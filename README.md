@@ -8,7 +8,7 @@ Wang (2026), which extends the residual permutation test of Wen, Wang & Wang
 regression coefficient
 
 ```
-y_ij = x_ij' gamma + d_ij' beta + eps_ij,      H0: beta = b
+$$y_{ij} = x_{ij}'\gamma + d_{ij}'\beta + \epsilon_{ij}, \quad H_0: \beta = b$$
 ```
 
 where the errors are *separately exchangeable* across clustering dimensions
