@@ -2,26 +2,57 @@
 
 **Invariant permutation tests for multi-way clustered, panel, and missing-data regression.**
 
-`mwperm` implements the finite-sample-valid permutation test of Guo, Toulis &
-Wang (2026), which extends the residual permutation test of Wen, Wang & Wang
-(2025, *Annals of Statistics*) to multi-way clustered designs. It tests a
-regression coefficient
+`mwperm` implements the finite-sample-valid *invariant permutation test* (IPT) of
+Guo, Toulis & Wang (2026), which extends the residual permutation test of Wen,
+Wang & Wang (2025, *Annals of Statistics*) to multi-way clustered designs.
 
-```
-y_ij = x_ij' gamma + d_ij' beta + eps_ij,      H0: beta = b
-```
+For the **dyadic regression model** (Guo et al., 2026, Eq. 1)
 
-where the errors are *separately exchangeable* across clustering dimensions
-(e.g. `eps_ij = eta_i + xi_j + u_ij`). Unlike multi-way cluster-robust
-standard errors or the wild cluster bootstrap, the test
+$$
+y_{ij} = x_{ij}^{\top}\gamma + d_{ij}^{\top}\beta + \varepsilon_{ij},
+\qquad i, j = 1, \dots, n,
+$$
 
-- is **exact in finite samples** — valid with as few as ~20 clusters per
-  dimension, with no asymptotics in the number of clusters;
-- makes **no assumption on the covariate distribution** — covariates may be
-  sparse, irregular, or heavy-tailed;
-- extends cleanly to **three-way clustering**, **panel data** with an
-  arbitrary common time trend, **replicated two-way layouts**, and
-  **incomplete arrays** (missing cells).
+with outcomes $y_{ij}\in\mathbb{R}$, covariates of interest $d_{ij}\in\mathbb{R}^{d}$,
+auxiliary (nuisance) covariates $x_{ij}\in\mathbb{R}^{p}$, and unobserved errors
+$\varepsilon_{ij}$, the package tests the significance null
+
+$$
+H_0 : \beta = 0
+$$
+
+(and, by test inversion, any $H_0^{b}:\beta = b$), where $\beta$ is the parameter of
+interest and $\gamma$ is a nuisance parameter.
+
+The test is exact whenever the errors are **conditionally (doubly) exchangeable**
+given the covariates — Assumption 1 of Guo et al. (2026):
+
+$$
+(\varepsilon_{ij})_{i,j\in[n]} \;\overset{d}{=}\;
+(\varepsilon_{\pi(i)\sigma(j)})_{i,j\in[n]} \;\mid\; \mathbf{X}, \mathbf{D}
+\qquad \text{for all permutations } \pi, \sigma \text{ on } [n] := \{1,\dots,n\}.
+$$
+
+This holds, for example, under a two-way random-effects structure
+(Guo et al., 2026, Eq. 8)
+
+$$
+\varepsilon_{ij} = \eta_i + \xi_j + u_{ij},
+$$
+
+with $\eta_i, \xi_j, u_{ij}$ i.i.d. conditional on the covariates. Unlike the
+*separate-exchangeability* framework that underlies multi-way cluster-robust
+standard errors and the wild cluster bootstrap, Assumption 1 imposes **no restriction
+on the covariate distribution** (covariates may be sparse, irregular, or heavy-tailed)
+and holds in the *finite sample* rather than the population. Relative to those methods,
+the test:
+
+- is **exact in finite samples** — valid with as few as ~20 clusters per dimension,
+  with no asymptotics in the number of clusters (Guo et al., 2026, Theorem 1);
+- makes **no assumption on the covariate distribution** — covariates may be sparse,
+  irregular, or heavy-tailed;
+- extends cleanly to **three-way clustering**, **panel data** with an arbitrary common
+  time trend, **replicated two-way layouts**, and **incomplete arrays** (missing cells).
 
 ## Installation
 
@@ -72,30 +103,139 @@ All test functions return an object of class `"mwperm"` with `print()`,
 
 ## How it works
 
-For each member `k` of a randomly drawn, algebraically closed permutation
-group (a block-cyclic group of order `K + 1`, built by `build_perm_set()`),
-the test forms the residual statistic `||D' V_k V_k' y||`, where the columns
-of `V_k` span the orthogonal complement of both the nuisance design `X` and
-its permuted copy. Because the group is closed under composition, the
-statistic for the identity is exchangeable with the others under `H0`, giving
-an exact p-value
+Write the stacked dyadic model (Guo et al., 2026, Eq. 7) as
 
-```
-p = (1 / (K + 1)) * (1 + #{ k : min_j a_j <= b_k }).
-```
+$$
+\mathbf{y} = \mathbf{X}\gamma + \mathbf{D}\beta + \boldsymbol{\varepsilon},
+\qquad
+\mathbf{y},\boldsymbol{\varepsilon}\in\mathbb{R}^{N},\;\;
+\mathbf{X}\in\mathbb{R}^{N\times p},\;\;
+\mathbf{D}\in\mathbb{R}^{N\times d},\;\; N = n^2,
+$$
 
-The smallest attainable p-value is `1 / (K + 1)`, so a 95% confidence
-interval (obtained by inverting the test) requires at least 20 clusters per
-dimension. Randomised runs are aggregated by the **median** p-value
-(`n_reps`).
+where the entries are stacked in lexicographic order, so that cell $(i,j)$ occupies
+row $(i-1)n + j$. The test then follows three steps.
 
-- **Panel data** (`mwperm_panel()`) applies the *same* row/column permutation
-  in every period, holding an arbitrary time trend fixed (condition InvB).
-  This is the first finite-sample-valid test for `beta = 0` in such panels.
-  Time fixed effects (`time_fe = TRUE`, the default) de-bias the point
-  estimate and sharpen the interval.
-- **Missing cells** (`mwperm_missing()`) restrict the permutation to disjoint,
-  fully observed bicliques and pool the residual statistics across them.
+**1. Permutation group.** `build_perm_set()` (Algorithm 1) draws a random,
+algebraically closed **block-cyclic group** of $K+1$ two-way permutations
+
+$$
+\mathcal{G} = \{(\pi_0,\sigma_0), (\pi_1,\sigma_1), \dots, (\pi_K,\sigma_K)\},
+\qquad \pi_0 = \sigma_0 = \mathrm{Id},
+$$
+
+closed under composition in each dimension.
+
+**2. Partialling-out and the residual statistic.** For each $k = 1,\dots,K$, the test
+forms an orthonormal $V_k\in\mathbb{R}^{N\times(N-2p)}$ whose columns span the
+orthogonal complement of *both* the nuisance design and its permuted copy,
+
+$$
+V_k^{\top}\mathbf{X} = 0,
+\qquad V_k^{\top}\mathbf{X}_{\pi_k,\sigma_k} = 0
+$$
+
+(a Frisch–Waugh–Lovell-style projection), and computes the residual statistics
+
+$$
+a_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top}\, \mathbf{y}\rVert,
+\qquad
+b_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top}\, \mathbf{y}_{\pi_k,\sigma_k}\rVert,
+$$
+
+where $\mathbf{y}_{\pi_k,\sigma_k}$ is $\mathbf{y}$ after permuting rows by $\pi_k$ and
+columns by $\sigma_k$. Because $\mathcal{G}$ is closed under composition, the identity
+statistic is exchangeable with the permuted ones under $H_0$.
+
+**3. Randomization p-value.** The exact p-value (Guo et al., 2026, Eq. 10) is
+
+$$
+\mathrm{pval} = \frac{1}{K+1}
+\left(1 + \sum_{k=1}^{K}
+\mathbb{1}\!\left\{ \min_{1\le j\le K} a_j \le b_k \right\}\right),
+$$
+
+and `confint()` inverts the test to return the $100(1-\alpha)\%$ confidence region
+
+$$
+\mathrm{CI} = \{\, b \in \mathbb{R}^{d} : \mathrm{pval}(b) > \alpha \,\}.
+$$
+
+The smallest attainable p-value is $1/(K+1)$, and Algorithm 1 requires $n \ge K+1$;
+hence a 95% confidence interval needs $K + 1 \ge 20$, i.e. **at least 20 clusters per
+dimension**. The permutation group is random, so randomized runs are aggregated by the
+**median** p-value across `n_reps` repetitions (Guo et al., 2026, Remark 1).
+
+## Extensions
+
+All extensions reuse the same partialling-out / minorization machinery; only the
+invariance condition and the construction of $\mathcal{G}$ change (Guo et al., 2026, §6).
+
+**Three-way clustering** (`mwperm_threeway()`). For
+
+$$
+y_{ijl} = x_{ijl}^{\top}\gamma + d_{ijl}^{\top}\beta + \varepsilon_{ijl},
+\qquad i\in[m],\; j\in[n],\; l\in[\ell],
+$$
+
+under the three-way exchangeability condition (InvA),
+
+$$
+(\varepsilon_{ijl}) \;\overset{d}{=}\;
+(\varepsilon_{\pi(i)\sigma(j)\psi(l)}) \;\mid\; \mathbf{X}, \mathbf{D},
+$$
+
+Algorithm 1 is applied three times. (InvA) holds, e.g., under the full random-effects
+model $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$.
+
+**Panel data** (`mwperm_panel()`). With a time index $t$,
+
+$$
+y_{ijt} = x_{ijt}^{\top}\gamma + d_{ijt}^{\top}\beta + \varepsilon_{ijt},
+$$
+
+full three-way exchangeability is implausible because errors are autocorrelated over
+$t$. The test instead requires exchangeability across the first two dimensions only
+(InvB),
+
+$$
+(\varepsilon_{ijt})_{i\in[m],j\in[n]} \;\overset{d}{=}\;
+(\varepsilon_{\pi(i)\sigma(j)t})_{i\in[m],j\in[n]} \;\mid\; \mathbf{X}, \mathbf{D},
+$$
+
+which holds under $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$ with $\zeta_t$
+an **arbitrary common time trend**. The *same* row/column permutation is applied in every
+period, so the procedure runs the baseline dyadic test within each $t$ and holds the time
+trend fixed. This is the first finite-sample-valid test of $\beta = 0$ under (InvB). Time
+fixed effects (`time_fe = TRUE`, the default) de-bias the point estimate and sharpen the
+interval.
+
+**Replicated two-way layouts** (`mwperm_layout()`). When the number of observations per
+cell $\ell_{ij}$ varies, permutation is performed only within each cell $(i,j)$ over
+$[\ell_{ij}]$. This is valid under the relaxed structure
+$\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}$ ($\eta_{ij}$ arbitrary, $\zeta_l$
+i.i.d.) — appropriate when $l$ indexes independent replications, as in two-way layouts
+from randomized experiments. For irregular designs, the threshold argument `L0` keeps
+cells with $\ell_{ij}\ge L_0$ (mask $M_{ij} = \mathbb{1}\{\ell_{ij}\ge L_0\}$), randomly
+drops $\ell_{ij} - L_0$ observations to balance them, and then applies the missing-data
+procedure; tune `L0` (e.g. by grid search) to trade off the number of eligible cells
+against within-cell sample size.
+
+**Missing cells** (`mwperm_missing()`). With an observation mask
+$M\in\{0,1\}^{n\times n}$ ($M_{ij} = 1$ iff cell $(i,j)$ is observed) satisfying
+$M \perp\!\!\!\perp \boldsymbol{\varepsilon} \mid \mathbf{X},\mathbf{D}$
+(Assumption 4), `find_bicliques()` restricts the permutation to disjoint, fully observed
+blocks
+
+$$
+F_M = \{ I_q \times J_q \}_{q=1}^{Q},
+\qquad I_q \cap I_{q'} = J_q \cap J_{q'} = \varnothing \;\; (q \ne q'),
+$$
+
+which are exactly **bicliques** (complete bipartite subgraphs) in the row–column
+bipartite graph induced by $M$. The residual statistics are pooled across blocks. Power
+exhibits phase transitions in the missingness rate under Erdős–Rényi-type masking
+(Guo et al., 2026, §5).
 
 ## Data
 
@@ -112,11 +252,11 @@ trade statistics.
 
 ## References
 
-- Guo, F. R., Toulis, P. & Wang, Y. (2026). *Permutation inference under
-  multi-way clustering and missing data.*
-- Wen, K., Wang, T. & Wang, Y. (2025). Residual permutation test for
-  regression coefficient testing. *The Annals of Statistics* **53**(2),
-  724–748. doi:10.1214/24-AOS2360.
+- Guo, W., Toulis, P. & Wang, Y. (2026). *Permutation Inference under Multi-way
+  Clustering and Missing Data.* arXiv:2601.08610 [stat.ME].
+- Wen, K., Wang, T. & Wang, Y. (2025). Residual permutation test for regression
+  coefficient testing. *The Annals of Statistics* **53**(2), 724–748.
+  doi:10.1214/24-AOS2360.
 
 ## License
 
