@@ -1,0 +1,55 @@
+# =========================================================================
+# .gitignore for the mwperm R package
+# Goal: publish ONLY the installable R package (and standard dev scaffolding).
+# Everything listed here is kept locally but NEVER pushed to GitHub -- this is
+# what keeps sensitive / third-party / machine-local files out of every future
+# `git add` + `git push`.
+# =========================================================================
+
+# ----- R build artifacts -----
+*.tar.gz
+*.Rcheck/
+..Rcheck/
+/*.Rout
+src/*.o
+src/*.so
+src/*.dll
+inst/doc/
+
+# ----- R / RStudio machine-local state -----
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+
+# ----- vignette / knitr build outputs -----
+vignettes/*.html
+vignettes/*.R
+vignettes/*_cache/
+vignettes/*_files/
+
+# ----- OS / editor cruft -----
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/
+
+# ----- Claude Code project memory / local config (internal, not published) -----
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# ----- Internal design doc (not part of the shipped package) -----
+IMPLEMENTATION_PLAN.md
+
+# ----- Third-party reference material: the paper authors' replication code -----
+# (MATLAB IPT_*.m, "Log of Gravity.xls", .mat/.RData, etc.) -- NOT ours to
+# redistribute, so it is never committed/pushed.
+shared code/
+
+# ----- Local-only research code / write-ups (not part of the R package) -----
+# simulation + benchmark scripts, generated results/figures, and the manuscript.
+reference/
+report/

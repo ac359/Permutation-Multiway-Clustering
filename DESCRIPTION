@@ -1,0 +1,33 @@
+Package: mwperm
+Type: Package
+Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
+Version: 0.1.0
+Authors@R: c(
+    person("mwperm", "authors", role = c("Andrew", "Chen"),
+           email = "andrewc24@uchicago.edu"))
+Description: Finite-sample valid hypothesis tests and confidence intervals for
+    regression coefficients under multi-way (e.g. dyadic) clustering, including
+    panel and missing-data designs. The methods implement the invariant
+    permutation test of Guo, Toulis and Wang (2026), which builds on the
+    residual permutation test of Wen, Wang and Wang (2025)
+    <doi:10.1214/24-AOS2360>. Validity requires only that the errors be
+    separately exchangeable across clustering dimensions, conditional on the
+    covariates; in particular the covariate distribution is unrestricted, so
+    the tests remain exact in finite samples even with few clusters or
+    heavy-tailed regressors, where multi-way cluster-robust standard errors and
+    the wild cluster bootstrap can be badly miscalibrated. A block-cyclic
+    permutation group is constructed for each clustering dimension, nuisance
+    covariates are partialled out by the Frisch-Waugh-Lovell projection, and
+    confidence intervals are obtained by test inversion. Specialised routines
+    cover two-way (dyadic) designs, three-way clustering, panels with arbitrary
+    time effects, replicated two-way layouts, and incomplete arrays via fully
+    observed bicliques.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 3.6.0)
+Imports: stats, graphics
+Suggests: knitr, rmarkdown
+VignetteBuilder: knitr
+LazyData: true
+RoxygenNote: 7.3.1
+NeedsCompilation: no

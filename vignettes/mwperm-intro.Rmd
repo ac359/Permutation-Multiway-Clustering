@@ -1,0 +1,167 @@
+---
+title: "Getting started with mwperm"
+author: "The mwperm authors"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with mwperm}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(mwperm)
+set.seed(1)
+```
+
+## What problem does this solve?
+
+Many regressions have errors that are correlated within *several* overlapping
+groups at once. The classic example is **dyadic data**: bilateral trade,
+migration, or network flows indexed by an ordered pair $(i, j)$, where shocks
+to country $i$ affect all of its partners and shocks to country $j$ affect all
+of *its* partners. The error matrix is then exchangeable across rows and across
+columns,
+$$
+\varepsilon_{ij} = \eta_i + \xi_j + u_{ij},
+$$
+and ordinary or even one-way cluster-robust standard errors are badly
+anti-conservative.
+
+The usual fix --- multi-way cluster-robust standard errors or the wild cluster
+bootstrap --- relies on having *many* clusters and on regularity of the
+covariates. When the number of clusters is modest, or a covariate is sparse or
+heavy-tailed, those approximations can over-reject severely.
+
+`mwperm` takes a different route: a **permutation test that is exact in finite
+samples**. It tests
+$$
+H_0:\ \beta = b \qquad\text{in}\qquad
+y_{ij} = x_{ij}^\top\gamma + d_{ij}^\top\beta + \varepsilon_{ij},
+$$
+assuming only that the error matrix is separately exchangeable across the
+clustering dimensions. It makes **no assumption on the distribution of the
+covariates** and needs no large-cluster asymptotics.
+
+## A dyadic example
+
+The bundled `trade_dyadic` data set is a synthetic 40 × 40 gravity
+cross-section. The coefficient on log distance was set to $-1$ in the
+data-generating process.
+
+```{r dyadic}
+data(trade_dyadic)
+
+fit <- with(trade_dyadic,
+            mwperm_dyadic(y = log_trade, d = log_dist,
+                          x   = cbind(log_gdp_i, log_gdp_j),
+                          row = importer, col = exporter,
+                          n_reps = 15, seed = 1))
+fit
+```
+
+The point estimate is close to the truth, the p-value rejects $H_0:\beta = 0$,
+and the confidence interval (obtained by **inverting** the test) excludes zero.
+
+A placebo regressor that is independent of the outcome should *not* be flagged:
+
+```{r placebo}
+fit0 <- with(trade_dyadic,
+             mwperm_dyadic(y = log_trade, d = placebo,
+                           x   = cbind(log_dist, log_gdp_i, log_gdp_j),
+                           row = importer, col = exporter,
+                           n_reps = 15, seed = 2))
+c(estimate = fit0$estimate, p_value = fit0$pvalue)
+```
+
+### Reading the output
+
+`summary()` returns a tidy one-row-per-coefficient data frame, and `confint()`
+extracts the inverted-test interval:
+
+```{r accessors}
+summary(fit)
+confint(fit)
+```
+
+Because the test is *randomised* (it draws a random permutation group), running
+it several times and aggregating by the median p-value is recommended; that is
+what `n_reps` does. `plot(fit)` shows how stable the p-value is across those
+replications.
+
+## Resolution: why 20 clusters?
+
+The smallest p-value the test can return is $1/(K+1)$, where $K+1$ is the order
+of the permutation group and is capped by the number of clusters per dimension.
+To form a 95% confidence interval you therefore need $1/(K+1)\le 0.05$, i.e. at
+least **20 clusters** on the smaller dimension. With fewer clusters the test is
+still valid, but `conf_int` is returned as `NULL` with an explanatory note:
+
+```{r resolution}
+small <- subset(trade_dyadic,
+                as.integer(importer) <= 8 & as.integer(exporter) <= 8)
+fits <- with(small,
+             mwperm_dyadic(y = log_trade, d = log_dist,
+                           x = cbind(log_gdp_i, log_gdp_j),
+                           row = importer, col = exporter, seed = 1))
+fits$conf_int      # NULL: 1/8 = 0.125 > 0.05
+```
+
+## Panel data
+
+For longitudinal dyadic data, full three-way exchangeability is implausible
+because errors are autocorrelated over time. `mwperm_panel()` instead assumes
+exchangeability across the two cross-sectional dimensions *within each period*
+and applies the **same** permutation in every period, which holds an arbitrary
+common time trend $\zeta_t$ fixed. The `trade_panel` data set is a balanced
+22 × 22 × 6 panel with a free-trade-agreement treatment whose true effect is
+$0.5$.
+
+```{r panel}
+data(trade_panel)
+fit_p <- with(trade_panel,
+              mwperm_panel(y = log_trade, d = fta,
+                           x   = cbind(log_gdp_i, log_gdp_j),
+                           row = importer, col = exporter, time = year,
+                           time_fe = TRUE, n_reps = 15, seed = 1))
+fit_p
+```
+
+Keeping `time_fe = TRUE` (the default) removes the time trend from the
+residuals, which de-biases the estimate and tightens the interval when
+treatment timing is correlated with the period.
+
+## Missing cells
+
+When the array is incomplete --- for instance, if self-trade
+($i = j$) is dropped --- general row/column permutations are no longer valid.
+`mwperm_missing()` restricts the permutations to disjoint, fully observed
+**bicliques** and pools the residual statistics across them, reporting how many
+cells were retained.
+
+```{r missing}
+no_diag <- subset(trade_dyadic, importer != exporter)
+fit_m <- with(no_diag,
+              mwperm_missing(y = log_trade, d = log_dist,
+                             x   = cbind(log_gdp_i, log_gdp_j),
+                             row = importer, col = exporter,
+                             min_block = 3, n_reps = 11, seed = 1))
+fit_m
+```
+
+## Where to go next
+
+- `?mwperm_dyadic`, `?mwperm_panel`, `?mwperm_missing` for the full argument
+  lists.
+- `?build_perm_set` for the permutation-group construction (Algorithm 1).
+- The accompanying technical report works through these use cases in more
+  depth, including a Monte-Carlo study of the test's size and power.
+
+## References
+
+Guo, F. R., Toulis, P. and Wang, Y. (2026). *Permutation inference under
+multi-way clustering and missing data.*
+
+Wen, K., Wang, T. and Wang, Y. (2025). Residual permutation test for regression
+coefficient testing. *The Annals of Statistics* **53**(2), 724--748.

@@ -1,0 +1,49 @@
+% Generated manually (no roxygen2/CRAN access in build environment).
+\name{trade_panel}
+\alias{trade_panel}
+\docType{data}
+\title{Synthetic panel (longitudinal) dyadic trade data}
+\format{
+A data frame with 2904 rows (a complete balanced 22 x 22 x 6 array) and 8
+variables:
+\describe{
+  \item{importer}{Factor with 22 levels (ISO3 codes); the row cluster.}
+  \item{exporter}{Factor with 22 levels (ISO3 codes); the column cluster.}
+  \item{year}{Integer time index, 2015--2020.}
+  \item{log_trade}{Numeric outcome: log bilateral trade flow.}
+  \item{fta}{Integer 0/1 dyad-by-time policy covariate: an in-force free
+    trade agreement for the pair in that year (true coefficient \eqn{0.5}).
+    Roll-out timing varies randomly across pairs.}
+  \item{log_gdp_i}{Numeric time-varying node covariate: log GDP of the
+    importer (true coefficient \eqn{0.6}).}
+  \item{log_gdp_j}{Numeric time-varying node covariate: log GDP of the
+    exporter (true coefficient \eqn{0.6}).}
+  \item{placebo}{Numeric dyad-by-time covariate independent of the outcome
+    (true coefficient \eqn{0}).}
+}
+The attribute \code{"true_coef"} stores the data-generating coefficients
+(intercept \eqn{1.5}, \code{fta} \eqn{0.5}, \code{log_gdp_i} and
+\code{log_gdp_j} \eqn{0.6}, \code{placebo} \eqn{0}).
+}
+\usage{
+data(trade_panel)
+}
+\description{
+A simulated panel of bilateral trade among 22 countries over six years. The
+error structure adds an \emph{arbitrary} (irregular) common time trend to the
+two-way clustered components, \eqn{\varepsilon_{ijt} = \eta_i + \xi_j +
+\zeta_t + u_{ijt}}, with heavy-tailed (scaled \eqn{t_4}) idiosyncratic
+shocks. This is the setting of condition InvB and
+\code{\link{mwperm_panel}}: errors are exchangeable across importer and
+exporter within each year but not over time.
+}
+\details{
+The data are synthetic and contain no real trade statistics. They are
+generated reproducibly by the script in \code{data-raw/make_data.R}.
+}
+\examples{
+data(trade_panel)
+str(trade_panel)
+attr(trade_panel, "true_coef")
+}
+\keyword{datasets}

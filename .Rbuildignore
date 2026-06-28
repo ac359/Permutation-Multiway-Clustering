@@ -1,0 +1,15 @@
+^data-raw$
+^report$
+^reference$
+^shared code$
+^shared.code$
+^.*\.DS_Store$
+^\.Rbuildignore$
+^CLAUDE\.md$
+^IMPLEMENTATION_PLAN\.md$
+^CLAUDE\.local\.md$
+^\.claude$
+^\.gitignore$
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
