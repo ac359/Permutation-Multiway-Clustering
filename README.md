@@ -28,9 +28,9 @@ The test is exact whenever the errors are **conditionally (doubly) exchangeable*
 given the covariates — Assumption 1 of Guo et al. (2026):
 
 $$
-(\varepsilon_{ij})_{i,j\in[n]} \;\overset{d}{=}\;
-(\varepsilon_{\pi(i)\sigma(j)})_{i,j\in[n]} \;\mid\; \mathbf{X}, \mathbf{D}
-\qquad \text{for all permutations } \pi, \sigma \text{ on } [n] := \{1,\dots,n\}.
+(\varepsilon_{ij})_{i,j\in[n]}  \overset{d}{=} 
+(\varepsilon_{\pi(i)\sigma(j)})_{i,j\in[n]}  \mid  \mathbf{X}, \mathbf{D}
+\qquad \text{for all permutations } \pi, \sigma \text{ on } [n] := \lbrace1,\dots,n\rbrace.
 $$
 
 This holds, for example, under a two-way random-effects structure
@@ -108,9 +108,9 @@ Write the stacked dyadic model (Guo et al., 2026, Eq. 7) as
 $$
 \mathbf{y} = \mathbf{X}\gamma + \mathbf{D}\beta + \boldsymbol{\varepsilon},
 \qquad
-\mathbf{y},\boldsymbol{\varepsilon}\in\mathbb{R}^{N},\;\;
-\mathbf{X}\in\mathbb{R}^{N\times p},\;\;
-\mathbf{D}\in\mathbb{R}^{N\times d},\;\; N = n^2,
+\mathbf{y},\boldsymbol{\varepsilon}\in\mathbb{R}^{N},\quad
+\mathbf{X}\in\mathbb{R}^{N\times p},\quad
+\mathbf{D}\in\mathbb{R}^{N\times d},\quad N = n^2,
 $$
 
 where the entries are stacked in lexicographic order, so that cell $(i,j)$ occupies
@@ -120,7 +120,7 @@ row $(i-1)n + j$. The test then follows three steps.
 algebraically closed **block-cyclic group** of $K+1$ two-way permutations
 
 $$
-\mathcal{G} = \{(\pi_0,\sigma_0), (\pi_1,\sigma_1), \dots, (\pi_K,\sigma_K)\},
+\mathcal{G} = \lbrace(\pi_0,\sigma_0), (\pi_1,\sigma_1), \dots, (\pi_K,\sigma_K)\rbrace,
 \qquad \pi_0 = \sigma_0 = \mathrm{Id},
 $$
 
@@ -138,9 +138,9 @@ $$
 (a Frisch–Waugh–Lovell-style projection), and computes the residual statistics
 
 $$
-a_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top}\, \mathbf{y}\rVert,
+a_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top} \mathbf{y}\rVert,
 \qquad
-b_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top}\, \mathbf{y}_{\pi_k,\sigma_k}\rVert,
+b_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top} \mathbf{y}_{\pi_k,\sigma_k}\rVert,
 $$
 
 where $\mathbf{y}_{\pi_k,\sigma_k}$ is $\mathbf{y}$ after permuting rows by $\pi_k$ and
@@ -152,13 +152,13 @@ statistic is exchangeable with the permuted ones under $H_0$.
 $$
 \mathrm{pval} = \frac{1}{K+1}
 \left(1 + \sum_{k=1}^{K}
-\mathbb{1}\!\left\{ \min_{1\le j\le K} a_j \le b_k \right\}\right),
+\mathbb{1}\left\lbrace \min_{1\le j\le K} a_j \le b_k \right\rbrace\right),
 $$
 
 and `confint()` inverts the test to return the $100(1-\alpha)\%$ confidence region
 
 $$
-\mathrm{CI} = \{\, b \in \mathbb{R}^{d} : \mathrm{pval}(b) > \alpha \,\}.
+\mathrm{CI} = \lbrace b \in \mathbb{R}^{d} : \mathrm{pval}(b) > \alpha \rbrace.
 $$
 
 The smallest attainable p-value is $1/(K+1)$, and Algorithm 1 requires $n \ge K+1$;
@@ -175,14 +175,14 @@ invariance condition and the construction of $\mathcal{G}$ change (Guo et al., 2
 
 $$
 y_{ijl} = x_{ijl}^{\top}\gamma + d_{ijl}^{\top}\beta + \varepsilon_{ijl},
-\qquad i\in[m],\; j\in[n],\; l\in[\ell],
+\qquad i\in[m],  j\in[n],  l\in[\ell],
 $$
 
 under the three-way exchangeability condition (InvA),
 
 $$
-(\varepsilon_{ijl}) \;\overset{d}{=}\;
-(\varepsilon_{\pi(i)\sigma(j)\psi(l)}) \;\mid\; \mathbf{X}, \mathbf{D},
+(\varepsilon_{ijl})  \overset{d}{=} 
+(\varepsilon_{\pi(i)\sigma(j)\psi(l)})  \mid  \mathbf{X}, \mathbf{D},
 $$
 
 Algorithm 1 is applied three times. (InvA) holds, e.g., under the full random-effects
@@ -199,8 +199,8 @@ $t$. The test instead requires exchangeability across the first two dimensions o
 (InvB),
 
 $$
-(\varepsilon_{ijt})_{i\in[m],j\in[n]} \;\overset{d}{=}\;
-(\varepsilon_{\pi(i)\sigma(j)t})_{i\in[m],j\in[n]} \;\mid\; \mathbf{X}, \mathbf{D},
+(\varepsilon_{ijt})_{i\in[m],j\in[n]}  \overset{d}{=} 
+(\varepsilon_{\pi(i)\sigma(j)t})_{i\in[m],j\in[n]}  \mid  \mathbf{X}, \mathbf{D},
 $$
 
 which holds under $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$ with $\zeta_t$
@@ -216,20 +216,20 @@ $[\ell_{ij}]$. This is valid under the relaxed structure
 $\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}$ ($\eta_{ij}$ arbitrary, $\zeta_l$
 i.i.d.) — appropriate when $l$ indexes independent replications, as in two-way layouts
 from randomized experiments. For irregular designs, the threshold argument `L0` keeps
-cells with $\ell_{ij}\ge L_0$ (mask $M_{ij} = \mathbb{1}\{\ell_{ij}\ge L_0\}$), randomly
+cells with $\ell_{ij}\ge L_0$ (mask $M_{ij} = \mathbb{1}\lbrace\ell_{ij}\ge L_0\rbrace$), randomly
 drops $\ell_{ij} - L_0$ observations to balance them, and then applies the missing-data
 procedure; tune `L0` (e.g. by grid search) to trade off the number of eligible cells
 against within-cell sample size.
 
 **Missing cells** (`mwperm_missing()`). With an observation mask
-$M\in\{0,1\}^{n\times n}$ ($M_{ij} = 1$ iff cell $(i,j)$ is observed) satisfying
-$M \perp\!\!\!\perp \boldsymbol{\varepsilon} \mid \mathbf{X},\mathbf{D}$
+$M\in\lbrace0,1\rbrace^{n\times n}$ ($M_{ij} = 1$ iff cell $(i,j)$ is observed) satisfying
+$M \perp\mkern-10mu\perp \boldsymbol{\varepsilon} \mid \mathbf{X},\mathbf{D}$
 (Assumption 4), `find_bicliques()` restricts the permutation to disjoint, fully observed
 blocks
 
 $$
-F_M = \{ I_q \times J_q \}_{q=1}^{Q},
-\qquad I_q \cap I_{q'} = J_q \cap J_{q'} = \varnothing \;\; (q \ne q'),
+F_M = \lbrace I_q \times J_q \rbrace_{q=1}^{Q},
+\qquad I_q \cap I_{q'} = J_q \cap J_{q'} = \varnothing \quad (q \ne q'),
 $$
 
 which are exactly **bicliques** (complete bipartite subgraphs) in the row–column
