@@ -7,9 +7,9 @@ Wang (2026), which extends the residual permutation test of Wen, Wang & Wang
 (2025, *Annals of Statistics*) to multi-way clustered designs. It tests a
 regression coefficient
 
-```
+
 $$y_{ij} = x_{ij}'\gamma + d_{ij}'\beta + \epsilon_{ij}, \quad H_0: \beta = b$$
-```
+
 
 where the errors are *separately exchangeable* across clustering dimensions
 (e.g. `eps_ij = eta_i + xi_j + u_ij`). Unlike multi-way cluster-robust
