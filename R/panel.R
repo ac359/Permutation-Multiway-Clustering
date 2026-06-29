@@ -59,28 +59,27 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
   .check_lengths(N, list(row = row, col = col, time = time))
 
-  ri <- .dense_id(row); ci <- .dense_id(col); ti <- .dense_id(time)
-  n_row <- max(ri); n_col <- max(ci); n_t <- max(ti)
+  ri <- .dense_id(row); ci <- .dense_id(col); ti <- .dense_id(time)  # dense ids per dimension
+  n_row <- max(ri); n_col <- max(ci); n_t <- max(ti)                 # cluster / period counts
 
-  ## nuisance design: user covariates (+ intercept) and optional time dummies
+  ## Nuisance design: user covariates (+ intercept) and optional time dummies.
+  ## The time dummies are invariant to the within-period permutation, so adding
+  ## them is valid under condition InvB and removes the time trend zeta_t.
   X <- .make_X(x, N)
   if (isTRUE(time_fe) && n_t > 1L) {
-    TD <- stats::model.matrix(~ factor(ti))[, -1L, drop = FALSE]
+    TD <- stats::model.matrix(~ factor(ti))[, -1L, drop = FALSE]   # period dummies (drop reference)
     colnames(TD) <- paste0("time", sort(unique(ti))[-1L])
     X <- cbind(X, TD)
   }
 
   coords <- cbind(ri, ci, ti)
-  if (anyDuplicated(coords))
-    stop("Each (row, col, time) cell must appear at most once.", call. = FALSE)
-  if (N != n_row * n_col * n_t)
-    stop(sprintf(paste0("Panel must be a complete balanced array: expected ",
-                        "n_row*n_col*n_time = %d cells but found %d. Fill or ",
-                        "drop cells so the array is complete."),
-                 n_row * n_col * n_t, N), call. = FALSE)
+  .require_complete_array(coords, c(row = n_row, col = n_col, time = n_t), N,
+                          what = "Panel")
 
   K <- .default_K(K, c(n_row, n_col))
 
+  ## The SAME row/column permutation is applied in every period (time passed as
+  ## NULL = held fixed), so any unknown time effect is preserved and partialled out.
   perm_builder <- function(rep_seed) {
     Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))
     Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))
@@ -89,7 +88,6 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
 
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
-              grid = grid, conf_level = 1 - alpha, type = "panel",
-              d_names = d_names,
+              grid = grid, type = "panel", d_names = d_names,
               n_clusters = c(row = n_row, col = n_col, time = n_t), call = cl)
 }

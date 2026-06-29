@@ -35,17 +35,16 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
   X <- .make_X(x, N)
   .check_lengths(N, list(id1 = id1, id2 = id2, id3 = id3))
 
-  a1 <- .dense_id(id1); a2 <- .dense_id(id2); a3 <- .dense_id(id3)
-  m <- max(a1); n <- max(a2); ell <- max(a3)
-  coords <- cbind(a1, a2, a3)
-  if (anyDuplicated(coords))
-    stop("Each (id1, id2, id3) cell must appear at most once.", call. = FALSE)
-  if (N != m * n * ell)
-    stop(sprintf(paste0("Three-way design must be a complete balanced array: ",
-                        "expected %d cells, found %d."), m * n * ell, N), call. = FALSE)
+  a1 <- .dense_id(id1); a2 <- .dense_id(id2); a3 <- .dense_id(id3)  # dense ids per dimension
+  m <- max(a1); n <- max(a2); ell <- max(a3)                        # cluster counts per dimension
+  coords <- cbind(a1, a2, a3)          # per-observation (id1, id2, id3) coordinates
+  .require_complete_array(coords, c(id1 = m, id2 = n, id3 = ell), N,
+                          what = "Three-way design")
 
-  K <- .default_K(K, c(m, n, ell))
+  K <- .default_K(K, c(m, n, ell))     # group order capped by the smallest dimension
 
+  ## An independent permutation is drawn for each of the three dimensions (distinct
+  ## sub-seeds 1, 2, 3) and applied jointly: full three-way exchangeability (InvA).
   perm_builder <- function(rep_seed) {
     G1 <- build_perm_set(m,   K, seed = .sub_seed(rep_seed, 1L))
     G2 <- build_perm_set(n,   K, seed = .sub_seed(rep_seed, 2L))
@@ -55,7 +54,6 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
 
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
-              grid = grid, conf_level = 1 - alpha, type = "threeway",
-              d_names = d_names,
+              grid = grid, type = "threeway", d_names = d_names,
               n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl)
 }

@@ -64,23 +64,26 @@
 mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
                           alpha = 0.05, beta_null = 0, conf_int = TRUE,
                           n_reps = 1L, seed = NULL, grid = NULL) {
-  cl <- match.call()
+  cl <- match.call()                   # stored on the result for printing
   y <- as.numeric(y)
-  N <- length(y)
-  D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
-  X <- .make_X(x, N)
+  N <- length(y)                       # number of observations
+  D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))  # covariate(s) of interest + label(s)
+  X <- .make_X(x, N)                   # nuisance design with intercept
   .check_lengths(N, list(row = row, col = col))
 
-  ri <- .dense_id(row); ci <- .dense_id(col)
-  n_row <- max(ri); n_col <- max(ci)
+  ri <- .dense_id(row); ci <- .dense_id(col)   # dense 1-based row/col cluster ids
+  n_row <- max(ri); n_col <- max(ci)           # number of row / col clusters
   if (anyDuplicated(cbind(ri, ci)))
     stop("Dyadic regression expects one observation per (row, col) cell. ",
          "For repeated observations use mwperm_layout() or mwperm_panel().",
          call. = FALSE)
 
-  K <- .default_K(K, c(n_row, n_col))
-  coords <- cbind(ri, ci)
+  K <- .default_K(K, c(n_row, n_col))  # group order capped by the smaller dimension
+  coords <- cbind(ri, ci)              # per-observation (row, col) coordinates
 
+  ## Per-rep permutations: draw an independent row group and column group and
+  ## combine them into observation gather-vectors. Distinct sub-seeds (1, 2)
+  ## keep the two dimensions' relabellings independent within a rep.
   perm_builder <- function(rep_seed) {
     Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))
     Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))
@@ -89,32 +92,6 @@ mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
 
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
-              grid = grid, conf_level = 1 - alpha, type = "dyadic",
-              d_names = d_names,
+              grid = grid, type = "dyadic", d_names = d_names,
               n_clusters = c(row = n_row, col = n_col), call = cl)
-}
-
-## ---- small shared helpers -------------------------------------------------
-
-.default_K <- function(K, dim_sizes, cap = 199L) {
-  gmax <- min(dim_sizes) - 1L
-  if (is.null(K)) {
-    K <- min(gmax, cap)
-  } else {
-    K <- as.integer(K)
-    if (K + 1L > min(dim_sizes))
-      stop(sprintf("K + 1 = %d exceeds the smallest permuted dimension (%d).",
-                   K + 1L, min(dim_sizes)), call. = FALSE)
-  }
-  if (K < 1L) stop("Not enough clusters to permute (need >= 2 in each dimension).",
-                   call. = FALSE)
-  K
-}
-
-.sub_seed <- function(rep_seed, j) if (is.null(rep_seed)) NULL else rep_seed * 1000L + j
-
-.coef_names <- function(D, fallback) {
-  nm <- colnames(D)
-  if (!is.null(nm)) return(nm)
-  if (ncol(D) == 1L) fallback else paste0(fallback, seq_len(ncol(D)))
 }

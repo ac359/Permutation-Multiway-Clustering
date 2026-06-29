@@ -28,7 +28,9 @@ print.mwperm <- function(x, digits = 4L, ...) {
   cat("\n")
 
   est <- x$estimate
-  has_box <- !is.null(x$conf_box)
+  has_box <- !is.null(x$conf_box)      # TRUE when a joint region (d > 1) was computed
+  ## One line per coefficient: estimate, plus a CI (coef 1, scalar case) or the
+  ## marginal region bracket (joint case).
   for (k in seq_along(est)) {
     nm <- x$d_names[k]
     line <- sprintf("  %-12s estimate = %s", nm,
@@ -80,7 +82,9 @@ print.mwperm <- function(x, digits = 4L, ...) {
 #' @return A data frame, invisibly.
 #' @export
 summary.mwperm <- function(object, ...) {
-  d <- length(object$estimate)
+  d <- length(object$estimate)         # number of coefficients
+  ## Confidence limits per coefficient: a scalar interval populates only row 1,
+  ## a joint region contributes the marginal box extents for every coefficient.
   ci_lo <- rep(NA_real_, d); ci_hi <- rep(NA_real_, d)
   if (!is.null(object$conf_int) && length(object$conf_int) == 2L) {
     ci_lo[1] <- object$conf_int[1]; ci_hi[1] <- object$conf_int[2]
@@ -130,6 +134,7 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
     stop(sprintf(paste0("This object stores a %.0f%% set; `level = %g` would need ",
                         "refitting with alpha = %g (the permutations are fixed at fit time)."),
                  100 * object$conf_level, level, 1 - level), call. = FALSE)
+  ## Two-sided percentile column labels, e.g. "2.5 %" / "97.5 %" for a 95% set.
   pct <- 100 * c((1 - object$conf_level) / 2, 1 - (1 - object$conf_level) / 2)
   lab <- paste(format(pct, trim = TRUE), "%")
   if (has_int) {

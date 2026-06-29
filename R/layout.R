@@ -45,9 +45,9 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   .check_lengths(N, list(row = row, col = col,
                          rep = if (is.null(rep)) seq_len(N) else rep))
 
-  cell <- .dense_id(interaction(.dense_id(row), .dense_id(col), drop = TRUE))
-  ncell <- max(cell)
-  ell <- tabulate(cell, nbins = ncell)
+  cell <- .dense_id(interaction(.dense_id(row), .dense_id(col), drop = TRUE))  # dense (row,col) cell id
+  ncell <- max(cell)                   # number of occupied cells
+  ell <- tabulate(cell, nbins = ncell) # replicate count per cell (the cell sizes)
 
   ## optional balancing: keep dense cells, downsample each to exactly L0 (5.3)
   balance_note <- character(0)
@@ -70,15 +70,18 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
     ell <- tabulate(cell, nbins = ncell)
   }
 
-  ## dense within-cell index
+  ## Dense 1-based replication index l within each cell. The permutation acts on
+  ## this index, so it must run 1..ell[c] inside every cell; ties in the ordering
+  ## key are broken deterministically.
   widx <- integer(N)
-  ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))
+  ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))  # within-cell ordering
   for (c in seq_len(ncell)) {
     idx <- which(cell == c)
     widx[idx] <- rank(ord_key[idx], ties.method = "first")
   }
 
-  ## warn if d is constant within every cell
+  ## Warn if d does not vary within any cell: within-cell permutation then leaves
+  ## the residual statistic unchanged, so the test would have no power.
   within_var <- tapply(seq_len(N), cell, function(ii)
     any(apply(D[ii, , drop = FALSE], 2L, function(v) diff(range(v)) > 0)))
   if (!any(unlist(within_var)))
@@ -86,7 +89,7 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
             "Did you mean mwperm_dyadic() or mwperm_panel()?", call. = FALSE)
 
   min_cell <- min(ell)
-  K <- .default_K(K, c(min_cell, min_cell))
+  K <- .default_K(K, min_cell)
 
   perm_builder <- function(rep_seed) {
     cell_groups <- vector("list", ncell)
@@ -97,7 +100,7 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
 
   res <- .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
                      alpha = alpha, conf_int = conf_int, beta_null = beta_null,
-                     grid = grid, conf_level = 1 - alpha,
+                     grid = grid,
                      type = if (is.null(L0)) "layout" else "layout (balanced)",
                      d_names = d_names,
                      n_clusters = c(ncell = ncell, min_cell = min_cell), call = cl)
@@ -118,12 +121,12 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
     on.exit(.restore_seed(old), add = TRUE)
     set.seed(seed)
   }
-  dense <- which(ell >= L0)
-  per_cell <- split(seq_along(cell), cell)
+  dense <- which(ell >= L0)            # cells big enough to keep
+  per_cell <- split(seq_along(cell), cell)   # observation indices grouped by cell
   keep <- vector("list", length(dense))
   for (q in seq_along(dense)) {
-    idx <- per_cell[[dense[q]]]
-    keep[[q]] <- idx[sample.int(length(idx), L0)]
+    idx <- per_cell[[dense[q]]]        # all rows of this dense cell
+    keep[[q]] <- idx[sample.int(length(idx), L0)]   # uniform subsample of size L0
   }
   sort(unlist(keep, use.names = FALSE))
 }
@@ -134,20 +137,21 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
 .build_obs_perms_layout <- function(cell, widx, cell_groups) {
   N <- length(cell)
   ncell <- max(cell)
-  Kp1 <- length(cell_groups[[1L]])
-  cell_idx <- split(seq_len(N), cell)            # global positions per cell
-  ## position-within-cell -> global obs index, per cell
+  Kp1 <- length(cell_groups[[1L]])     # group order (all cells share it)
+  cell_idx <- split(seq_len(N), cell)            # global observation positions per cell
+  ## pos_in_cell[[c]][l] = the global observation index whose within-cell index is l,
+  ## i.e. a lookup from replication index back to row, per cell.
   pos_in_cell <- lapply(seq_len(ncell), function(c) {
     idx <- cell_idx[[as.character(c)]]
     idx[order(widx[idx])]
   })
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
-    g <- integer(N)
+    g <- integer(N)                    # observation gather-vector for element k
     for (c in seq_len(ncell)) {
       idx <- cell_idx[[as.character(c)]]
-      img_within <- cell_groups[[c]][[k]][widx[idx]]
-      g[idx] <- pos_in_cell[[c]][img_within]
+      img_within <- cell_groups[[c]][[k]][widx[idx]]   # permuted within-cell indices
+      g[idx] <- pos_in_cell[[c]][img_within]           # back to global observation indices
     }
     obs_perms[[k]] <- g
   }

@@ -24,7 +24,7 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     cover two-way (dyadic) designs, three-way clustering, panels with arbitrary
     time effects, replicated two-way layouts, and incomplete arrays via fully
     observed bicliques.
-License: MIT + file LICENSE
+License: Proprietary
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics

@@ -82,29 +82,32 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
   ## smallest block side caps the group order
   min_side <- min(vapply(blocks, function(b) min(length(b$rows), length(b$cols)), integer(1)))
-  K <- .default_K(K, c(min_side, min_side))
+  K <- .default_K(K, min_side)
 
   ## --- restrict data to cells inside the selected blocks ---------------------
-  cell_code <- .cell_code(cbind(ri, ci))
-  keep <- logical(N)
-  ## local (block, local-row, local-col) bookkeeping for retained cells
-  blk_of <- integer(N); lrow <- integer(N); lcol <- integer(N)
+  ## For each retained cell we record which block it belongs to and its position
+  ## *within* that block (local row/col index), so the permutation builder can
+  ## permute block-locally and translate back to global cluster ids.
+  keep <- logical(N)                 # is this observation inside some block?
+  blk_of <- integer(N)               # block index q for each observation
+  lrow <- integer(N); lcol <- integer(N)   # 1-based position within block b$rows / b$cols
   for (q in seq_along(blocks)) {
     b <- blocks[[q]]
     in_rows <- ri %in% b$rows
     in_cols <- ci %in% b$cols
-    sel <- in_rows & in_cols
+    sel <- in_rows & in_cols         # cells of this fully observed block
     keep <- keep | sel
     blk_of[sel] <- q
     lrow[sel] <- match(ri[sel], b$rows)
     lcol[sel] <- match(ci[sel], b$cols)
   }
+  ## Subset every per-observation vector to the retained cells (suffix _k).
   idx <- which(keep)
   yk <- y[idx]; Dk <- D[idx, , drop = FALSE]; Xk <- X[idx, , drop = FALSE]
-  ri_k <- ri[idx]; ci_k <- ci[idx]
-  blk_k <- blk_of[idx]; lrow_k <- lrow[idx]; lcol_k <- lcol[idx]
+  ri_k <- ri[idx]; ci_k <- ci[idx]                      # global cluster ids, retained
+  blk_k <- blk_of[idx]; lrow_k <- lrow[idx]; lcol_k <- lcol[idx]   # block + local indices
   code_k <- .cell_code(cbind(ri_k, ci_k))   # global cell code on retained cells
-  Nk <- length(idx)
+  Nk <- length(idx)                  # number of cells actually used
 
   sizes <- vapply(blocks, function(b) c(length(b$rows), length(b$cols)),
                   integer(2))
@@ -116,8 +119,12 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   )
 
   ## --- per-rep observation-permutation builder (block-diagonal) --------------
+  ## Permutes rows and columns independently within each block (the blocks are
+  ## disjoint, so the joint map is a genuine relabelling), then expresses the
+  ## result as observation gather-vectors over the retained cells.
   perm_builder <- function(rep_seed) {
-    ## per block, a row group and a col group of common order K+1
+    ## Per block, a row group and a col group of common order K+1. The 4*q
+    ## offsets keep every block's two seeds distinct within a rep.
     rowG <- vector("list", length(blocks))
     colG <- vector("list", length(blocks))
     for (q in seq_along(blocks)) {
@@ -127,17 +134,19 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                                   seed = .sub_seed(rep_seed, 4L * q))
     }
     Kp1 <- K + 1L
-    ops <- vector("list", Kp1)
+    ops <- vector("list", Kp1)        # one observation gather-vector per element
     for (k in seq_len(Kp1)) {
-      ## target global (row, col) for every retained cell under element k
+      ## Compute the target global (row, col) of every retained cell under the
+      ## k-th element, block by block (unchanged where the block has no cells).
       tg_row <- ri_k; tg_col <- ci_k
       for (q in seq_along(blocks)) {
-        sel <- blk_k == q
+        sel <- blk_k == q            # retained cells in block q
         if (!any(sel)) next
-        rimg <- rowG[[q]][[k]]; cimg <- colG[[q]][[k]]
-        tg_row[sel] <- blocks[[q]]$rows[rimg[lrow_k[sel]]]
+        rimg <- rowG[[q]][[k]]; cimg <- colG[[q]][[k]]   # local image vectors
+        tg_row[sel] <- blocks[[q]]$rows[rimg[lrow_k[sel]]]   # local -> permuted -> global
         tg_col[sel] <- blocks[[q]]$cols[cimg[lcol_k[sel]]]
       }
+      ## Map each target cell back to its observation index among retained cells.
       tgt_code <- .cell_code(cbind(tg_row, tg_col))
       g <- match(tgt_code, code_k)
       if (anyNA(g))
@@ -150,7 +159,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
   res <- .ipt_engine(yk, Dk, Xk, perm_builder, K = K, n_reps = n_reps,
                      seed = seed, alpha = alpha, conf_int = conf_int,
-                     beta_null = beta_null, grid = grid, conf_level = 1 - alpha,
+                     beta_null = beta_null, grid = grid,
                      type = "missing (bicliques)", d_names = d_names,
                      n_clusters = c(row = n_row, col = n_col), call = cl)
   res$note <- c(note, res$note)
@@ -210,30 +219,34 @@ find_bicliques <- function(row, col, min_block = 2L,
   min_block <- max(2L, as.integer(min_block))
   rf <- factor(row); cf <- factor(col)
   ri <- as.integer(rf); ci <- as.integer(cf)
-  nr <- nlevels(rf); nc <- nlevels(cf)
-  ## observed-cell incidence as a logical matrix (clusters are usually modest)
+  nr <- nlevels(rf); nc <- nlevels(cf)            # number of row / col clusters
+  ## Observed-cell incidence as a logical matrix A[row, col] (cluster counts are
+  ## usually modest, so a dense matrix is fine). A[i, j] == TRUE iff cell (i,j) seen.
   A <- matrix(FALSE, nr, nc)
   A[cbind(ri, ci)] <- TRUE
 
+  ## Original cluster labels, restored to numeric where possible so the returned
+  ## blocks use the user's own coding rather than factor levels.
   row_lab <- levels(rf); col_lab <- levels(cf)
-  ## restore the user's original cluster coding (numeric if possible)
   restore <- function(lab) {
     num <- suppressWarnings(as.numeric(lab))
     if (!anyNA(num)) num else lab
   }
   row_lab <- restore(row_lab); col_lab <- restore(col_lab)
 
+  ## Peel off disjoint blocks one at a time: rows/cols already claimed by a block
+  ## become unavailable for later blocks.
   avail_row <- rep(TRUE, nr); avail_col <- rep(TRUE, nc)
   blocks <- list()
-  budget_hit <- FALSE
+  budget_hit <- FALSE                  # did the exact search ever exhaust its budget?
 
   repeat {
-    rrows <- which(avail_row); rcols <- which(avail_col)
+    rrows <- which(avail_row); rcols <- which(avail_col)   # still-available clusters
     if (length(rrows) < min_block || length(rcols) < min_block) break
-    Asub <- A[rrows, rcols, drop = FALSE]
+    Asub <- A[rrows, rcols, drop = FALSE]   # incidence among available clusters
     if (method == "exact") {
       blk <- .max_biclique_exact(Asub, node_budget = node_budget)
-      if (!isTRUE(blk$exact)) {
+      if (!isTRUE(blk$exact)) {        # budget hit: fall back to the greedy block
         budget_hit <- TRUE
         gre <- .grow_biclique(Asub)               # valid fallback for this block
         if (length(gre$rows) * length(gre$cols) > blk$area) blk <- gre
@@ -243,6 +256,7 @@ find_bicliques <- function(row, col, min_block = 2L,
     }
     if (length(blk$rows) < min_block || length(blk$cols) < min_block) break
 
+    ## Map the block's local indices back to global clusters, store, and retire them.
     gr <- rrows[blk$rows]; gc <- rcols[blk$cols]
     blocks[[length(blocks) + 1L]] <- list(rows = row_lab[gr], cols = col_lab[gc])
     avail_row[gr] <- FALSE; avail_col[gc] <- FALSE
@@ -262,19 +276,21 @@ find_bicliques <- function(row, col, min_block = 2L,
 .grow_biclique <- function(A) {
   nr <- nrow(A); nc <- ncol(A)
   if (nr == 0L || nc == 0L) return(list(rows = integer(0), cols = integer(0)))
-  deg <- rowSums(A)
-  ord <- order(deg, decreasing = TRUE)
-  best <- list(rows = integer(0), cols = integer(0), area = 0)
+  deg <- rowSums(A)                        # per-row number of observed columns
+  ord <- order(deg, decreasing = TRUE)     # process the densest rows first
+  best <- list(rows = integer(0), cols = integer(0), area = 0)  # best block so far
 
-  ## try a few high-degree seed rows; keep the best block found
+  ## Try a few high-degree seed rows; keep the largest-area block found.
   n_seed <- min(nr, 8L)
   for (s in seq_len(n_seed)) {
     seed_row <- ord[s]
     cols <- which(A[seed_row, ])           # columns observed for the seed row
     if (length(cols) == 0L) next
-    rows <- seed_row
-    area <- length(rows) * length(cols)
-    ## consider remaining rows in degree order; intersect their column support
+    rows <- seed_row                       # current row set (grows below)
+    area <- length(rows) * length(cols)    # current all-ones area
+    ## Consider the remaining rows in degree order; adding a row shrinks the
+    ## common column set to those it also observes. Keep a row only if the
+    ## resulting block is at least as large (greedy area maximisation).
     for (r in ord) {
       if (r == seed_row) next
       new_cols <- cols[A[r, cols]]          # cols still fully observed if r added
@@ -307,31 +323,36 @@ find_bicliques <- function(row, col, min_block = 2L,
   nr <- nrow(A); nc <- ncol(A)
   if (nr == 0L || nc == 0L)
     return(list(rows = integer(0), cols = integer(0), area = 0, exact = TRUE))
-  supp <- lapply(seq_len(nr), function(r) which(A[r, ]))   # column support / row
+  supp <- lapply(seq_len(nr), function(r) which(A[r, ]))   # column support per row
   ord  <- order(lengths(supp), decreasing = TRUE)          # process dense rows first
-  best <- list(rows = integer(0), cols = integer(0), area = 0)
-  nodes <- 0L
-  exact <- TRUE
+  best <- list(rows = integer(0), cols = integer(0), area = 0)  # incumbent best block
+  nodes <- 0L                          # search nodes visited (vs. node_budget)
+  exact <- TRUE                        # cleared to FALSE if the budget is hit
 
+  ## Depth-first branch-and-bound over rows in `ord`.
+  ##   pos     : index into `ord` of the row being decided
+  ##   chosen  : row indices included so far
+  ##   curcols : columns observed by *every* chosen row (the block's columns)
   rec <- function(pos, chosen, curcols) {
     if (nodes >= node_budget) { exact <<- FALSE; return(invisible(NULL)) }
     nodes <<- nodes + 1L
-    rem <- length(ord) - pos + 1L
+    rem <- length(ord) - pos + 1L      # rows not yet decided
     if (length(chosen) > 0L) {
       ncols <- length(curcols)
       if (ncols == 0L) return(invisible(NULL))           # no common column: dead end
       area <- length(chosen) * ncols
       if (area > best$area) best <<- list(rows = chosen, cols = curcols, area = area)
-      ## optimistic bound: at most all remaining rows added, columns can only shrink
+      ## Optimistic bound: even adding every remaining row keeps <= ncols columns,
+      ## so if that cannot beat the incumbent, prune this branch.
       if ((length(chosen) + rem) * ncols <= best$area) return(invisible(NULL))
     }
     if (pos > length(ord)) return(invisible(NULL))
     r <- ord[pos]
-    ## branch 1: include row r (intersect its support with the running columns)
+    ## Branch 1: include row r (intersect its support with the running columns).
     newcols <- if (length(chosen) == 0L) supp[[r]] else curcols[curcols %in% supp[[r]]]
     rec(pos + 1L, c(chosen, r), newcols)
-    if (!exact) return(invisible(NULL))
-    ## branch 2: skip row r
+    if (!exact) return(invisible(NULL))   # budget hit deeper down: stop early
+    ## Branch 2: skip row r.
     rec(pos + 1L, chosen, curcols)
   }
   rec(1L, integer(0), integer(0))

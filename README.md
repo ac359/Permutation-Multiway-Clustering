@@ -257,7 +257,3 @@ trade statistics.
 - Wen, K., Wang, T. & Wang, Y. (2025). Residual permutation test for regression
   coefficient testing. *The Annals of Statistics* **53**(2), 724–748.
   doi:10.1214/24-AOS2360.
-
-## License
-
-MIT (see `LICENSE`).

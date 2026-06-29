@@ -46,38 +46,45 @@ build_perm_set <- function(n, K, seed = NULL) {
   K <- as.integer(K)
   if (n < 2L) stop("`n` must be at least 2.", call. = FALSE)
   if (K < 1L) stop("`K` must be at least 1.", call. = FALSE)
-  B <- K + 1L                      # block size
+  B <- K + 1L                      # block size = group order
   if (B > n) {
     stop(sprintf(
       "K + 1 = %d exceeds n = %d: no non-trivial permutation exists. Use K <= n - 1.",
       B, n), call. = FALSE)
   }
 
+  ## Reproducible relabelling without disturbing the caller's RNG stream: save
+  ## the global seed, reseed, and restore on exit (see .save_seed/.restore_seed).
   if (!is.null(seed)) {
     old <- .save_seed()
     on.exit(.restore_seed(old), add = TRUE)
     set.seed(seed)
   }
 
-  ## random relabelling pi and its inverse
+  ## Random relabelling pi (a permutation of 1..n) and its inverse. pi is what
+  ## makes the test a *random* invariant test; different seeds give different pi.
   pi_vec <- sample.int(n)           # pi_vec[i] = pi(i)
-  pi_inv <- integer(n)
+  pi_inv <- integer(n)              # pi_inv[pi(i)] = i  (the inverse map)
   pi_inv[pi_vec] <- seq_len(n)
 
+  ## Split 1..n into consecutive blocks of size B; any tail of < B leftover
+  ## indices is held fixed (it cannot be cyclically shifted within a full block).
   nb <- n %/% B                     # number of full blocks
-  in_block <- seq_len(nb * B)       # indices that live in a full block
-  ## position within block (0-based) and block start (1-based) for in-block idx
-  pos0 <- (in_block - 1L) %% B
-  blk_start <- in_block - pos0      # first index of each element's block
+  in_block <- seq_len(nb * B)       # the indices that live in a full block
+  pos0 <- (in_block - 1L) %% B      # 0-based position within the block
+  blk_start <- in_block - pos0      # 1-based index of the block's first element
 
+  ## Each non-identity element k cyclically shifts every block by k positions;
+  ## element 0 is the identity. Building all powers of one generator guarantees
+  ## the set is a cyclic group of order B (closed under composition).
   perms <- vector("list", B)
   for (k in 0:K) {
-    psit <- seq_len(n)              # psi-tilde_k as image vector; default identity
+    psit <- seq_len(n)              # psi-tilde_k as an image vector; default = identity
     if (k > 0L && nb > 0L) {
-      new_pos0 <- (pos0 + k) %% B
+      new_pos0 <- (pos0 + k) %% B   # shifted position within the block
       psit[in_block] <- blk_start + new_pos0
     }
-    ## psi_k(i) = pi^{-1}( psi-tilde_k( pi(i) ) )
+    ## Conjugate the block shift by the relabelling: psi_k(i) = pi^{-1}( psi-tilde_k( pi(i) ) )
     perms[[k + 1L]] <- pi_inv[psit[pi_vec]]
   }
   attr(perms, "block_size") <- B
@@ -85,7 +92,13 @@ build_perm_set <- function(n, K, seed = NULL) {
 }
 
 ## ---- internal RNG-state helpers ------------------------------------------
+## These let a seeded routine draw random numbers reproducibly without
+## clobbering the caller's random stream: snapshot .Random.seed, reseed, do the
+## work, then restore the snapshot on exit.
 
+#' Snapshot the current global RNG state (or NULL if none has been initialised).
+#' @keywords internal
+#' @noRd
 .save_seed <- function() {
   if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
     get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -94,6 +107,10 @@ build_perm_set <- function(n, K, seed = NULL) {
   }
 }
 
+#' Restore a global RNG state previously captured by \code{.save_seed()}.
+#' A NULL snapshot means the RNG was uninitialised, so we remove the seed again.
+#' @keywords internal
+#' @noRd
 .restore_seed <- function(old) {
   if (is.null(old)) {
     if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {

@@ -31,7 +31,7 @@
 .cell_code <- function(coords) {
   coords <- as.matrix(coords)
   storage.mode(coords) <- "double"
-  radix <- apply(coords, 2L, max)
+  radix <- apply(coords, 2L, max)      # per-dimension base = number of clusters
   ## Guard exactness: the code ranges over 0..prod(radix)-1, which must fit in a
   ## double without rounding (integers are exact only up to 2^53). For realistic
   ## cluster counts this is never an issue, but error loudly rather than risk a
@@ -40,11 +40,11 @@
     stop(sprintf(paste0("Cluster index space (%.3g cells) exceeds 2^53; the ",
                         "mixed-radix cell encoding would not be exact. Too many ",
                         "clusters for this design."), prod(radix)), call. = FALSE)
-  code <- coords[, 1L] - 1
+  code <- coords[, 1L] - 1             # least-significant digit (0-based)
   if (ncol(coords) > 1L) {
-    mult <- 1
+    mult <- 1                          # place value of the current digit
     for (c in 2L:ncol(coords)) {
-      mult <- mult * radix[c - 1L]
+      mult <- mult * radix[c - 1L]     # advance to the next, higher base
       code <- code + mult * (coords[, c] - 1)
     }
   }
@@ -81,25 +81,27 @@
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
-  Kp1 <- length(obs_perms)
-  K <- Kp1 - 1L
+  Kp1 <- length(obs_perms)             # group order (number of permutations incl. identity)
+  K <- Kp1 - 1L                        # number of non-identity permutations
   if (K < 1L) stop("Need at least one non-identity permutation.", call. = FALSE)
-  d <- ncol(D)
+  d <- ncol(D)                         # number of coefficients of interest
 
-  u <- matrix(0, d, K)                 # u[, k] = Dr' yr      (a-intercept)
-  v <- matrix(0, d, K)                 # v[, k] = Dr' ypr     (b-intercept)
-  M <- array(0, dim = c(d, d, K))      # M[ , , k] = Dr' Dr   (a-slope)
-  W <- array(0, dim = c(d, d, K))      # W[ , , k] = Dr' Dpr  (b-slope)
+  ## Cached d-vectors / d x d matrices, one slice per non-identity permutation k.
+  ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
+  u <- matrix(0, d, K)                 # u[, k]   = Dr' yr    (a-statistic intercept)
+  v <- matrix(0, d, K)                 # v[, k]   = Dr' ypr   (b-statistic intercept)
+  M <- array(0, dim = c(d, d, K))      # M[ , ,k] = Dr' Dr    (a-statistic slope in b)
+  W <- array(0, dim = c(d, d, K))      # W[ , ,k] = Dr' Dpr   (b-statistic slope in b)
   for (k in seq_len(K)) {
-    g   <- obs_perms[[k + 1L]]
-    qMk <- qr(cbind(X, X[g, , drop = FALSE]))
-    Dr  <- qr.resid(qMk, D)            # N x d
-    yr  <- qr.resid(qMk, y)            # N
-    ypr <- qr.resid(qMk, y[g])         # N (permuted outcome residualized)
-    u[, k]   <- crossprod(Dr, yr)
+    g   <- obs_perms[[k + 1L]]         # gather-vector of the k-th permutation
+    qMk <- qr(cbind(X, X[g, , drop = FALSE]))   # QR of the FWL projector M_k = [X | X_k]
+    Dr  <- qr.resid(qMk, D)            # residualized covariate(s),     N x d
+    yr  <- qr.resid(qMk, y)            # residualized outcome,          length N
+    ypr <- qr.resid(qMk, y[g])         # residualized permuted outcome, length N
+    u[, k]   <- crossprod(Dr, yr)      # = t(Dr) %*% yr
     v[, k]   <- crossprod(Dr, ypr)
-    M[, , k] <- crossprod(Dr)
-    if (need_perm_D)
+    M[, , k] <- crossprod(Dr)          # = t(Dr) %*% Dr
+    if (need_perm_D)                   # only needed for CI / non-zero null (see engine)
       W[, , k] <- crossprod(Dr, qr.resid(qMk, D[g, , drop = FALSE]))
   }
   list(u = u, v = v, M = M, W = W, K = K, Kp1 = Kp1, d = d,
@@ -119,8 +121,10 @@
 #' @noRd
 .ipt_eval <- function(prep, beta) {
   d <- prep$d
-  beta <- rep(as.numeric(beta), length.out = d)
-  if (d == 1L) {
+  beta <- rep(as.numeric(beta), length.out = d)   # recycle scalar null to length d
+  ## a[k], b[k]: the identity- and k-th-permutation residual norms at this beta,
+  ## reconstructed from the cached cross products (affine in beta, no QR).
+  if (d == 1L) {                       # scalar fast path: norms reduce to abs()
     a <- abs(prep$u[1L, ] - prep$M[1L, 1L, ] * beta)
     b <- abs(prep$v[1L, ] - prep$W[1L, 1L, ] * beta)
   } else {
@@ -131,7 +135,9 @@
       b[k] <- sqrt(sum((prep$v[, k] - prep$W[, , k] %*% beta)^2))
     }
   }
-  amin <- min(a)
+  amin <- min(a)                       # minorizing identity statistic
+  ## Minorized randomization p-value: fraction of permutations whose statistic
+  ## is at least the (minorized) observed one, with the usual +1 correction.
   list(pvalue = (1 + sum(b >= amin)) / prep$Kp1, a = a, b = b)
 }
 
@@ -166,23 +172,26 @@
 #' @noRd
 .build_obs_perms <- function(coords, groups) {
   coords <- as.matrix(coords)
-  C <- ncol(coords)
-  orig_code <- .cell_code(coords)
-  ## determine K from the first non-NULL group
+  C <- ncol(coords)                    # number of clustering dimensions
+  orig_code <- .cell_code(coords)      # cell code of each observation as it stands
+  ## Determine the group order K+1 from the first dimension that is permuted
+  ## (all non-NULL groups share the same order).
   Kp1 <- NULL
   for (g in groups) if (!is.null(g)) { Kp1 <- length(g); break }
   if (is.null(Kp1)) stop("At least one dimension must be permuted.", call. = FALSE)
 
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
-    mapped <- coords
+    mapped <- coords                   # coordinates after applying the k-th element
     for (c in seq_len(C)) {
       gk <- groups[[c]]
-      if (!is.null(gk)) {
+      if (!is.null(gk)) {              # NULL group => this dimension is held fixed
         img <- gk[[k]]                 # image vector for this dim at element k
         mapped[, c] <- img[coords[, c]]
       }
     }
+    ## Translate permuted coordinates back to observation indices by matching
+    ## cell codes; an NA means the permutation reached an unobserved cell.
     mapped_code <- .cell_code(mapped)
     g <- match(mapped_code, orig_code)
     if (anyNA(g)) {
@@ -190,7 +199,7 @@
            "complete array. Use mwperm_missing() or mwperm_layout().",
            call. = FALSE)
     }
-    obs_perms[[k]] <- g
+    obs_perms[[k]] <- g                # observation gather-vector for element k
   }
   obs_perms
 }
