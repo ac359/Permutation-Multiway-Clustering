@@ -44,6 +44,43 @@ assuming only that the error matrix is separately exchangeable across the
 clustering dimensions. It makes **no assumption on the distribution of the
 covariates** and needs no large-cluster asymptotics.
 
+## Just one call: `mwperm()`
+
+You do not need to know in advance which design applies. `mwperm()` inspects
+the clustering structure — how many index dimensions, whether cells repeat,
+whether the array is complete — and dispatches to the matching test,
+forwarding every argument unchanged, so the result is identical to calling
+the specific function yourself:
+
+```{r unified}
+data(trade_dyadic)
+fit1 <- mwperm(y = "log_trade", d = "log_dist",
+               x = c("log_gdp_i", "log_gdp_j"),
+               index = c("importer", "exporter"),
+               data = trade_dyadic, n_reps = 15, seed = 1)
+```
+
+To see the diagnosis without running anything, use `mwperm_check()`:
+
+```{r check}
+data(trade_panel)
+mwperm_check(index = c("importer", "exporter", "year"), data = trade_panel)
+```
+
+Forks that the data itself can resolve (complete vs incomplete arrays,
+repeated cells) are decided silently. Two forks hinge on an exchangeability
+assumption the data *cannot* reveal, and there `mwperm()` defaults to the
+choice that stays valid under the widest set of error processes and tells you
+how to override it: a complete three-index array is treated as a **panel**
+(time held fixed) unless you force `design = "threeway"`, because the panel
+test remains valid when all three dimensions are exchangeable while the
+converse fails; and repeated $(i, j)$ cells are treated as within-cell
+replication (**layout**) with a warning, because they could equally be a time
+dimension you forgot to pass — supply `time =` if so.
+
+The rest of this vignette walks through the design-specific functions, which
+remain fully supported for direct use.
+
 ## A dyadic example
 
 The bundled `trade_dyadic` data set is a synthetic 40 × 40 gravity

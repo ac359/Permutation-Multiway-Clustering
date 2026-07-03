@@ -6,7 +6,7 @@
 mwperm_missing(y, d, x = NULL, row, col, K = NULL,
                alpha = 0.05, beta_null = 0, conf_int = TRUE,
                n_reps = 1L, seed = NULL, grid = NULL, min_block = 3L,
-               block_method = c("greedy", "exact"))
+               block_method = c("greedy", "exact"), n_cores = 1L)
 }
 \arguments{
 \item{y}{Numeric outcome vector, one entry per observed cell.}
@@ -37,6 +37,11 @@ for a single covariate, or a joint confidence region for several.}
 \item{seed}{Optional integer; run \code{r} uses seed \code{seed + r - 1}.}
 
 \item{grid}{Optional numeric vector of candidate \eqn{\beta} values.}
+\item{n_cores}{Number of CPU cores for the permutation computations
+(default 1 = serial). Parallelism is over the \code{n_reps} repetitions when
+several are run with a \code{seed}, otherwise over the \code{K}
+per-permutation factorizations; either way the result is \emph{identical} to
+the serial one. See \code{\link{mwperm_dyadic}} for details.}
 
 \item{min_block}{Integer; only bicliques whose smaller side is at least
 \code{min_block} are used. Larger values give finer p-value resolution

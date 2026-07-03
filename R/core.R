@@ -74,10 +74,14 @@
 #'   observations; element 1 must be the identity `seq_len(N)`.
 #' @param need_perm_D logical; if `FALSE` the permuted-`D` projection (needed
 #'   only for confidence-interval inversion) is skipped to save work.
+#' @param n_cores number of workers for the per-permutation QR loop (the K
+#'   independent factorizations); 1 = serial. The loop uses no RNG and each
+#'   iteration writes an independent slice, so any schedule gives identical
+#'   output.
 #' @return a list (the "prep" object) consumed by \code{\link{.ipt_eval}}.
 #' @keywords internal
 #' @noRd
-.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE) {
+.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L) {
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
@@ -86,23 +90,32 @@
   if (K < 1L) stop("Need at least one non-identity permutation.", call. = FALSE)
   d <- ncol(D)                         # number of coefficients of interest
 
-  ## Cached d-vectors / d x d matrices, one slice per non-identity permutation k.
+  ## One slice of cached cross products per non-identity permutation k.
   ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
-  u <- matrix(0, d, K)                 # u[, k]   = Dr' yr    (a-statistic intercept)
-  v <- matrix(0, d, K)                 # v[, k]   = Dr' ypr   (b-statistic intercept)
-  M <- array(0, dim = c(d, d, K))      # M[ , ,k] = Dr' Dr    (a-statistic slope in b)
-  W <- array(0, dim = c(d, d, K))      # W[ , ,k] = Dr' Dpr   (b-statistic slope in b)
-  for (k in seq_len(K)) {
+  one_k <- function(k) {
     g   <- obs_perms[[k + 1L]]         # gather-vector of the k-th permutation
     qMk <- qr(cbind(X, X[g, , drop = FALSE]))   # QR of the FWL projector M_k = [X | X_k]
     Dr  <- qr.resid(qMk, D)            # residualized covariate(s),     N x d
     yr  <- qr.resid(qMk, y)            # residualized outcome,          length N
     ypr <- qr.resid(qMk, y[g])         # residualized permuted outcome, length N
-    u[, k]   <- crossprod(Dr, yr)      # = t(Dr) %*% yr
-    v[, k]   <- crossprod(Dr, ypr)
-    M[, , k] <- crossprod(Dr)          # = t(Dr) %*% Dr
-    if (need_perm_D)                   # only needed for CI / non-zero null (see engine)
-      W[, , k] <- crossprod(Dr, qr.resid(qMk, D[g, , drop = FALSE]))
+    list(u = crossprod(Dr, yr),        # = t(Dr) %*% yr
+         v = crossprod(Dr, ypr),
+         M = crossprod(Dr),            # = t(Dr) %*% Dr
+         W = if (need_perm_D)          # only needed for CI / non-zero null (see engine)
+           crossprod(Dr, qr.resid(qMk, D[g, , drop = FALSE])))
+  }
+  slices <- .plapply(seq_len(K), one_k, n_cores = n_cores)
+
+  ## Assemble in k order (order-independent: each slice is self-contained).
+  u <- matrix(0, d, K)                 # u[, k]   = Dr' yr    (a-statistic intercept)
+  v <- matrix(0, d, K)                 # v[, k]   = Dr' ypr   (b-statistic intercept)
+  M <- array(0, dim = c(d, d, K))      # M[ , ,k] = Dr' Dr    (a-statistic slope in b)
+  W <- array(0, dim = c(d, d, K))      # W[ , ,k] = Dr' Dpr   (b-statistic slope in b)
+  for (k in seq_len(K)) {
+    u[, k]   <- slices[[k]]$u
+    v[, k]   <- slices[[k]]$v
+    M[, , k] <- slices[[k]]$M
+    if (need_perm_D) W[, , k] <- slices[[k]]$W
   }
   list(u = u, v = v, M = M, W = W, K = K, Kp1 = Kp1, d = d,
        has_perm_D = need_perm_D)

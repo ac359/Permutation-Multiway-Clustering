@@ -28,7 +28,8 @@
 #' @export
 mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                            n_reps = 1L, seed = NULL, grid = NULL) {
+                            n_reps = 1L, seed = NULL, grid = NULL,
+                            n_cores = 1L) {
   cl <- match.call()
   y <- as.numeric(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
@@ -55,5 +56,6 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
               grid = grid, type = "threeway", d_names = d_names,
-              n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl)
+              n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl,
+              n_cores = n_cores)
 }

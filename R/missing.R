@@ -60,7 +60,8 @@
 mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            alpha = 0.05, beta_null = 0, conf_int = TRUE,
                            n_reps = 1L, seed = NULL, grid = NULL,
-                           min_block = 3L, block_method = c("greedy", "exact")) {
+                           min_block = 3L, block_method = c("greedy", "exact"),
+                           n_cores = 1L) {
   cl <- match.call()
   block_method <- match.arg(block_method)
   y <- as.numeric(y); N <- length(y)
@@ -161,7 +162,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                      seed = seed, alpha = alpha, conf_int = conf_int,
                      beta_null = beta_null, grid = grid,
                      type = "missing (bicliques)", d_names = d_names,
-                     n_clusters = c(row = n_row, col = n_col), call = cl)
+                     n_clusters = c(row = n_row, col = n_col), call = cl,
+                     n_cores = n_cores)
   res$note <- c(note, res$note)
   res$n_blocks <- length(blocks)
   res$cells_used <- Nk

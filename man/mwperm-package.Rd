@@ -1,7 +1,6 @@
 % Generated manually (no roxygen2/CRAN access in build environment).
 \name{mwperm-package}
 \alias{mwperm-package}
-\alias{mwperm}
 \docType{package}
 \title{mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression}
 \description{
@@ -11,9 +10,15 @@ missing-data designs, implementing the invariant permutation test of Guo,
 Toulis and Wang (2026) building on Wen, Wang and Wang (2025).
 }
 \details{
+The recommended entry points are \code{\link{mwperm}}, which detects the
+clustering design of the data and dispatches to the matching test, and
+\code{\link{mwperm_check}}, which prints the diagnosis (detected design,
+roles, balance, attainable resolution) without running anything.
+
 The key object is the block-cyclic permutation group built by
-\code{\link{build_perm_set}}. The user-facing tests are
-\code{\link{mwperm_dyadic}} (two-way / dyadic clustering),
+\code{\link{build_perm_set}}. The design-specific tests -- which
+\code{\link{mwperm}} calls and which remain fully supported for direct use --
+are \code{\link{mwperm_dyadic}} (two-way / dyadic clustering),
 \code{\link{mwperm_threeway}} (three-way clustering),
 \code{\link{mwperm_panel}} (panels with an arbitrary time effect),
 \code{\link{mwperm_layout}} (replicated two-way layouts) and
@@ -34,6 +39,7 @@ regression coefficient testing. \emph{The Annals of Statistics} 53(2),
 724--748.
 }
 \seealso{
+\code{\link{mwperm}}, \code{\link{mwperm_check}},
 \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
 \code{\link{build_perm_set}}.
 }

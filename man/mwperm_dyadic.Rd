@@ -5,7 +5,7 @@
 \usage{
 mwperm_dyadic(y, d, x = NULL, row, col, K = NULL,
               alpha = 0.05, beta_null = 0, conf_int = TRUE,
-              n_reps = 1L, seed = NULL, grid = NULL)
+              n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L)
 }
 \arguments{
 \item{y}{Numeric outcome vector, one entry per observed cell.}
@@ -45,6 +45,16 @@ are aggregated by the median, as recommended for randomised tests.}
 single covariate, a numeric vector (the interval becomes the range of grid
 points not rejected). For several, a list of one numeric vector per covariate
 defining the region search grid.}
+
+\item{n_cores}{Number of CPU cores for the permutation computations
+(default 1 = serial). Parallelism is over the \code{n_reps} repetitions when
+several are run with a \code{seed}, otherwise over the \code{K}
+per-permutation factorizations; either way the result is \emph{identical} to
+the serial one (every random draw is derived from explicit seeds, and the
+statistics are combined by order-independent reductions). Uses forked workers
+on Unix and a PSOCK cluster on Windows. Worthwhile for large problems
+(thousands of cells, large \code{K}); for small ones the fork overhead
+usually exceeds the gain.}
 }
 \value{
 An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).

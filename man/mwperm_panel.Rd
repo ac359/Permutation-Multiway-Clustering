@@ -5,7 +5,8 @@
 \usage{
 mwperm_panel(y, d, x = NULL, row, col, time, K = NULL,
              alpha = 0.05, beta_null = 0, conf_int = TRUE,
-             n_reps = 1L, seed = NULL, grid = NULL, time_fe = TRUE)
+             n_reps = 1L, seed = NULL, grid = NULL, time_fe = TRUE,
+             n_cores = 1L)
 }
 \arguments{
 \item{y}{Numeric outcome vector, one entry per observed cell.}
@@ -38,6 +39,11 @@ for a single covariate, or a joint confidence region for several.}
 
 \item{grid}{Optional numeric vector of candidate \eqn{\beta} values for the
 confidence interval.}
+\item{n_cores}{Number of CPU cores for the permutation computations
+(default 1 = serial). Parallelism is over the \code{n_reps} repetitions when
+several are run with a \code{seed}, otherwise over the \code{K}
+per-permutation factorizations; either way the result is \emph{identical} to
+the serial one. See \code{\link{mwperm_dyadic}} for details.}
 
 \item{time_fe}{Logical; if \code{TRUE} (the default) time fixed effects are
 added to the nuisance design. Under condition InvB this is valid (the time

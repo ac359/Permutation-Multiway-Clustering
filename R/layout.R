@@ -37,7 +37,7 @@
 #' @export
 mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                           K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                          n_reps = 1L, seed = NULL, grid = NULL) {
+                          n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L) {
   cl <- match.call()
   y <- as.numeric(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
@@ -103,7 +103,8 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                      grid = grid,
                      type = if (is.null(L0)) "layout" else "layout (balanced)",
                      d_names = d_names,
-                     n_clusters = c(ncell = ncell, min_cell = min_cell), call = cl)
+                     n_clusters = c(ncell = ncell, min_cell = min_cell), call = cl,
+                     n_cores = n_cores)
   if (length(balance_note)) res$note <- c(balance_note, res$note)
   res
 }

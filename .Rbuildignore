@@ -5,12 +5,18 @@
 ^shared.code$
 ^.*\.DS_Store$
 ^\.Rbuildignore$
-^CLAUDE\.md$
 ^IMPLEMENTATION_PLAN\.md$
-^CLAUDE\.local\.md$
-^\.claude$
 ^\.gitignore$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.git$
 ^more_info$
+^Reference papers$
+^Reference.papers$
+^docs$
+^sim-cache$
+^PROGRESS\.md$
+^REVIEW\.md$
+^mwperm_.*\.tar\.gz$
+^mwperm\.Rcheck$
+^demo$

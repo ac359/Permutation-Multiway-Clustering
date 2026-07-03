@@ -27,8 +27,8 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
 License: Proprietary
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
-Imports: stats, graphics
-Suggests: knitr, rmarkdown
+Imports: stats, graphics, parallel
+Suggests: knitr, rmarkdown, RhpcBLASctl
 VignetteBuilder: knitr
 LazyData: true
 RoxygenNote: 7.3.1

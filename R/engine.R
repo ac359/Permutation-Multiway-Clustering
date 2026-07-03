@@ -1,5 +1,41 @@
 ## Shared internals for all mwperm_* front ends. Not exported.
 
+#' Parallel lapply with a serial default and a Windows PSOCK fallback.
+#'
+#' Runs \code{lapply(X, FUN)} on \code{n_cores} workers: forked
+#' \code{parallel::mclapply} on Unix, a PSOCK cluster elsewhere (or when
+#' forced via \code{method}, used by the tests). With \code{n_cores = 1} it is
+#' exactly \code{lapply}, so the default path stays base-R single-threaded.
+#' Because every task in this package is either explicitly seeded or free of
+#' RNG use, scheduling cannot perturb results: parallel output is identical to
+#' serial (asserted by tests). Worker errors are re-thrown in the parent. If a
+#' multithreaded BLAS is in use, R-level parallelism can oversubscribe cores;
+#' where RhpcBLASctl is installed, workers pin BLAS to one thread.
+#' @keywords internal
+#' @noRd
+.plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock")) {
+  method <- match.arg(method)
+  n_cores <- max(1L, as.integer(n_cores))
+  if (n_cores == 1L || length(X) < 2L) return(lapply(X, FUN))
+  wrap <- function(x) {                # run in the worker
+    if (requireNamespace("RhpcBLASctl", quietly = TRUE))
+      try(RhpcBLASctl::blas_set_num_threads(1L), silent = TRUE)
+    FUN(x)
+  }
+  use_fork <- (method == "fork") ||
+    (method == "auto" && .Platform$OS.type == "unix")
+  out <- if (use_fork) {
+    parallel::mclapply(X, wrap, mc.cores = n_cores)
+  } else {
+    cl <- parallel::makePSOCKcluster(n_cores)
+    on.exit(parallel::stopCluster(cl), add = TRUE)
+    parallel::parLapply(cl, X, wrap)
+  }
+  bad <- vapply(out, inherits, logical(1), what = "try-error")
+  if (any(bad)) stop(attr(out[[which(bad)[1L]]], "condition"))
+  out
+}
+
 #' OLS reference estimate of the coefficient(s) of interest and a naive SE
 #' (used only as a centre/scale for the confidence-interval search).
 #' @keywords internal
@@ -51,7 +87,7 @@
 #' @noRd
 .ipt_engine <- function(y, D, X, perm_builder, K, n_reps, seed,
                         alpha, conf_int, beta_null, grid,
-                        type, d_names, n_clusters, call) {
+                        type, d_names, n_clusters, call, n_cores = 1L) {
   y <- as.numeric(y); D <- as.matrix(D); X <- as.matrix(X)
   N <- length(y)                     # number of observations
   d <- ncol(D)                       # number of coefficients of interest
@@ -84,13 +120,22 @@
   ## objects for the CI search (so the QR work is never repeated).
   ## seeds: one per rep (NULL = use the ambient RNG, no reproducibility).
   seeds <- if (is.null(seed)) rep(list(NULL), n_reps) else as.list(seed + seq_len(n_reps) - 1L)
-  prep_list <- vector("list", n_reps)   # cached cross products, one per rep
-  pv <- numeric(n_reps)                 # per-rep p-value at the null
-  for (r in seq_len(n_reps)) {
-    op <- perm_builder(seeds[[r]])      # K+1 observation gather-vectors for this rep
-    prep_list[[r]] <- .ipt_prepare(y, D, X, op, need_perm_D = need_W)
-    pv[r] <- .ipt_eval(prep_list[[r]], beta0)$pvalue
+  ## Parallel axis (n_cores > 1): the rep loop when it offers several
+  ## explicitly seeded tasks -- each worker rebuilds its permutations from its
+  ## own seed, so scheduling cannot change any draw -- otherwise the K loop
+  ## inside .ipt_prepare (which uses no RNG at all). With seed = NULL the rep
+  ## loop MUST stay serial: forked workers would inherit identical RNG states
+  ## and silently duplicate the permutation draws across reps.
+  rep_axis <- n_cores > 1L && n_reps > 1L && !is.null(seed)
+  one_rep <- function(s) {
+    op <- perm_builder(s)               # K+1 observation gather-vectors for this rep
+    prep <- .ipt_prepare(y, D, X, op, need_perm_D = need_W,
+                         n_cores = if (rep_axis) 1L else n_cores)
+    list(prep = prep, pv = .ipt_eval(prep, beta0)$pvalue)
   }
+  reps <- .plapply(seeds, one_rep, n_cores = if (rep_axis) n_cores else 1L)
+  prep_list <- lapply(reps, `[[`, "prep")   # cached cross products, one per rep
+  pv <- vapply(reps, `[[`, numeric(1), "pv")  # per-rep p-value at the null
   pvalue <- stats::median(pv)           # reported p-value: median across reps
   Kp1 <- prep_list[[1L]]$Kp1            # realised group order (K + 1)
 
@@ -111,6 +156,14 @@
       ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
                        centre = ref$estimate, scale = ref$se,
                        y = y, D = D, grid = grid)
+      if (isTRUE(attr(ci, "disconnected"))) {
+        note <- c(note, paste0(
+          "The acceptance region of the inverted test is disconnected ",
+          "(per-permutation estimates with p-value 1 lie outside the interval ",
+          "around the OLS estimate). The reported interval was widened to the ",
+          "hull of the detected components; it is conservative."))
+      }
+      ci <- as.numeric(ci)             # drop the internal flag attribute
     } else {
       reg <- .invert_region(prep_list, alpha = 1 - conf_level,
                             centre = ref$estimate, scale = ref$se,
@@ -164,6 +217,13 @@
 #' the per-rep interval end points. The p-value at each candidate `b` is read
 #' off the cached prep objects (\code{\link{.ipt_prepare}}) in O(K), so the
 #' whole search costs no extra QR decompositions.
+#'
+#' Note the two modes aggregate across reps differently, both deliberately:
+#' the default (bracketing) mode takes the MEDIAN of the per-rep end points
+#' (matching the median-p-value aggregation of the test itself), while the
+#' explicit-`grid` mode retains a point accepted in ANY rep (a union), which
+#' is more conservative and also covers disconnected acceptance regions by
+#' returning the hull of the retained grid points. See REVIEW.md 3.
 #' @param prep_list list of per-rep prep objects (each with `has_perm_D = TRUE`).
 #' @param y,D the (unshifted) outcome and single covariate, used only to derive
 #'   a sensible step size when the naive SE is unavailable.
@@ -184,16 +244,33 @@
 
   pval_at <- function(b, prep) .ipt_eval(prep, b)$pvalue   # p-value at null b, one rep
 
-  ## Locate one endpoint of the acceptance interval for a single rep.
-  ## `direction` is -1 (lower limit) or +1 (upper limit).
-  one_side <- function(prep, direction) {
-    ## centre (the point estimate) rejected => degenerate; fall back to centre
-    if (pval_at(centre, prep) <= alpha) return(centre)
-    lo <- centre                       # last value known to be accepted
+  ## Per-permutation FWL point estimates u_j / M_j cached in the prep object.
+  ## Each has p-value 1 (its identity statistic a_j is exactly zero there), so
+  ## every finite one is a certified member of the acceptance region -- used to
+  ## rescue a rejected centre and to detect disconnected acceptance regions.
+  bhat_of <- function(prep) {
+    bh <- prep$u[1L, ] / prep$M[1L, 1L, ]
+    bh[is.finite(bh)]
+  }
+
+  ## Locate one endpoint of the acceptance interval component containing
+  ## `start`, for a single rep. `direction` is -1 (lower) or +1 (upper).
+  one_side <- function(prep, direction, start = centre) {
+    if (pval_at(start, prep) <= alpha) {
+      ## start rejected: restart from the nearest per-permutation estimate,
+      ## which is always accepted (p = 1). Degenerate [centre, centre] output
+      ## only remains if even that fails (numerically impossible in practice).
+      bh <- bhat_of(prep)
+      if (length(bh)) {
+        cand <- bh[which.min(abs(bh - start))]
+        if (pval_at(cand, prep) > alpha) start <- cand else return(start)
+      } else return(start)
+    }
+    lo <- start                        # last value known to be accepted
     hi <- NA_real_                     # first value known to be rejected
-    h <- step                          # current step out from the centre
+    h <- step                          # current step out from the start
     for (i in seq_len(max_expand)) {   # phase 1: expand outward to bracket the edge
-      cand <- centre + direction * h
+      cand <- start + direction * h
       if (pval_at(cand, prep) <= alpha) { hi <- cand; break }
       lo <- cand                       # cand accepted: advance the bracket
       h <- h * 1.6                     # geometric growth so few steps are needed
@@ -220,12 +297,33 @@
   }
 
   ## default mode: bracket each side in every rep, report the median endpoints.
+  ## Island guard: the acceptance set {b : pval(b) > alpha} is usually one
+  ## interval, but it is not guaranteed to be (see REVIEW.md 3) -- and every
+  ## finite u_j / M_j has p = 1, so any of them outside the bracketed interval
+  ## certifies a disconnected region. In that case extend the interval to the
+  ## boundary of the outlying component(s) (a conservative hull; never narrower
+  ## than before) and flag it so the engine can attach a note.
   lowers <- numeric(length(prep_list)); uppers <- numeric(length(prep_list))
+  disconnected <- FALSE
   for (r in seq_along(prep_list)) {
-    lowers[r] <- one_side(prep_list[[r]], -1)
-    uppers[r] <- one_side(prep_list[[r]], +1)
+    prep <- prep_list[[r]]
+    lo_r <- one_side(prep, -1)
+    up_r <- one_side(prep, +1)
+    bh <- bhat_of(prep)
+    out_lo <- bh[bh < lo_r]; out_hi <- bh[bh > up_r]
+    if (length(out_lo)) {
+      disconnected <- TRUE
+      lo_r <- one_side(prep, -1, start = min(out_lo))
+    }
+    if (length(out_hi)) {
+      disconnected <- TRUE
+      up_r <- one_side(prep, +1, start = max(out_hi))
+    }
+    lowers[r] <- lo_r; uppers[r] <- up_r
   }
-  c(stats::median(lowers), stats::median(uppers))
+  ci <- c(stats::median(lowers), stats::median(uppers))
+  attr(ci, "disconnected") <- disconnected
+  ci
 }
 
 #' Joint confidence region for several coefficients by test inversion.
@@ -399,6 +497,14 @@
 }
 
 #' Derive a per-rep, per-dimension seed from a rep-level seed (or NULL).
+#'
+#' Rep seeds are `seed + r - 1` (see .ipt_engine), so two (rep, j) pairs can
+#' only collide when the j-range spans >= 1000 — i.e. layouts with >= 1000
+#' occupied cells or missing designs with >= 250 blocks. Even then each rep's
+#' test remains valid (the seed only picks the random relabelling); only the
+#' cross-rep independence of the median aggregation degrades. Deliberately
+#' NOT changed: any new mixing scheme would shift every seeded result and
+#' invalidate the published reference numbers. See REVIEW.md 1.
 #' @keywords internal
 #' @noRd
 .sub_seed <- function(rep_seed, j) if (is.null(rep_seed)) NULL else rep_seed * 1000L + j

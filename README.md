@@ -52,7 +52,10 @@ the test:
 - makes **no assumption on the covariate distribution** — covariates may be sparse,
   irregular, or heavy-tailed;
 - extends cleanly to **three-way clustering**, **panel data** with an arbitrary common
-  time trend, **replicated two-way layouts**, and **incomplete arrays** (missing cells).
+  time trend, **replicated two-way layouts**, and **incomplete arrays** (missing cells);
+- **detects the design for you**: `mwperm()` inspects the clustering structure and
+  dispatches to the right test, and `mwperm_check()` prints the diagnosis without
+  running anything.
 
 ## Installation
 
@@ -63,20 +66,25 @@ From a local clone of this repository:
 remotes::install_local("mwperm")        # or: R CMD INSTALL mwperm
 ```
 
-The package depends only on base R (>= 3.6) and the recommended packages
-`stats` and `graphics`.
+The package depends only on base R (>= 3.6): `stats`, `graphics`, and
+`parallel` (for the opt-in `n_cores` argument). `knitr`, `rmarkdown` and
+`RhpcBLASctl` are optional (vignette, BLAS pinning).
 
 ## Quick start
 
+Hand the data over once; `mwperm()` figures out the design and runs the
+matching test:
+
 ```r
 library(mwperm)
-data(trade_dyadic)        # synthetic 40 x 40 gravity panel
+data(trade_dyadic)        # synthetic 40 x 40 gravity cross-section
 
-fit <- with(trade_dyadic,
-            mwperm_dyadic(y = log_trade, d = log_dist,
-                          x   = cbind(log_gdp_i, log_gdp_j),
-                          row = importer, col = exporter,
-                          n_reps = 15, seed = 1))
+fit <- mwperm(y = "log_trade", d = "log_dist",
+              x = c("log_gdp_i", "log_gdp_j"),
+              index = c("importer", "exporter"),
+              data = trade_dyadic, n_reps = 15, seed = 1)
+#> Detected design: dyadic (2 indices, one observation per cell, complete array)
+#>   -> running mwperm_dyadic(y, d, x, row = importer, col = exporter)
 fit
 #>   log_dist   estimate = -0.89   95% CI [-1.25, -0.56]
 #>   H0: beta = 0    p-value = 0.025   (reject at alpha = 0.05)
@@ -86,10 +94,33 @@ confint(fit)              # inverted-test confidence interval
 plot(fit)                 # stability of the randomised p-value across reps
 ```
 
+To see what would run — detected design, index roles, balance, attainable
+p-value resolution — without any computation:
+
+```r
+mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)
+```
+
+The design-specific functions remain fully supported for direct use:
+
+```r
+fit <- with(trade_dyadic,
+            mwperm_dyadic(y = log_trade, d = log_dist,
+                          x   = cbind(log_gdp_i, log_gdp_j),
+                          row = importer, col = exporter,
+                          n_reps = 15, seed = 1))
+```
+
+For large problems (thousands of cells, large `K`), every test function takes
+`n_cores =` to parallelise the permutation computations; the result is
+**identical** to the serial one (every draw is derived from explicit seeds).
+
 ## Function map
 
 | Design                                   | Function            |
 |------------------------------------------|---------------------|
+| **Auto-detect and dispatch**             | `mwperm()`          |
+| **Diagnose only (no computation)**       | `mwperm_check()`    |
 | Two-way / dyadic clustering              | `mwperm_dyadic()`   |
 | Three-way clustering                     | `mwperm_threeway()` |
 | Panel (two-way + arbitrary time trend)   | `mwperm_panel()`    |
@@ -100,6 +131,19 @@ plot(fit)                 # stability of the randomised p-value across reps
 
 All test functions return an object of class `"mwperm"` with `print()`,
 `summary()`, `confint()` and `plot()` methods.
+
+### How `mwperm()` chooses
+
+Forks the data itself can resolve (complete vs incomplete arrays, repeated
+cells) are decided silently. Two forks hinge on an exchangeability assumption
+the data *cannot* reveal, and there `mwperm()` defaults to the choice that
+stays valid under the widest set of error processes and tells you how to
+override: a complete 3-index array is treated as a **panel** (time held
+fixed) unless you force `design = "threeway"` — the panel test remains valid
+when all three dimensions are exchangeable, while the converse fails — and
+repeated `(i, j)` cells are treated as within-cell replication (**layout**)
+with a warning, since they could equally be a time dimension you forgot to
+pass (`time =` if so).
 
 ## How it works
 
@@ -215,11 +259,11 @@ cell $\ell_{ij}$ varies, permutation is performed only within each cell $(i,j)$ 
 $[\ell_{ij}]$. This is valid under the relaxed structure
 $\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}$ ($\eta_{ij}$ arbitrary, $\zeta_l$
 i.i.d.) — appropriate when $l$ indexes independent replications, as in two-way layouts
-from randomized experiments. For irregular designs, the threshold argument `L0` keeps
-cells with $\ell_{ij}\ge L_0$ (mask $M_{ij} = \mathbb{1}\lbrace\ell_{ij}\ge L_0\rbrace$), randomly
-drops $\ell_{ij} - L_0$ observations to balance them, and then applies the missing-data
-procedure; tune `L0` (e.g. by grid search) to trade off the number of eligible cells
-against within-cell sample size.
+from randomized experiments. For unbalanced layouts, the threshold argument `L0` keeps
+the cells with $\ell_{ij}\ge L_0$, uniformly downsamples each to exactly $L_0$
+replicates (reproducibly via `seed`), and runs the same within-cell test on the
+resulting balanced array; tune `L0` (e.g. by grid search) to trade off the number of
+eligible cells against within-cell sample size.
 
 **Missing cells** (`mwperm_missing()`). With an observation mask
 $M\in\lbrace0,1\rbrace^{n\times n}$ ($M_{ij} = 1$ iff cell $(i,j)$ is observed) satisfying

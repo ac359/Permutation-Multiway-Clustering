@@ -53,7 +53,8 @@
 #' @export
 mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
                          alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                         n_reps = 1L, seed = NULL, grid = NULL, time_fe = TRUE) {
+                         n_reps = 1L, seed = NULL, grid = NULL, time_fe = TRUE,
+                         n_cores = 1L) {
   cl <- match.call()
   y <- as.numeric(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
@@ -89,5 +90,6 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
               grid = grid, type = "panel", d_names = d_names,
-              n_clusters = c(row = n_row, col = n_col, time = n_t), call = cl)
+              n_clusters = c(row = n_row, col = n_col, time = n_t), call = cl,
+              n_cores = n_cores)
 }

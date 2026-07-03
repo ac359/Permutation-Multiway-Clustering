@@ -18,6 +18,8 @@ print.mwperm <- function(x, digits = 4L, ...) {
   cat("\nInvariant permutation test (mwperm)\n")
   cat(strrep("-", 36), "\n", sep = "")
   cat("Design       :", x$type, "\n")
+  if (!is.null(x$auto))                 # dispatched via mwperm(): say why
+    cat("Auto-detected:", x$auto$design, sprintf("(%s)\n", x$auto$reason))
   nc <- x$n_clusters
   cat("Clusters     :",
       paste(sprintf("%s=%d", names(nc), nc), collapse = ", "),
@@ -63,7 +65,9 @@ print.mwperm <- function(x, digits = 4L, ...) {
 
   if (length(x$note)) {
     cat("\nNotes:\n")
-    for (n in x$note) cat(strwrap(n, prefix = "  - ", width = 0.9 * getOption("width", 80)), sep = "\n")
+    for (n in x$note)
+      cat(strwrap(n, initial = "  - ", prefix = "    ",
+                  width = 0.9 * getOption("width", 80)), sep = "\n")
     cat("\n")
   } else cat("\n")
   invisible(x)

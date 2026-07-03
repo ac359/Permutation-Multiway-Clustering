@@ -2,6 +2,8 @@
 
 export(build_perm_set)
 export(find_bicliques)
+export(mwperm)
+export(mwperm_check)
 export(mwperm_dyadic)
 export(mwperm_panel)
 export(mwperm_threeway)
@@ -12,6 +14,7 @@ S3method(print, mwperm)
 S3method(summary, mwperm)
 S3method(confint, mwperm)
 S3method(plot, mwperm)
+S3method(print, mwperm_design)
 
 importFrom(stats, median, lm.fit, model.matrix, sd, setNames)
 importFrom(graphics, hist, abline, legend, barplot)

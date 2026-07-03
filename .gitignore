@@ -1,9 +1,15 @@
 # =========================================================================
 # .gitignore for the mwperm R package
-# Goal: publish ONLY the installable R package (and standard dev scaffolding).
-# Everything listed here is kept locally but NEVER pushed to GitHub -- this is
-# what keeps sensitive / third-party / machine-local files out of every future
-# `git add` + `git push`.
+# Goal: the public repository contains ONLY the installable R package
+# (R/, man/, data/, data-raw/, vignettes/, DESCRIPTION, NAMESPACE,
+# README.md, NEWS.md). Everything listed below stays on the local machine
+# and is never pushed.
+#
+# Note: ignore rules do not untrack files that are already committed, so the
+# private development branch (review-and-unify) keeps its tracked copies of
+# tests/, demo/, sim-cache/ etc.; on the public branch the same paths are
+# simply invisible to git. Adding NEW files under these paths on the private
+# branch requires `git add -f`.
 # =========================================================================
 
 # ----- R build artifacts -----
@@ -36,21 +42,30 @@ Thumbs.db
 .idea/
 .vscode/
 
-# ----- Claude Code project memory / local config (internal, not published) -----
-.claude/
-CLAUDE.md
-CLAUDE.local.md
+# =========================================================================
+# PRIVATE / LOCAL-ONLY MATERIAL -- never for the public repository
+# =========================================================================
 
-# ----- Internal design doc (not part of the shipped package) -----
-IMPLEMENTATION_PLAN.md
-
-# ----- Third-party reference material: the paper authors' replication code -----
-# (MATLAB IPT_*.m, "Log of Gravity.xls", .mat/.RData, etc.) -- NOT ours to
-# redistribute, so it is never committed/pushed.
+# Third-party material that is NOT ours to redistribute:
+# the paper authors' replication code and the reference-paper PDFs
+# (plus the local convenience symlink to the authors' code).
 shared code/
-
-# ----- Local-only research code / write-ups (not part of the R package) -----
-# simulation + benchmark scripts, generated results/figures, and the manuscript.
+shared code
+more_info/
 reference/
 report/
-more_info/
+Reference papers/
+
+# Local project memory / internal design docs
+IMPLEMENTATION_PLAN.md
+
+# Internal review/task artifacts (development record, private branch only)
+PROGRESS.md
+REVIEW.md
+docs/
+
+# Development-only test suite, demo script, and validation simulations
+# (kept on the private branch; not shipped in the public package repo)
+tests/
+demo/
+sim-cache/
