@@ -28,6 +28,7 @@ inst/doc/
 .RData
 .Ruserdata
 .Rproj.user/
+*.Rproj
 
 # ----- vignette / knitr build outputs -----
 vignettes/*.html
