@@ -31,7 +31,11 @@
 #'   \code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).
 #'   Must satisfy \code{K + 1 <= min(cell size)}.
 #'
-#' @return An object of class \code{"mwperm"}.
+#' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
+#'   are the OLS estimate and naive SE, \code{conf_int} (or
+#'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
+#'   inverted-test confidence set, and \code{pvalue} the IPT permutation
+#'   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 #' @references Guo, F. R., Toulis, P. and Wang, Y. (2026), Section 6.3.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
 #' @export

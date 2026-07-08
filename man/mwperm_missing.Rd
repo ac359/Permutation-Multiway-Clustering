@@ -53,9 +53,14 @@ search of maximum-area blocks (with a node-budget fallback to greedy). See
 \code{\link{find_bicliques}}.}
 }
 \value{
-An object of class \code{"mwperm"}. Its \code{n_obs} is the number of
-cells actually used (inside the selected blocks), and the \code{note} field
-records how many cells and blocks were retained.
+An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive} are the
+OLS estimate and naive SE, \code{conf_int} (or \code{conf_region}/
+\code{conf_box} for several coefficients) the IPT inverted-test confidence
+set, and \code{pvalue} the IPT permutation p-value; see
+\code{\link{mwperm_dyadic}} for the field provenance in full. Its
+\code{n_obs} is the number of cells actually used (inside the selected
+blocks), and the \code{note} field records how many cells and blocks were
+retained.
 }
 \description{
 Finite-sample valid test of \eqn{H_0: \beta = b} in the dyadic model when the

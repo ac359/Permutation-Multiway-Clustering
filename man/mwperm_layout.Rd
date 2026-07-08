@@ -52,7 +52,11 @@ per-permutation factorizations; either way the result is \emph{identical} to
 the serial one. See \code{\link{mwperm_dyadic}} for details.}
 }
 \value{
-An object of class \code{"mwperm"}.
+An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive} are the
+OLS estimate and naive SE, \code{conf_int} (or \code{conf_region}/
+\code{conf_box} for several coefficients) the IPT inverted-test confidence
+set, and \code{pvalue} the IPT permutation p-value; see
+\code{\link{mwperm_dyadic}} for the field provenance in full.
 }
 \description{
 Finite-sample valid test of \eqn{H_0: \beta = b} for a two-way layout

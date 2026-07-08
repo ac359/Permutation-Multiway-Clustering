@@ -37,7 +37,11 @@
 #' @param K Number of non-identity permutations; defaults to
 #'   \code{min(n_row, n_col) - 1} capped at 199.
 #'
-#' @return An object of class \code{"mwperm"}.
+#' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
+#'   are the OLS estimate and naive SE, \code{conf_int} (or
+#'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
+#'   inverted-test confidence set, and \code{pvalue} the IPT permutation
+#'   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 #'
 #' @references Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation
 #'   inference under multi-way clustering and missing data, Section 6.2.

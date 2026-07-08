@@ -12,14 +12,17 @@
 }
 \value{
 A data frame, invisibly, with one row per coefficient and columns
-\code{term}, \code{estimate}, \code{se_naive}, \code{conf_low},
-\code{conf_high} and \code{p_value}. \code{estimate} is the \emph{OLS} point
-estimate (least squares on the full design); \code{conf_low}/\code{conf_high}
-are the limits of the IPT (inverted permutation test) confidence set -- the
-inverted-test interval for a single coefficient, or the marginal extent of
-the joint confidence region for several; \code{p_value} is the permutation
-p-value of the joint test (repeated across rows when there are several
-coefficients).
+\code{term}, \code{ols_estimate}, \code{ols_se_naive}, \code{ipt_ci_low},
+\code{ipt_ci_high} and \code{p_value}; the column names carry the provenance
+of each quantity. \code{ols_estimate} is the \emph{OLS} point estimate (least
+squares on the full design) and \code{ols_se_naive} its naive homoskedastic
+OLS standard error, used internally only to centre and scale the
+confidence-set search -- not an inferential quantity;
+\code{ipt_ci_low}/\code{ipt_ci_high} are the limits of the IPT (inverted
+permutation test) confidence set -- the inverted-test interval for a single
+coefficient, or the marginal extent of the joint confidence region for
+several; \code{p_value} is the IPT permutation p-value of the joint test
+(repeated across rows when there are several coefficients).
 }
 \description{
 Returns (invisibly, after printing) a one-row-per-coefficient data frame with

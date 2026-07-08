@@ -1,7 +1,23 @@
 # mwperm 0.1.1
 
-Publication-standard plotting (no change to any test, seed, or p-value).
+Publication-standard plotting and provenance-labelled return values (no
+change to any test, seed, or p-value).
 
+* **Breaking:** the `summary()` data frame's columns now name the source of
+  each quantity, matching the printed "OLS estimate" / "IPT CI" labels:
+  `estimate` -> `ols_estimate`, `se_naive` -> `ols_se_naive`,
+  `conf_low` -> `ipt_ci_low`, `conf_high` -> `ipt_ci_high` (`term` and
+  `p_value` are unchanged; `p_value` is the IPT permutation p-value). No
+  numeric value changed. Code that indexes the old column names must be
+  updated; no deprecated aliases are provided.
+* `confint()` still returns the percentile-labelled matrix the generic
+  promises (`"2.5 %"`/`"97.5 %"`), but now records its provenance in a
+  `"method"` attribute, `"IPT (inverted permutation test)"`. The `\value`
+  documentation of every test function now states which fields of the
+  returned object are the OLS estimate/naive SE (`estimate`, `se_naive` --
+  the SE is only the centre/scale of the confidence-set search) and which
+  are the IPT confidence set (`conf_int`, `conf_region`, `conf_box`); the
+  field names themselves are unchanged.
 * `plot.mwperm()` gains a `type` argument: `"coef"` (OLS estimate against the
   inverted-test confidence set -- an interval with end caps for one
   coefficient, a forest of the joint region's marginal extents for several),

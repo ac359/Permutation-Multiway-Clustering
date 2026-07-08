@@ -57,7 +57,16 @@ on Unix and a PSOCK cluster on Windows. Worthwhile for large problems
 usually exceeds the gain.}
 }
 \value{
-An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).
+An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}). The
+provenance of its main fields: \code{estimate} and \code{se_naive} are the
+\emph{OLS} point estimate(s) and the naive homoskedastic OLS standard
+error(s) -- the SE is used only to centre and scale the confidence-set
+search, it is not an inferential quantity; \code{conf_int} (single
+coefficient) or \code{conf_region}/\code{conf_box} (several coefficients:
+the retained \eqn{\beta} vectors and their marginal extent) hold the
+\emph{IPT} (inverted permutation test) confidence set at level
+\code{conf_level}; \code{pvalue} is the IPT permutation p-value (the median
+of the per-rep p-values \code{pvalues_rep}).
 }
 \description{
 Finite-sample valid test of \eqn{H_0: \beta = b} in the dyadic regression

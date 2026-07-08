@@ -54,6 +54,16 @@
 #'   overhead usually exceeds the gain.
 #'
 #' @return An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).
+#'   The provenance of its main fields: \code{estimate} and \code{se_naive}
+#'   are the \emph{OLS} point estimate(s) and the naive homoskedastic OLS
+#'   standard error(s) -- the SE is used only to centre and scale the
+#'   confidence-set search, it is not an inferential quantity;
+#'   \code{conf_int} (single coefficient) or \code{conf_region}/\code{conf_box}
+#'   (several coefficients: the retained \eqn{\beta} vectors and their
+#'   marginal extent) hold the \emph{IPT} (inverted permutation test)
+#'   confidence set at level \code{conf_level}; \code{pvalue} is the IPT
+#'   permutation p-value (the median of the per-rep p-values
+#'   \code{pvalues_rep}).
 #'
 #' @references Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation
 #'   inference under multi-way clustering and missing data.

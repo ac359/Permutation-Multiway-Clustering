@@ -17,10 +17,14 @@ permutations). Defaults to the stored level.}
 \item{...}{Ignored.}
 }
 \value{
-A matrix with the lower and upper limits, one row per coefficient: the
-inverted-test interval for a single coefficient, or the marginal extent of the
-joint confidence region for several (see \code{object$conf_region} for the full
-set of retained vectors).
+A matrix with the lower and upper limits, one row per coefficient (rows are
+named by coefficient; columns keep the percentile labels the \code{confint}
+generic promises, e.g. \code{"2.5 \%"}/\code{"97.5 \%"}). The interval is the
+\emph{IPT inverted-test} set, not a Wald interval: for a single coefficient
+the inverted-test interval, for several the \emph{marginal} extent of the
+joint confidence region (see \code{object$conf_region} for the full set of
+retained vectors). The provenance is recorded in the matrix's
+\code{"method"} attribute, \code{"IPT (inverted permutation test)"}.
 }
 \description{
 Extracts the test-inversion confidence set stored in a \code{"mwperm"} object:

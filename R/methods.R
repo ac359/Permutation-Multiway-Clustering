@@ -81,14 +81,18 @@ print.mwperm <- function(x, digits = 4L, ...) {
 
 #' Summarise a multi-way permutation test
 #'
-#' Returns (invisibly, after printing) a one-row-per-coefficient data frame.
-#' The \code{estimate} column is the \emph{OLS} point estimate (computed by
-#' least squares on the full design); \code{conf_low}/\code{conf_high} are the
-#' limits of the IPT (inverted permutation test) confidence set -- the
-#' inverted-test interval for a single coefficient, or the marginal extent of
-#' the joint confidence region for several -- and \code{p_value} is the
-#' permutation p-value for \eqn{H_0:\beta = b} (the joint test; repeated
-#' across rows when there are several coefficients).
+#' Returns (invisibly, after printing) a one-row-per-coefficient data frame
+#' whose column names carry the provenance of each quantity. The
+#' \code{ols_estimate} column is the \emph{OLS} point estimate (computed by
+#' least squares on the full design) and \code{ols_se_naive} its naive
+#' homoskedastic OLS standard error (used internally only to centre and scale
+#' the confidence-set search -- not an inferential quantity);
+#' \code{ipt_ci_low}/\code{ipt_ci_high} are the limits of the IPT (inverted
+#' permutation test) confidence set -- the inverted-test interval for a single
+#' coefficient, or the marginal extent of the joint confidence region for
+#' several -- and \code{p_value} is the IPT permutation p-value for
+#' \eqn{H_0:\beta = b} (the joint test; repeated across rows when there are
+#' several coefficients).
 #'
 #' @param object An object of class \code{"mwperm"}.
 #' @param ... Ignored.
@@ -105,13 +109,13 @@ summary.mwperm <- function(object, ...) {
     ci_lo <- object$conf_box[1, ]; ci_hi <- object$conf_box[2, ]
   }
   tab <- data.frame(
-    term       = object$d_names,
-    estimate   = as.numeric(object$estimate),
-    se_naive   = as.numeric(object$se_naive),
-    conf_low   = ci_lo,
-    conf_high  = ci_hi,
-    p_value    = object$pvalue,
-    row.names  = NULL,
+    term         = object$d_names,
+    ols_estimate = as.numeric(object$estimate),
+    ols_se_naive = as.numeric(object$se_naive),
+    ipt_ci_low   = ci_lo,
+    ipt_ci_high  = ci_hi,
+    p_value      = object$pvalue,
+    row.names    = NULL,
     stringsAsFactors = FALSE
   )
   print.mwperm(object)
@@ -134,10 +138,15 @@ summary.mwperm <- function(object, ...) {
 #'   an error is raised (the interval cannot be re-derived without the stored
 #'   permutations).
 #' @param ... Ignored.
-#' @return A matrix with the lower and upper limits, one row per coefficient. For
-#'   a single coefficient this is the inverted-test interval; for several it is
-#'   the \emph{marginal} extent of the joint confidence region (see
-#'   \code{object$conf_region} for the full set of retained vectors).
+#' @return A matrix with the lower and upper limits, one row per coefficient
+#'   (rows are named by coefficient; columns keep the percentile labels the
+#'   \code{confint} generic promises, e.g. \code{"2.5 \%"}/\code{"97.5 \%"}).
+#'   The interval is the \emph{IPT inverted-test} set, not a Wald interval:
+#'   for a single coefficient the inverted-test interval, for several the
+#'   \emph{marginal} extent of the joint confidence region (see
+#'   \code{object$conf_region} for the full set of retained vectors). The
+#'   provenance is recorded in the matrix's \code{"method"} attribute,
+#'   \code{"IPT (inverted permutation test)"}.
 #' @export
 confint.mwperm <- function(object, parm, level = NULL, ...) {
   has_int <- !is.null(object$conf_int)
@@ -152,13 +161,17 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
   ## Two-sided percentile column labels, e.g. "2.5 %" / "97.5 %" for a 95% set.
   pct <- 100 * c((1 - object$conf_level) / 2, 1 - (1 - object$conf_level) / 2)
   lab <- paste(format(pct, trim = TRUE), "%")
-  if (has_int) {
+  out <- if (has_int) {
     matrix(object$conf_int, nrow = 1, dimnames = list(object$d_names[1], lab))
   } else {
-    out <- t(object$conf_box)                       # d x 2 (lower, upper)
-    dimnames(out) <- list(object$d_names, lab)
-    out
+    box <- t(object$conf_box)                       # d x 2 (lower, upper)
+    dimnames(box) <- list(object$d_names, lab)
+    box
   }
+  ## Record provenance without touching the percentile column labels the
+  ## confint generic promises (downstream code indexes by "2.5 %"/"97.5 %").
+  attr(out, "method") <- "IPT (inverted permutation test)"
+  out
 }
 
 ## plot.mwperm lives in plot.R (with the style layer and drawing primitives).
