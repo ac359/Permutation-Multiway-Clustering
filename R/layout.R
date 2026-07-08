@@ -45,7 +45,8 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   .check_lengths(N, list(row = row, col = col,
                          rep = if (is.null(rep)) seq_len(N) else rep))
 
-  cell <- .dense_id(interaction(.dense_id(row), .dense_id(col), drop = TRUE))  # dense (row,col) cell id
+  cell <- .dense_id(interaction(.dense_id(row, "row"), .dense_id(col, "col"),
+                                drop = TRUE))  # dense (row,col) cell id
   ncell <- max(cell)                   # number of occupied cells
   ell <- tabulate(cell, nbins = ncell) # replicate count per cell (the cell sizes)
 
@@ -69,6 +70,10 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
     cell <- .dense_id(cell[keep]); ncell <- max(cell)
     ell <- tabulate(cell, nbins = ncell)
   }
+
+  ## Validate here (the engine re-checks) because the within-cell-variation
+  ## diagnostic below reads `d` and would fail opaquely on NA/non-numeric input.
+  .check_finite(list(y = y, d = D, x = X))
 
   ## Dense 1-based replication index l within each cell. The permutation acts on
   ## this index, so it must run 1..ell[c] inside every cell; ties in the ordering

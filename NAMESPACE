@@ -9,6 +9,7 @@ export(mwperm_panel)
 export(mwperm_threeway)
 export(mwperm_layout)
 export(mwperm_missing)
+export(mwperm_save)
 
 S3method(print, mwperm)
 S3method(summary, mwperm)
@@ -17,4 +18,6 @@ S3method(plot, mwperm)
 S3method(print, mwperm_design)
 
 importFrom(stats, median, lm.fit, model.matrix, sd, setNames)
-importFrom(graphics, hist, abline, legend, barplot)
+importFrom(graphics, arrows, axis, hist, legend, mtext, par, plot.new,
+           plot.window, points, polygon, rect, segments, strwidth, text, title)
+importFrom(grDevices, adjustcolor, chull, dev.off, jpeg, pdf, png, tiff)

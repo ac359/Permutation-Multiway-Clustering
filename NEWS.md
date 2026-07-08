@@ -1,3 +1,31 @@
+# mwperm 0.1.1
+
+Publication-standard plotting (no change to any test, seed, or p-value).
+
+* `plot.mwperm()` gains a `type` argument: `"coef"` (OLS estimate against the
+  inverted-test confidence set -- an interval with end caps for one
+  coefficient, a forest of the joint region's marginal extents for several),
+  `"region"` (joint confidence region, two coefficients), `"stability"` (the
+  Monte-Carlo p-value diagnostic, restyled), and `"all"`. **The default
+  figure changed:** `type = "auto"` now draws the flagship `"coef"` figure
+  whenever a confidence set is stored, falling back to `"stability"`
+  otherwise (previously a p-value histogram/barplot was always drawn).
+* All figures share one style layer: Okabe-Ito colourblind-safe palette with
+  marks/line types differing as well as colour (grayscale-legible), no
+  top/right spines, and a standard annotation block (design, cluster counts,
+  N, resolution 1/(K+1), the null, the p-value, and the decision at alpha).
+  Style elements can be overridden by name, e.g.
+  `plot(fit, col_estimate = "black")`; unknown `...` arguments now warn and
+  are ignored instead of crashing the underlying graphics calls.
+* `"null"` and `"profile"` types are reserved (permutation-null and
+  test-inversion p(b) figures); they need fit-time storage that this version
+  does not retain and currently fall back to the default figure with a
+  message.
+* New `mwperm_save()` writes any figure at journal dimensions (single-column
+  3.5 in / double-column 7 in, >= 300 dpi; pdf/png/tiff/jpeg).
+* `grDevices` added to Imports (still base R only). Plotting never mutates
+  global graphics state (`par()` is restored on exit).
+
 # mwperm 0.1.0
 
 Initial release.

@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = "aut"),
@@ -27,7 +27,7 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
 License: Proprietary
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
-Imports: stats, graphics, parallel
+Imports: stats, graphics, grDevices, parallel
 Suggests: knitr, rmarkdown, RhpcBLASctl
 VignetteBuilder: knitr
 LazyData: true

@@ -25,9 +25,11 @@ set of retained vectors).
 \description{
 Extracts the test-inversion confidence set stored in a \code{"mwperm"} object:
 the interval for a single coefficient, or the marginal extent of the joint
-confidence region for several. Note that \code{level} is fixed at fitting time
-(\code{1 - alpha}); a different level requires refitting with the corresponding
-\code{alpha}.
+confidence region for several. This is the IPT (inverted permutation test)
+set -- obtained by inverting the finite-sample-valid test, \emph{not} a Wald
+interval around the OLS estimate. Note that \code{level} is fixed at fitting
+time (\code{1 - alpha}); a different level requires refitting with the
+corresponding \code{alpha}.
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.

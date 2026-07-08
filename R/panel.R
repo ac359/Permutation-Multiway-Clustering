@@ -60,7 +60,8 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
   .check_lengths(N, list(row = row, col = col, time = time))
 
-  ri <- .dense_id(row); ci <- .dense_id(col); ti <- .dense_id(time)  # dense ids per dimension
+  ri <- .dense_id(row, "row"); ci <- .dense_id(col, "col")           # dense ids per dimension
+  ti <- .dense_id(time, "time")
   n_row <- max(ri); n_col <- max(ci); n_t <- max(ti)                 # cluster / period counts
 
   ## Nuisance design: user covariates (+ intercept) and optional time dummies.

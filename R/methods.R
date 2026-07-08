@@ -9,6 +9,11 @@
 
 #' Print a multi-way permutation test
 #'
+#' The per-coefficient lines label their two quantities by provenance: the
+#' point estimate is the \emph{OLS} estimate (printed as "OLS estimate"),
+#' while the confidence set comes from inverting the invariant permutation
+#' test (printed as "IPT CI", or "IPT region" for a joint region).
+#'
 #' @param x An object of class \code{"mwperm"}.
 #' @param digits Number of significant digits for the estimate and interval.
 #' @param ... Ignored.
@@ -35,15 +40,15 @@ print.mwperm <- function(x, digits = 4L, ...) {
   ## marginal region bracket (joint case).
   for (k in seq_along(est)) {
     nm <- x$d_names[k]
-    line <- sprintf("  %-12s estimate = %s", nm,
+    line <- sprintf("  %-12s OLS estimate = %s", nm,
                     formatC(est[k], digits = digits, format = "g"))
     if (k == 1L && !is.null(x$conf_int) && length(x$conf_int) == 2L) {
-      line <- paste0(line, sprintf("   %.0f%% CI [%s, %s]",
+      line <- paste0(line, sprintf("   %.0f%% IPT CI [%s, %s]",
                                    100 * x$conf_level,
                                    formatC(x$conf_int[1], digits = digits, format = "g"),
                                    formatC(x$conf_int[2], digits = digits, format = "g")))
     } else if (has_box) {
-      line <- paste0(line, sprintf("   %.0f%% region [%s, %s]",
+      line <- paste0(line, sprintf("   %.0f%% IPT region [%s, %s]",
                                    100 * x$conf_level,
                                    formatC(x$conf_box[1, k], digits = digits, format = "g"),
                                    formatC(x$conf_box[2, k], digits = digits, format = "g")))
@@ -57,7 +62,8 @@ print.mwperm <- function(x, digits = 4L, ...) {
 
   cat("\n")
   cat(sprintf("H0: beta = %s    p-value = %s\n",
-              formatC(x$beta_null, format = "g"), .fmt_p(x$pvalue)))
+              paste(formatC(x$beta_null, format = "g"), collapse = ", "),
+              .fmt_p(x$pvalue)))
   decision <- if (is.na(x$pvalue)) "undetermined" else
     if (x$pvalue <= x$alpha) sprintf("reject at alpha = %.2g", x$alpha) else
       sprintf("do not reject at alpha = %.2g", x$alpha)
@@ -75,11 +81,14 @@ print.mwperm <- function(x, digits = 4L, ...) {
 
 #' Summarise a multi-way permutation test
 #'
-#' Returns (invisibly, after printing) a one-row-per-coefficient data frame with
-#' the point estimate, naive standard error, the confidence limits (the inverted
-#' interval for a single coefficient, or the marginal extent of the joint
-#' confidence region for several), and the permutation p-value for
-#' \eqn{H_0:\beta = b}.
+#' Returns (invisibly, after printing) a one-row-per-coefficient data frame.
+#' The \code{estimate} column is the \emph{OLS} point estimate (computed by
+#' least squares on the full design); \code{conf_low}/\code{conf_high} are the
+#' limits of the IPT (inverted permutation test) confidence set -- the
+#' inverted-test interval for a single coefficient, or the marginal extent of
+#' the joint confidence region for several -- and \code{p_value} is the
+#' permutation p-value for \eqn{H_0:\beta = b} (the joint test; repeated
+#' across rows when there are several coefficients).
 #'
 #' @param object An object of class \code{"mwperm"}.
 #' @param ... Ignored.
@@ -113,8 +122,10 @@ summary.mwperm <- function(object, ...) {
 #'
 #' Extracts the test-inversion confidence set stored in a \code{"mwperm"} object:
 #' the interval for a single coefficient, or the marginal extent of the joint
-#' confidence region for several. Note that \code{level} is fixed at fitting time
-#' (\code{1 - alpha}); a different level requires refitting with the
+#' confidence region for several. This is the IPT (inverted permutation test)
+#' set -- obtained by inverting the finite-sample-valid test, \emph{not} a Wald
+#' interval around the OLS estimate. Note that \code{level} is fixed at fitting
+#' time (\code{1 - alpha}); a different level requires refitting with the
 #' corresponding \code{alpha}.
 #'
 #' @param object An object of class \code{"mwperm"}.
@@ -150,38 +161,4 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
   }
 }
 
-#' Visualise the permutation reference distribution
-#'
-#' Plots the per-replication p-values when several replications were run, with
-#' the reported (median) p-value and the level \code{alpha} marked; for a single
-#' replication it draws a simple bar of the p-value against \code{alpha}. This
-#' gives a quick read on the Monte-Carlo stability of the randomised test.
-#'
-#' @param x An object of class \code{"mwperm"}.
-#' @param ... Passed to the underlying plotting calls.
-#' @return \code{x}, invisibly.
-#' @export
-plot.mwperm <- function(x, ...) {
-  pv <- x$pvalues_rep
-  if (length(pv) >= 5L) {
-    graphics::hist(pv, breaks = "Sturges",
-                   xlim = c(0, max(1, max(pv))),
-                   main = "mwperm: p-value across replications",
-                   xlab = "p-value", col = "grey85", border = "white", ...)
-    graphics::abline(v = x$pvalue, col = "steelblue", lwd = 2)
-    graphics::abline(v = x$alpha, col = "firebrick", lwd = 2, lty = 2)
-    graphics::legend("topright", bty = "n",
-                     legend = c(sprintf("median p = %.3f", x$pvalue),
-                                sprintf("alpha = %.2g", x$alpha)),
-                     col = c("steelblue", "firebrick"), lwd = 2, lty = c(1, 2))
-  } else {
-    graphics::barplot(x$pvalue, ylim = c(0, max(1, x$pvalue, x$alpha * 4)),
-                      names.arg = sprintf("H0: beta = %g", x$beta_null),
-                      ylab = "p-value", col = "grey85", border = "white",
-                      main = "mwperm: permutation p-value", ...)
-    graphics::abline(h = x$alpha, col = "firebrick", lwd = 2, lty = 2)
-    graphics::legend("topright", bty = "n", legend = sprintf("alpha = %.2g", x$alpha),
-                     col = "firebrick", lwd = 2, lty = 2)
-  }
-  invisible(x)
-}
+## plot.mwperm lives in plot.R (with the style layer and drawing primitives).

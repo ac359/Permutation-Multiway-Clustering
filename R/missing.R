@@ -69,7 +69,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   X <- .make_X(x, N)
   .check_lengths(N, list(row = row, col = col))
 
-  ri <- .dense_id(row); ci <- .dense_id(col)
+  ri <- .dense_id(row, "row"); ci <- .dense_id(col, "col")
   if (anyDuplicated(cbind(ri, ci)))
     stop("Expected at most one observation per (row, col) cell.", call. = FALSE)
   n_row <- max(ri); n_col <- max(ci)

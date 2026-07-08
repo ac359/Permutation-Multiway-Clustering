@@ -19,6 +19,12 @@
 Compact display of the design, the permutation-group order, the point
 estimate and inverted confidence interval (when available), and the
 permutation p-value with the reject/retain decision.
+
+The per-coefficient lines label their two quantities by provenance: the
+point estimate is the \emph{OLS} estimate (printed as \code{"OLS estimate"}),
+while the confidence set comes from inverting the invariant permutation
+test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a joint
+confidence region).
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{summary.mwperm}}.

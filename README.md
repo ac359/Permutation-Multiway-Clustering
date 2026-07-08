@@ -86,12 +86,12 @@ fit <- mwperm(y = "log_trade", d = "log_dist",
 #> Detected design: dyadic (2 indices, one observation per cell, complete array)
 #>   -> running mwperm_dyadic(y, d, x, row = importer, col = exporter)
 fit
-#>   log_dist   estimate = -0.89   95% CI [-1.25, -0.56]
+#>   log_dist   OLS estimate = -0.89   95% IPT CI [-1.25, -0.56]
 #>   H0: beta = 0    p-value = 0.025   (reject at alpha = 0.05)
 
 summary(fit)              # tidy data frame
 confint(fit)              # inverted-test confidence interval
-plot(fit)                 # stability of the randomised p-value across reps
+plot(fit)                 # OLS estimate against the inverted IPT confidence interval
 ```
 
 To see what would run — detected design, index roles, balance, attainable
@@ -115,6 +115,37 @@ For large problems (thousands of cells, large `K`), every test function takes
 `n_cores =` to parallelise the permutation computations; the result is
 **identical** to the serial one (every draw is derived from explicit seeds).
 
+## Figures
+
+Every fitted object has a `plot()` method producing publication-style base
+graphics: Okabe-Ito colourblind-safe palette, legible in grayscale (marks and
+line types differ, never colour alone), and each figure annotated with the
+design, per-dimension cluster counts, N, the attainable p-value resolution
+$1/(K+1)$, the null value, the p-value, and the decision at $\alpha$.
+
+```r
+plot(fit)                       # default: OLS estimate + the inverted IPT CI
+                                #   (forest of marginal extents when d > 1)
+plot(fit, type = "region")      # joint confidence region (exactly 2 coefficients)
+plot(fit, type = "stability")   # diagnostic: p-value stability across n_reps
+plot(fit, type = "all")         # every figure available for this fit, one page
+
+plot(fit, col_estimate = "black", lwd_interval = 3,   # style overrides by name
+     main = "Distance elasticity")                    # (see ?plot.mwperm)
+```
+
+A requested figure whose ingredients are not stored on the object falls back
+with a message rather than an error (e.g. `type = "coef"` after
+`conf_int = FALSE` shows the stability diagnostic).
+
+To export at journal dimensions (single-column 3.5 in or double-column 7 in,
+300 dpi raster or vector pdf), use:
+
+```r
+mwperm_save(fit, "figure1.pdf", width = "single")
+mwperm_save(fit, "figureA2.png", width = "double", type = "stability")
+```
+
 ## Function map
 
 | Design                                   | Function            |
@@ -128,6 +159,7 @@ For large problems (thousands of cells, large `K`), every test function takes
 | Incomplete array (missing cells)         | `mwperm_missing()`  |
 | Permutation-group construction (Alg. 1)  | `build_perm_set()`  |
 | Fully observed biclique finder (greedy/exact) | `find_bicliques()` |
+| Journal-dimension figure export          | `mwperm_save()`     |
 
 All test functions return an object of class `"mwperm"` with `print()`,
 `summary()`, `confint()` and `plot()` methods.

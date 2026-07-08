@@ -15,7 +15,10 @@
 #' @noRd
 .plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock")) {
   method <- match.arg(method)
-  n_cores <- max(1L, as.integer(n_cores))
+  n_cores <- suppressWarnings(as.integer(n_cores))
+  if (length(n_cores) != 1L || is.na(n_cores))
+    stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
+  n_cores <- max(1L, n_cores)
   if (n_cores == 1L || length(X) < 2L) return(lapply(X, FUN))
   wrap <- function(x) {                # run in the worker
     if (requireNamespace("RhpcBLASctl", quietly = TRUE))
@@ -33,6 +36,12 @@
   }
   bad <- vapply(out, inherits, logical(1), what = "try-error")
   if (any(bad)) stop(attr(out[[which(bad)[1L]]], "condition"))
+  ## mclapply returns NULL (with only a warning) for tasks whose forked worker
+  ## died without reporting an error (e.g. killed by the OS); fail loudly here
+  ## rather than letting the NULL surface as an unrelated error downstream.
+  if (any(vapply(out, is.null, logical(1))))
+    stop("A parallel worker died without returning a result; ",
+         "rerun with n_cores = 1 to see the underlying error.", call. = FALSE)
   out
 }
 
@@ -92,6 +101,29 @@
   N <- length(y)                     # number of observations
   d <- ncol(D)                       # number of coefficients of interest
   p <- ncol(X)                       # number of nuisance columns (incl. intercept)
+  ## Validate before any linear algebra so bad input fails with its own name,
+  ## not as an NA/coercion error deep inside lm.fit or a QR decomposition.
+  .check_finite(list(y = y, d = D, x = X))
+  if (!(is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha) &&
+        alpha > 0 && alpha < 1))
+    stop("`alpha` must be a single number strictly between 0 and 1.",
+         call. = FALSE)
+  if (!(is.numeric(n_reps) && length(n_reps) == 1L && is.finite(n_reps) &&
+        n_reps >= 1 && n_reps == trunc(n_reps)))
+    stop("`n_reps` must be a single integer >= 1.", call. = FALSE)
+  if (!(is.numeric(beta_null) && all(is.finite(beta_null))))
+    stop("`beta_null` must be numeric and finite.", call. = FALSE)
+  if (!length(beta_null) %in% c(1L, d))
+    stop(sprintf("`beta_null` must have length 1 or %d (one per column of `d`).",
+                 d), call. = FALSE)
+  if (!is.null(grid) &&
+      !all(vapply(if (is.list(grid)) grid else list(grid),
+                  function(g) is.numeric(g) && length(g) >= 1L && all(is.finite(g)),
+                  logical(1))))
+    stop("`grid` must contain only finite numeric values.", call. = FALSE)
+  n_cores <- suppressWarnings(as.integer(n_cores))
+  if (length(n_cores) != 1L || is.na(n_cores))
+    stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
   conf_level <- 1 - alpha            # always the complement of the test level
   ## Need more observations than the stacked projection [X | X_k] consumes; with
   ## p nuisance columns that projection has up to 2p columns.
@@ -428,11 +460,39 @@
 }
 
 #' Validate and coerce a cluster id vector to dense 1-based integers.
+#'
+#' @param x the cluster id vector (any type coercible by \code{factor}).
+#' @param what the user-facing argument name, used in the error message.
 #' @keywords internal
 #' @noRd
-.dense_id <- function(x) {
+.dense_id <- function(x, what = "index") {
   f <- as.integer(factor(x))
+  if (anyNA(f))
+    stop(sprintf("`%s` contains missing values (NA); cluster identifiers must be complete.",
+                 what), call. = FALSE)
   f
+}
+
+#' Error unless every supplied vector/matrix is numeric (or logical) with all
+#' entries finite. NULLs are skipped; names label the user-facing arguments in
+#' the error messages.
+#' @keywords internal
+#' @noRd
+.check_finite <- function(vars) {
+  for (nm in names(vars)) {
+    v <- vars[[nm]]
+    if (is.null(v) || length(v) == 0L) next
+    if (!is.numeric(v) && !is.logical(v))
+      stop(sprintf(paste0("`%s` must be numeric (got mode \"%s\"). Convert ",
+                          "factors/characters to numeric columns first."),
+                   nm, mode(v)), call. = FALSE)
+    if (!all(is.finite(v)))
+      stop(sprintf(paste0("`%s` contains missing or non-finite values ",
+                          "(NA/NaN/Inf); mwperm requires complete data. Drop ",
+                          "or impute the affected rows first."),
+           nm), call. = FALSE)
+  }
+  invisible(NULL)
 }
 
 #' Error if any supplied vector does not have length N.

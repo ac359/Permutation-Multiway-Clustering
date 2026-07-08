@@ -80,7 +80,7 @@ mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
   X <- .make_X(x, N)                   # nuisance design with intercept
   .check_lengths(N, list(row = row, col = col))
 
-  ri <- .dense_id(row); ci <- .dense_id(col)   # dense 1-based row/col cluster ids
+  ri <- .dense_id(row, "row"); ci <- .dense_id(col, "col")   # dense 1-based row/col cluster ids
   n_row <- max(ri); n_col <- max(ci)           # number of row / col clusters
   if (anyDuplicated(cbind(ri, ci)))
     stop("Dyadic regression expects one observation per (row, col) cell. ",

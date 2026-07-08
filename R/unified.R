@@ -197,7 +197,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
          "(a tagged `time` or `rep` counts as the third).", call. = FALSE)
 
   dims <- vapply(idx, function(v) length(unique(v)), integer(1))
-  dense <- lapply(idx, .dense_id)
+  dense <- Map(.dense_id, idx, names(idx))
   cells2 <- .cell_code(cbind(dense[[1L]], dense[[2L]]))
   dup2 <- anyDuplicated(cells2) > 0L
 
@@ -237,7 +237,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   ## so fail here with the actionable message rather than deep in the engine.
   require_complete_panel <- function() {
     nT <- length(unique(time_v[[1L]]))
-    tri <- .cell_code(cbind(dense[[1L]], dense[[2L]], .dense_id(time_v[[1L]])))
+    tri <- .cell_code(cbind(dense[[1L]], dense[[2L]],
+                            .dense_id(time_v[[1L]], names(time_v))))
     exp3 <- prod(dims[1:2]) * nT
     if (anyDuplicated(tri) > 0L || N != exp3)
       stop(sprintf(paste0(

@@ -36,7 +36,8 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
   X <- .make_X(x, N)
   .check_lengths(N, list(id1 = id1, id2 = id2, id3 = id3))
 
-  a1 <- .dense_id(id1); a2 <- .dense_id(id2); a3 <- .dense_id(id3)  # dense ids per dimension
+  a1 <- .dense_id(id1, "id1"); a2 <- .dense_id(id2, "id2")          # dense ids per dimension
+  a3 <- .dense_id(id3, "id3")
   m <- max(a1); n <- max(a2); ell <- max(a3)                        # cluster counts per dimension
   coords <- cbind(a1, a2, a3)          # per-observation (id1, id2, id3) coordinates
   .require_complete_array(coords, c(id1 = m, id2 = n, id3 = ell), N,

@@ -1,0 +1,52 @@
+% Generated manually (no roxygen2/CRAN access in build environment).
+\name{mwperm_save}
+\alias{mwperm_save}
+\title{Save an mwperm figure at journal dimensions}
+\usage{
+mwperm_save(x, file, width = c("single", "double"), height = NULL,
+            type = "auto", res = 300, pointsize = NULL, ...)
+}
+\arguments{
+\item{x}{An object of class \code{"mwperm"}.}
+
+\item{file}{Output path; the extension selects the graphics device:
+\code{.pdf} (vector), \code{.png}, \code{.tiff}/\code{.tif}, or
+\code{.jpeg}/\code{.jpg}.}
+
+\item{width}{\code{"single"} (3.5 in, a one-column journal figure),
+\code{"double"} (7 in, full text width), or a numeric width in inches.}
+
+\item{height}{Height in inches; defaults to \code{0.65 * width}
+(\code{0.9 * width} for \code{type = "all"}).}
+
+\item{type}{Figure type, passed to \code{\link{plot.mwperm}}.}
+
+\item{res}{Raster resolution in dpi (default 300; ignored for pdf).}
+
+\item{pointsize}{Base point size; defaults to 8 for single-column widths
+and 10 otherwise, so labels stay readable at print size.}
+
+\item{...}{Passed to \code{\link{plot.mwperm}} (style overrides, titles).}
+}
+\value{
+The file path, invisibly.
+}
+\description{
+Renders \code{\link{plot.mwperm}} to a file sized for a journal column,
+using only base \code{grDevices} devices. The device is always closed on
+exit, even if drawing fails.
+}
+\examples{
+data(trade_dyadic)
+fit <- with(trade_dyadic,
+            mwperm_dyadic(y = log_trade, d = log_dist,
+                          x = cbind(log_gdp_i, log_gdp_j),
+                          row = importer, col = exporter, seed = 1))
+f <- file.path(tempdir(), "distance-elasticity.png")
+mwperm_save(fit, f, width = "single")           # 3.5 in x 2.3 in at 300 dpi
+mwperm_save(fit, file.path(tempdir(), "fig.pdf"),
+            width = "double", type = "stability")
+}
+\seealso{
+\code{\link{plot.mwperm}}.
+}
