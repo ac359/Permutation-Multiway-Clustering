@@ -65,11 +65,19 @@ set of error processes:
     running \code{\link{mwperm_threeway}} on a panel whose errors are
     dependent over time is \emph{invalid} (size distortion), while running
     \code{\link{mwperm_panel}} on genuinely three-way exchangeable data is
-    valid, only less powerful. The default is therefore \code{panel}; a
-    time-like third index (by name, temporal class, or regular numeric
-    spacing) is used as the time dimension silently, an ambiguous one with a
-    notice. Force \code{design = "threeway"} only when all three dimensions
-    are genuinely exchangeable.
+    valid, only less powerful. The default is therefore \code{panel}. The
+    time role is assigned by, in order: an explicit \code{time =} tag; a
+    time-like \emph{name} (case-insensitive vocabulary: year, yr, time, t,
+    date, period, wave, month, quarter, day, decade, week, season, annum,
+    and their plurals); time-like \emph{values} (temporal class, or
+    regularly spaced numeric). A name-based assignment that the values do
+    not corroborate (temporal class, or regularly spaced with strictly
+    fewer levels than every other dimension) carries a \strong{warning} --
+    a column merely \emph{named} like time may be a cluster, and permuting
+    the true time dimension over-rejects badly. An ambiguous case defaults
+    to holding the third index fixed, with a warning. Forcing
+    \code{design = "threeway"} when an index looks time-like also warns;
+    force it only when all three dimensions are genuinely exchangeable.
   \item \strong{layout vs suppressed panel} (2 indices with repeated cells):
     repeats are treated as within-cell replication
     (\code{\link{mwperm_layout}}), which assumes the replicates are

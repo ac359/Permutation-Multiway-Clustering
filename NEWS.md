@@ -10,6 +10,17 @@ p-value, or any seeded result unless explicitly noted).
 * The test suite (9 base-R files, ~2 s under `R CMD check`) is now tracked
   in the repository and ships with the package; internal development
   material is excluded from builds via `.Rbuildignore`.
+* **Detection safety** (`mwperm()`/`mwperm_check()`): the time role is never
+  assigned anti-conservatively in silence. A name-based time assignment that
+  the values do not corroborate now warns (a column merely *named* "period"/
+  "year" may be a cluster; permuting the true time dimension can over-reject
+  badly -- the audit measured 87% rejection at a nominal 12.5% on such a
+  case). Forcing `design = "threeway"` when an index looks time-like also
+  warns, and the ambiguous-fork message now states correctly that the panel
+  default protects only if the *permuted pair* is exchangeable. All
+  detection warnings are raised as R warnings at fit time (previously they
+  were only recorded on the returned object's `note`). Detection *choices*
+  are unchanged -- same data, same seed, same result.
 
 # mwperm 0.1.1
 

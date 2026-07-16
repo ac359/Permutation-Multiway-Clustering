@@ -74,6 +74,21 @@
   isTRUE(all(abs(d - d[1L]) < 1e-8))             # regularly spaced
 }
 
+#' Strongly time-like values: temporal class, or regularly spaced numeric with
+#' strictly fewer levels than every other dimension (the typical few-periods
+#' panel shape). Consecutive integer cluster ids satisfy the weak rule above,
+#' so this stricter form is what decides whether a NAME-based time assignment
+#' is corroborated by the values (audit F5.5). Used only to gate warnings --
+#' never to assign the time role itself (assignment behaviour is frozen).
+#' @keywords internal
+#' @noRd
+.timelike_strong <- function(v, n_levels, min_other) {
+  if (inherits(v, c("Date", "POSIXct", "POSIXlt"))) return(TRUE)
+  if (!is.numeric(v) || n_levels >= min_other) return(FALSE)
+  u <- sort(unique(as.numeric(v)))
+  length(u) >= 2L && isTRUE(all(abs(diff(u) - diff(u)[1L]) < 1e-8))
+}
+
 ## ---- mwperm_check -----------------------------------------------------------
 
 #' Diagnose a multi-way clustered dataset and choose the appropriate design
@@ -94,11 +109,19 @@
 #'     running \code{\link{mwperm_threeway}} on a panel whose errors are
 #'     dependent over time is \emph{invalid}, while running
 #'     \code{\link{mwperm_panel}} on genuinely three-way exchangeable data is
-#'     valid, only less powerful. The default is therefore \code{panel}; a
-#'     time-like third index (by name, temporal class, or regular numeric
-#'     spacing) is used as the time dimension silently, an ambiguous one with
-#'     a notice. Force \code{design = "threeway"} only when all three
-#'     dimensions are genuinely exchangeable.
+#'     valid, only less powerful. The default is therefore \code{panel}. The
+#'     time role is assigned by, in order: an explicit \code{time =} tag; a
+#'     time-like \emph{name} (case-insensitive vocabulary: year, yr, time, t,
+#'     date, period, wave, month, quarter, day, decade, week, season, annum,
+#'     and their plurals); time-like \emph{values} (temporal class, or
+#'     regularly spaced numeric). A name-based assignment that the values do
+#'     not corroborate (temporal class, or regularly spaced with strictly
+#'     fewer levels than every other dimension) carries a \strong{warning} --
+#'     a column merely \emph{named} like time may be a cluster, and permuting
+#'     the true time dimension over-rejects badly. An ambiguous case defaults
+#'     to holding the third index fixed, with a warning. Forcing
+#'     \code{design = "threeway"} when an index looks time-like also warns;
+#'     force it only when all three dimensions are genuinely exchangeable.
 #'   \item \strong{layout vs suppressed panel} (2 indices with repeated
 #'     cells): repeats are treated as within-cell replication
 #'     (\code{\link{mwperm_layout}}), which assumes the replicates are
@@ -302,6 +325,24 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       roles <- list(id1 = names(idx)[1L], id2 = names(idx)[2L], id3 = names(idx)[3L])
       K_default <- min(dims) - 1L
       balance <- "complete"
+      ## Forcing threeway permutes EVERY index (audit F3.4): if one looks
+      ## like time -- by name, or strongly by value (temporal class, or
+      ## regularly spaced with strictly fewest levels) -- say so, because a
+      ## permuted time series over-rejects badly under serial dependence.
+      tl <- union(which(vapply(names(idx), .timelike_name, logical(1))),
+                  which(vapply(seq_len(3L), function(k)
+                    .timelike_strong(idx[[k]], dims[k], min(dims[-k])),
+                    logical(1))))
+      if (length(tl))
+        warns <- c(warns, paste0(
+          "design = \"threeway\" permutes every index, but ",
+          paste0("'", names(idx)[tl], "'", collapse = ", "),
+          if (length(tl) > 1L) " look" else " looks",
+          " time-like. If any of these is a time dimension the three-way ",
+          "test is invalid under serial dependence (it can over-reject ",
+          "badly): use design = \"panel\" with time = naming the time ",
+          "index. Proceed only if the errors are exchangeable in every ",
+          "index."))
     } else if (design == "layout") {
       if (C != 2L) stop("design = \"layout\" needs exactly 2 index dimensions (cells).", call. = FALSE)
       finish_layout("forced via design =")
@@ -367,9 +408,31 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     name_hit <- which(vapply(names(idx), .timelike_name, logical(1)))
     val_hit <- which(vapply(seq_len(3L), function(k)
       .timelike_values(idx[[k]], dims[k], max(dims[-k])), logical(1)))
+    strong_hit <- which(vapply(seq_len(3L), function(k)
+      .timelike_strong(idx[[k]], dims[k], min(dims[-k])), logical(1)))
     t_k <- NULL; t_why <- NULL
     if (length(name_hit) == 1L) {
       t_k <- name_hit; t_why <- sprintf("'%s' identified as time by name", names(idx)[t_k])
+      ## A name match alone is weak evidence (audit F5.5): warn unless the
+      ## values single this index out. Assigning the time role to a mere
+      ## cluster sends the TRUE time dimension into the permuted pair, and a
+      ## permuted time series over-rejects badly.
+      if (!(length(strong_hit) == 1L && strong_hit == t_k)) {
+        others <- setdiff(strong_hit, t_k)
+        warns <- c(warns, paste0(
+          "The time role went to '", names(idx)[t_k], "' on the strength of ",
+          "its name alone",
+          if (length(others))
+            paste0(" -- and ", paste0("'", names(idx)[others], "'",
+                                      collapse = ", "),
+                   if (length(others) > 1L) " look" else " looks",
+                   " at least as time-like by value")
+          else " (its values do not single it out)",
+          ". If the true time dimension is a different index, permuting it ",
+          "makes the test invalid (it can over-reject badly). Tag the ",
+          "correct index explicitly via time = ; force design = \"threeway\" ",
+          "only if all three dimensions are exchangeable."))
+      }
     } else if (length(val_hit) == 1L) {
       t_k <- val_hit
       t_why <- sprintf("'%s' identified as time by its values (temporal/regularly spaced)",
@@ -381,10 +444,12 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       t_why <- sprintf("ambiguous third dimension; '%s' held fixed by default", names(idx)[3L])
       warns <- c(warns, paste0(
         "No index is clearly the time dimension, so the PANEL design was ",
-        "chosen with '", names(idx)[3L], "' held fixed (valid even if all ",
-        "three dimensions are exchangeable, only less powerful). If all ",
-        "three really are exchangeable, force design = \"threeway\"; if a ",
-        "different index is time, tag it via time = ."))
+        "chosen with '", names(idx)[3L], "' held fixed. That default is ",
+        "protective ONLY if the permuted pair ('", names(idx)[1L], "', '",
+        names(idx)[2L], "') is exchangeable -- if one of THOSE is the true ",
+        "time dimension the test is invalid, so tag the correct index via ",
+        "time = . If all three dimensions really are exchangeable, force ",
+        "design = \"threeway\" to recover power."))
     }
     chosen <- "panel"
     time_v <- idx[t_k]; idx <- idx[-t_k]
@@ -504,7 +569,9 @@ print.mwperm_design <- function(x, ...) {
 #' @return The \code{"mwperm"} object of the dispatched test, with an extra
 #'   \code{auto} field recording the detection (design, roles, reason); the
 #'   detection notices are prepended to the object's \code{note} field and
-#'   shown by \code{\link{print.mwperm}}. Field provenance (see
+#'   shown by \code{\link{print.mwperm}}, and any assumption-fork or
+#'   weak-evidence notice is additionally raised as a \code{warning} at fit
+#'   time. Field provenance (see
 #'   \code{\link{mwperm_dyadic}} for the full account):
 #'   \code{estimate}/\code{se_naive} are the OLS estimate and naive SE,
 #'   \code{conf_int} (or \code{conf_region}/\code{conf_box} for several
@@ -589,6 +656,12 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   check_arg("L0", "layout")
   check_arg("min_block", "missing")
   check_arg("block_method", "missing")
+
+  ## Assumption-fork and weak-evidence detection notices are REAL warnings at
+  ## fit time -- they flag branches that can be anti-conservative if the
+  ## guessed role is wrong, and must be impossible to miss (audit F5.5/F3.4).
+  ## They also stay on the returned object's `note`, as before.
+  for (w in chk$warnings) warning(w, call. = FALSE)
 
   if (isTRUE(verbose)) {
     message(sprintf("Detected design: %s (%s) -> running %s",

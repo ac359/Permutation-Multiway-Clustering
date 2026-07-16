@@ -58,7 +58,9 @@ design and the dispatched call.}
 The \code{"mwperm"} object of the dispatched test, with an extra \code{auto}
 field recording the detection (design, roles, reason); the detection notices
 are prepended to the object's \code{note} field and shown by
-\code{\link{print.mwperm}}. Field provenance (see \code{\link{mwperm_dyadic}}
+\code{\link{print.mwperm}}, and any assumption-fork or weak-evidence notice
+is additionally raised as a \code{warning} at fit time. Field provenance
+(see \code{\link{mwperm_dyadic}}
 for the full account): \code{estimate}/\code{se_naive} are the OLS estimate
 and naive SE, \code{conf_int} (or \code{conf_region}/\code{conf_box} for
 several coefficients) the IPT inverted-test confidence set, and
