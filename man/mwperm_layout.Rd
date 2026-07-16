@@ -97,8 +97,8 @@ fit <- with(dat, mwperm_layout(y = y, d = d, row = i, col = j, rep = l,
 fit
 }
 \references{
-Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-multi-way clustering and missing data, Section 6.3.
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+multi-way clustering and missing data, Section 6.3. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.

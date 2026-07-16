@@ -1,8 +1,8 @@
 #' Construct a random block-cyclic permutation group (Algorithm 1)
 #'
 #' Builds a set of \code{K + 1} permutations of \code{seq_len(n)} that form a
-#' cyclic algebraic group, following Algorithm 1 of Guo, Toulis and Wang (2026)
-#' (adapted from Wen, Wang and Wang, 2025). A random one-to-one relabelling
+#' cyclic algebraic group, following Algorithm 1 of Guo, Toulis and Wang
+#' (2026). A random one-to-one relabelling
 #' \eqn{\pi} is drawn, the index set is split into consecutive blocks of size
 #' \code{K + 1}, and each non-identity element cyclically shifts every block by
 #' \eqn{k} positions. Because the elements are powers of a single generator,
@@ -28,12 +28,8 @@
 #'   attribute \code{"block_size"} equal to \code{K + 1}.
 #'
 #' @references
-#' Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-#' multi-way clustering and missing data.
-#'
-#' Wen, K., Wang, T. and Wang, Y. (2025). Residual permutation test for
-#' regression coefficient testing. \emph{The Annals of Statistics} 53(2),
-#' 724--748.
+#' Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+#' multi-way clustering and missing data. arXiv:2601.08610.
 #'
 #' @examples
 #' G <- build_perm_set(n = 8, K = 3, seed = 1)

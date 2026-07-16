@@ -65,8 +65,8 @@
 #'   permutation p-value (the median of the per-rep p-values
 #'   \code{pvalues_rep}).
 #'
-#' @references Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #'
 #' @seealso \code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
 #'   \code{\link{mwperm_layout}}, \code{\link{mwperm_missing}}.

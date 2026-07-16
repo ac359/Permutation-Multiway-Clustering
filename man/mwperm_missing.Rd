@@ -99,8 +99,8 @@ fit <- with(d, mwperm_missing(y = log_trade, d = log_dist,
 fit
 }
 \references{
-Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-multi-way clustering and missing data.
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}} for the complete-array case;

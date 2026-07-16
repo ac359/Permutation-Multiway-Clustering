@@ -43,8 +43,9 @@
 #'   inverted-test confidence set, and \code{pvalue} the IPT permutation
 #'   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 #'
-#' @references Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 #'   inference under multi-way clustering and missing data, Section 6.2.
+#'   arXiv:2601.08610.
 #'
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_threeway}}.
 #'

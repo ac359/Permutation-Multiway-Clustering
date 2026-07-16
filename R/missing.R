@@ -44,8 +44,8 @@
 #'   selected blocks), and the \code{note} field records how many cells and
 #'   blocks were retained.
 #'
-#' @references Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #'
 #' @seealso \code{\link{mwperm_dyadic}} for the complete-array case;
 #'   \code{\link{find_bicliques}} for the block finder used internally.

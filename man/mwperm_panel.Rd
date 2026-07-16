@@ -89,8 +89,8 @@ fit <- with(trade_panel,
 fit
 }
 \references{
-Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-multi-way clustering and missing data, Section 6.2.
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+multi-way clustering and missing data, Section 6.2. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{mwperm_threeway}}.

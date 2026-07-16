@@ -3,7 +3,7 @@
 #' Finite-sample valid tests and confidence intervals for regression
 #' coefficients under multi-way (e.g. dyadic) clustering, including panel and
 #' missing-data designs, implementing the invariant permutation test of Guo,
-#' Toulis and Wang (2026) building on Wen, Wang and Wang (2025).
+#' Toulis and Wang (2026).
 #'
 #' The recommended entry points are \code{\link{mwperm}}, which detects the
 #' clustering design of the data and dispatches to the matching test, and
@@ -21,12 +21,8 @@
 #' \code{\link{confint.mwperm}} and \code{\link{plot.mwperm}} methods.
 #'
 #' @references
-#' Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-#' multi-way clustering and missing data.
-#'
-#' Wen, K., Wang, T. and Wang, Y. (2025). Residual permutation test for
-#' regression coefficient testing. \emph{The Annals of Statistics} 53(2),
-#' 724--748.
+#' Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+#' multi-way clustering and missing data. arXiv:2601.08610.
 #'
 #' @keywords internal
 "_PACKAGE"

@@ -36,7 +36,9 @@
 #'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
 #'   inverted-test confidence set, and \code{pvalue} the IPT permutation
 #'   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
-#' @references Guo, F. R., Toulis, P. and Wang, Y. (2026), Section 6.3.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data, Section 6.3.
+#'   arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
 #' @export
 mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,

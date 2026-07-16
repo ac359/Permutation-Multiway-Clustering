@@ -79,8 +79,8 @@ fit <- with(g, mwperm_threeway(y = y, d = d, id1 = i, id2 = j, id3 = l,
 fit
 }
 \references{
-Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-multi-way clustering and missing data, Section 6.1.
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+multi-way clustering and missing data, Section 6.1. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}}.
