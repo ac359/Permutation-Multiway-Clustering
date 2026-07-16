@@ -16,11 +16,16 @@
 #'
 #' Finding the largest fully observed biclique is NP-hard, so a greedy
 #' heuristic is used; an approximate (sub-maximal) solution still yields a valid
-#' test, only a less powerful one. The achievable permutation-group order
-#' \code{K + 1} is capped by the smallest selected block, so there is a tension
-#' between including many small blocks (more pooled data, coarser p-value
-#' resolution) and a few large balanced blocks (finer resolution); tune it with
-#' \code{min_block} and \code{K}.
+#' test, only a less powerful one. \strong{The smallest selected block is the
+#' binding constraint on resolution}: the group order \code{K + 1} is capped at
+#' its smaller side, so the smallest attainable p-value is
+#' \code{1/(K + 1) >= 1/min_side} no matter how large the other blocks are.
+#' Adding small blocks pools more data yet can destroy resolution -- rejecting
+#' at level \code{alpha} requires a fully observed block with both sides at
+#' least \code{ceiling(1/alpha)} (20 for \code{alpha = 0.05}). When the
+#' default \code{K} makes rejection at \code{alpha} unattainable the fit says
+#' so in its \code{note}; raise \code{min_block} to stop small blocks from
+#' setting \code{K}, at the price of discarding their cells.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param row,col Cluster identities of each observed cell. Cells that are absent
@@ -92,7 +97,26 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
   ## smallest block side caps the group order
   min_side <- min(vapply(blocks, function(b) min(length(b$rows), length(b$cols)), integer(1)))
+  K_was_null <- is.null(K)
   K <- .default_K(K, min_side)
+
+  ## The SMALLEST selected block is the binding constraint on resolution
+  ## (audit F3.2): under the default K = min_side - 1, a small block caps the
+  ## attainable p-value at 1/min_side even though it adds information. Say so
+  ## explicitly when the cap makes rejection at this alpha impossible; the
+  ## generic engine note states the arithmetic, this one names the cause and
+  ## the remedy.
+  res_note <- character(0)
+  if (K_was_null && is.numeric(alpha) && length(alpha) == 1L &&
+      is.finite(alpha) && alpha > 0 && alpha < 1 && 1 / (K + 1) > alpha) {
+    res_note <- sprintf(paste0(
+      "The smallest selected block (min side %d) caps the group order: ",
+      "K = %d, so no rejection is attainable at alpha = %.3g (smallest ",
+      "p-value 1/%d = %.3g). Testing at this level needs a fully observed ",
+      "block with both sides >= %d; raise `min_block` to stop small blocks ",
+      "from setting K."),
+      min_side, K, alpha, K + 1L, 1 / (K + 1), ceiling(1 / alpha))
+  }
 
   ## --- restrict data to cells inside the selected blocks ---------------------
   ## For each retained cell we record which block it belongs to and its position
@@ -125,47 +149,15 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
     sprintf("Used %d of %d observed cells (%.1f%%) across %d fully observed block(s).",
             Nk, N, 100 * Nk / N, length(blocks)),
     sprintf("Block sizes (rows x cols): %s.",
-            paste(sprintf("%dx%d", sizes[1, ], sizes[2, ]), collapse = ", "))
+            paste(sprintf("%dx%d", sizes[1, ], sizes[2, ]), collapse = ", ")),
+    res_note
   )
 
   ## --- per-rep observation-permutation builder (block-diagonal) --------------
-  ## Permutes rows and columns independently within each block (the blocks are
-  ## disjoint, so the joint map is a genuine relabelling), then expresses the
-  ## result as observation gather-vectors over the retained cells.
-  perm_builder <- function(rep_seed) {
-    ## Per block, a row group and a col group of common order K+1. The 4*q
-    ## offsets keep every block's two seeds distinct within a rep.
-    rowG <- vector("list", length(blocks))
-    colG <- vector("list", length(blocks))
-    for (q in seq_along(blocks)) {
-      rowG[[q]] <- build_perm_set(length(blocks[[q]]$rows), K,
-                                  seed = .sub_seed(rep_seed, 4L * q - 1L))
-      colG[[q]] <- build_perm_set(length(blocks[[q]]$cols), K,
-                                  seed = .sub_seed(rep_seed, 4L * q))
-    }
-    Kp1 <- K + 1L
-    ops <- vector("list", Kp1)        # one observation gather-vector per element
-    for (k in seq_len(Kp1)) {
-      ## Compute the target global (row, col) of every retained cell under the
-      ## k-th element, block by block (unchanged where the block has no cells).
-      tg_row <- ri_k; tg_col <- ci_k
-      for (q in seq_along(blocks)) {
-        sel <- blk_k == q            # retained cells in block q
-        if (!any(sel)) next
-        rimg <- rowG[[q]][[k]]; cimg <- colG[[q]][[k]]   # local image vectors
-        tg_row[sel] <- blocks[[q]]$rows[rimg[lrow_k[sel]]]   # local -> permuted -> global
-        tg_col[sel] <- blocks[[q]]$cols[cimg[lcol_k[sel]]]
-      }
-      ## Map each target cell back to its observation index among retained cells.
-      tgt_code <- .cell_code(cbind(tg_row, tg_col))
-      g <- match(tgt_code, code_k)
-      if (anyNA(g))
-        stop("Internal error: block permutation left the observed set.",
-             call. = FALSE)   # nocov
-      ops[[k]] <- g
-    }
-    ops
-  }
+  perm_builder <- function(rep_seed)
+    .build_obs_perms_blocks(rep_seed, K, blocks,
+                            ri = ri_k, ci = ci_k, blk = blk_k,
+                            lrow = lrow_k, lcol = lcol_k)
 
   res <- .ipt_engine(yk, Dk, Xk, perm_builder, K = K, n_reps = n_reps,
                      seed = seed, alpha = alpha, conf_int = conf_int,
@@ -178,6 +170,63 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   res$cells_used <- Nk
   res$cells_total <- N
   res
+}
+
+#' Block-diagonal observation permutations for the missing-data design
+#'
+#' Permutes rows and columns independently within each fully observed block
+#' (the blocks are disjoint in both dimensions, so the joint map is a genuine
+#' relabelling), then expresses the result as observation gather-vectors over
+#' the retained cells. Extracted from \code{mwperm_missing()}'s inline closure
+#' so the group-closure tests exercise the SAME code the fit runs (audit
+#' F2.6); behaviour-identical, same seed offsets.
+#'
+#' @param rep_seed rep-level seed (or NULL); block q draws its row/col groups
+#'   at \code{.sub_seed(rep_seed, 4q - 1)} / \code{.sub_seed(rep_seed, 4q)}.
+#' @param K group order minus one (common across blocks and dimensions).
+#' @param blocks list of blocks as returned by \code{find_bicliques()}.
+#' @param ri,ci global row/col cluster ids of the retained cells.
+#' @param blk block index of each retained cell.
+#' @param lrow,lcol 1-based position of each retained cell within its block's
+#'   \code{rows}/\code{cols} vectors.
+#' @return list of K+1 integer gather-vectors over the retained cells.
+#' @keywords internal
+#' @noRd
+.build_obs_perms_blocks <- function(rep_seed, K, blocks, ri, ci, blk,
+                                    lrow, lcol) {
+  ## Per block, a row group and a col group of common order K+1. The 4*q
+  ## offsets keep every block's two seeds distinct within a rep.
+  rowG <- vector("list", length(blocks))
+  colG <- vector("list", length(blocks))
+  for (q in seq_along(blocks)) {
+    rowG[[q]] <- build_perm_set(length(blocks[[q]]$rows), K,
+                                seed = .sub_seed(rep_seed, 4L * q - 1L))
+    colG[[q]] <- build_perm_set(length(blocks[[q]]$cols), K,
+                                seed = .sub_seed(rep_seed, 4L * q))
+  }
+  code <- .cell_code(cbind(ri, ci))   # global cell code on retained cells
+  Kp1 <- K + 1L
+  ops <- vector("list", Kp1)          # one observation gather-vector per element
+  for (k in seq_len(Kp1)) {
+    ## Compute the target global (row, col) of every retained cell under the
+    ## k-th element, block by block (unchanged where the block has no cells).
+    tg_row <- ri; tg_col <- ci
+    for (q in seq_along(blocks)) {
+      sel <- blk == q                # retained cells in block q
+      if (!any(sel)) next
+      rimg <- rowG[[q]][[k]]; cimg <- colG[[q]][[k]]   # local image vectors
+      tg_row[sel] <- blocks[[q]]$rows[rimg[lrow[sel]]]   # local -> permuted -> global
+      tg_col[sel] <- blocks[[q]]$cols[cimg[lcol[sel]]]
+    }
+    ## Map each target cell back to its observation index among retained cells.
+    tgt_code <- .cell_code(cbind(tg_row, tg_col))
+    g <- match(tgt_code, code)
+    if (anyNA(g))
+      stop("Internal error: block permutation left the observed set.",
+           call. = FALSE)   # nocov
+    ops[[k]] <- g
+  }
+  ops
 }
 
 

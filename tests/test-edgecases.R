@@ -59,6 +59,15 @@ for (b in bl8v) in_any <- in_any | (g8$i %in% b$rows & g8$j %in% b$cols)
 if (any(!in_any))
   expect_err(mwperm_missing(mkNA(y8, which(!in_any)[1L]), d8, row = g8$i,
                             col = g8$j, min_block = 3), "`y`")
+## when the smallest block caps K below the alpha resolution, the fit's note
+## names the block as the cause (F3.2 fix); attainable alpha -> no such note
+fm05 <- mwperm_missing(y8, d8, row = g8$i, col = g8$j, min_block = 3,
+                       seed = 1, conf_int = FALSE)
+stopifnot(1 / (fm05$K + 1) > 0.05,               # fixture really is capped
+          any(grepl("smallest selected block", fm05$note)))
+fm40 <- mwperm_missing(y8, d8, row = g8$i, col = g8$j, min_block = 3,
+                       seed = 1, conf_int = FALSE, alpha = 0.4)
+stopifnot(!any(grepl("smallest selected block", fm40$note)))
 gl <- expand.grid(l = 1:5, i = 1:4, j = 1:4)
 yl <- rnorm(nrow(gl)); dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
 expect_err(mwperm_layout(mkNA(yl), dl, row = gl$i, col = gl$j), "`y`")

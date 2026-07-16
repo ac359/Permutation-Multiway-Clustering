@@ -53,11 +53,10 @@ stopifnot(is_closed(Ol))
 stopifnot(all(vapply(Ol, function(o) identical(cell[o], cell), logical(1))))
 
 ## ---- 5. missing block-diagonal: two disjoint blocks --------------------------
-## The block-diagonal builder is defined inline in mwperm_missing() and is not
-## independently callable (see FINDING F2.6 in audit/02_correctness.md). We
-## reconstruct it verbatim to pin its group closure; the reconstruction mirrors
-## R/missing.R:131-164 and shares that logic (this is a closure check, not the
-## independent oracle of 2.3).
+## Closure of the SAME code the fit runs: the builder was extracted from
+## mwperm_missing()'s inline closure to the named internal
+## .build_obs_perms_blocks() (audit F2.6 fix), so this test can no longer
+## drift from the production code path.
 blocks <- list(list(rows = 1:4, cols = 1:4), list(rows = 5:8, cols = 5:8))
 gg <- rbind(expand.grid(r = 1:4, c = 1:4), expand.grid(r = 5:8, c = 5:8))
 ri_k <- gg$r; ci_k <- gg$c; blk_k <- ifelse(ri_k <= 4, 1L, 2L)
@@ -67,26 +66,9 @@ for (q in 1:2) {
   lrow_k[sel] <- match(ri_k[sel], blocks[[q]]$rows)
   lcol_k[sel] <- match(ci_k[sel], blocks[[q]]$cols)
 }
-code_k <- cc(cbind(ri_k, ci_k))
-build_missing_ops <- function(seed) {
-  rowG <- colG <- vector("list", 2)
-  for (q in 1:2) {
-    rowG[[q]] <- build_perm_set(4L, K, seed = seed * 1000L + 4L * q - 1L)
-    colG[[q]] <- build_perm_set(4L, K, seed = seed * 1000L + 4L * q)
-  }
-  ops <- vector("list", K + 1L)
-  for (k in seq_len(K + 1L)) {
-    tg_row <- ri_k; tg_col <- ci_k
-    for (q in 1:2) {
-      sel <- blk_k == q
-      tg_row[sel] <- blocks[[q]]$rows[rowG[[q]][[k]][lrow_k[sel]]]
-      tg_col[sel] <- blocks[[q]]$cols[colG[[q]][[k]][lcol_k[sel]]]
-    }
-    ops[[k]] <- match(cc(cbind(tg_row, tg_col)), code_k)
-  }
-  ops
-}
-Om <- build_missing_ops(1L)
+Om <- mwperm:::.build_obs_perms_blocks(1L, K, blocks, ri = ri_k, ci = ci_k,
+                                       blk = blk_k, lrow = lrow_k,
+                                       lcol = lcol_k)
 stopifnot(is_closed(Om))
 stopifnot(!anyNA(unlist(Om)))                              # never leaves the observed set
 stopifnot(all(vapply(Om, function(o) identical(blk_k[o], blk_k), logical(1))))  # stays in-block

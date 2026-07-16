@@ -80,11 +80,16 @@ the result.
 \details{
 Finding the largest fully observed biclique is NP-hard, so a greedy
 heuristic is used; an approximate (sub-maximal) solution still yields a valid
-test, only a less powerful one. The achievable permutation-group order
-\code{K + 1} is capped by the smallest selected block, so there is a tension
-between including many small blocks (more pooled data, coarser p-value
-resolution) and a few large balanced blocks (finer resolution); tune it with
-\code{min_block} and \code{K}.
+test, only a less powerful one. \strong{The smallest selected block is the
+binding constraint on resolution}: the group order \code{K + 1} is capped at
+its smaller side, so the smallest attainable p-value is
+\code{1/(K + 1) >= 1/min_side} no matter how large the other blocks are.
+Adding small blocks pools more data yet can destroy resolution -- rejecting
+at level \code{alpha} requires a fully observed block with both sides at
+least \code{ceiling(1/alpha)} (20 for \code{alpha = 0.05}). When the
+default \code{K} makes rejection at \code{alpha} unattainable the fit says
+so in its \code{note}; raise \code{min_block} to stop small blocks from
+setting \code{K}, at the price of discarding their cells.
 }
 \examples{
 data(trade_dyadic)
