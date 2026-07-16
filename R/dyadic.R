@@ -84,7 +84,7 @@ mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
                           alpha = 0.05, beta_null = 0, conf_int = TRUE,
                           n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L) {
   cl <- match.call()                   # stored on the result for printing
-  y <- as.numeric(y)
+  y <- .check_y(y)
   N <- length(y)                       # number of observations
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))  # covariate(s) of interest + label(s)
   X <- .make_X(x, N)                   # nuisance design with intercept

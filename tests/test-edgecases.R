@@ -54,6 +54,15 @@ expect_err(mwperm_missing(mkNA(y8, i_ret), d8, row = g8$i, col = g8$j,
 gl <- expand.grid(l = 1:5, i = 1:4, j = 1:4)
 yl <- rnorm(nrow(gl)); dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
 expect_err(mwperm_layout(mkNA(yl), dl, row = gl$i, col = gl$j), "`y`")
+## factor y is rejected in every front end, never coerced to its level codes
+## (audit F5.1: as.numeric(factor) is silent data corruption)
+yf6 <- factor(round(y6)); yfp <- factor(round(yp))
+yf8 <- factor(round(y8)); yfl <- factor(round(yl))
+expect_err(mwperm_dyadic(yf6, d6, row = g6$i, col = g6$j), "`y`")
+expect_err(mwperm_panel(yfp, dp, row = gp$i, col = gp$j, time = gp$t), "`y`")
+expect_err(mwperm_threeway(yfp, dp, id1 = gp$i, id2 = gp$j, id3 = gp$t), "`y`")
+expect_err(mwperm_missing(yf8, d8, row = g8$i, col = g8$j, min_block = 3), "`y`")
+expect_err(mwperm_layout(yfl, dl, row = gl$i, col = gl$j), "`y`")
 ## logicals are documented as allowed
 fl <- mwperm_dyadic(y6 > 0, d6 > 0, row = g6$i, col = g6$j, seed = 1,
                     conf_int = FALSE)

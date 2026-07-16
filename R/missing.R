@@ -69,7 +69,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            n_cores = 1L) {
   cl <- match.call()
   block_method <- match.arg(block_method)
-  y <- as.numeric(y); N <- length(y)
+  y <- .check_y(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
   X <- .make_X(x, N)
   .check_lengths(N, list(row = row, col = col))

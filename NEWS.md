@@ -21,6 +21,9 @@ p-value, or any seeded result unless explicitly noted).
   detection warnings are raised as R warnings at fit time (previously they
   were only recorded on the returned object's `note`). Detection *choices*
   are unchanged -- same data, same seed, same result.
+* A factor `y` is now rejected with an informative error in every front end;
+  it was previously coerced silently to its internal level codes (`d` and
+  `x` were already protected).
 
 # mwperm 0.1.1
 

@@ -37,7 +37,7 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             n_reps = 1L, seed = NULL, grid = NULL,
                             n_cores = 1L) {
   cl <- match.call()
-  y <- as.numeric(y); N <- length(y)
+  y <- .check_y(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
   X <- .make_X(x, N)
   .check_lengths(N, list(id1 = id1, id2 = id2, id3 = id3))

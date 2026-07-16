@@ -473,6 +473,24 @@
   f
 }
 
+#' Coerce the outcome to numeric, refusing factors.
+#'
+#' \code{as.numeric(factor)} yields the internal level codes -- silent data
+#' corruption for an outcome (audit F5.1). \code{d}/\code{x} are protected by
+#' matrix coercion (their mode stays character and \code{.check_finite}
+#' rejects it); \code{y} needs this explicit guard because factors are
+#' numeric-coercible.
+#' @keywords internal
+#' @noRd
+.check_y <- function(y) {
+  if (is.factor(y))
+    stop(paste0("`y` is a factor; the outcome must be numeric. Factors are ",
+                "not coerced to their level codes -- if the labels are ",
+                "numbers, convert explicitly with as.numeric(as.character(y))."),
+         call. = FALSE)
+  as.numeric(y)
+}
+
 #' Error unless every supplied vector/matrix is numeric (or logical) with all
 #' entries finite. NULLs are skipped; names label the user-facing arguments in
 #' the error messages.
