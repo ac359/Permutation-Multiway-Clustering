@@ -99,13 +99,24 @@ fcy <- mwperm_dyadic(rep(2, N6), d6, row = g6$i, col = g6$j, seed = 1,
                      conf_int = FALSE)
 stopifnot(fcy$pvalue == 1)
 ## constant d / d collinear with x: OLS estimate honestly NA (rank deficient);
-## the p-value itself is float-noise-driven -- filed as finding F5.2, not pinned
-fcd <- mwperm_dyadic(y6, rep(1, N6), row = g6$i, col = g6$j, seed = 1,
-                     conf_int = FALSE)
-stopifnot(is.na(fcd$estimate))
-fcl <- mwperm_dyadic(y6, 2 * x6 + 1, x = x6, row = g6$i, col = g6$j, seed = 1,
-                     conf_int = FALSE)
-stopifnot(is.na(fcl$estimate))
+## the test warns that beta is unidentified and returns p = 1 EXACTLY (the
+## exact-arithmetic answer: a residualized-away d has a_k = 0, so the
+## minorization gives p = 1; float noise must never decide instead -- F5.2 fix)
+warn_of <- function(expr) {
+  w <- character(0)
+  withCallingHandlers(expr, warning = function(cnd) {
+    w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning")
+  })
+  w
+}
+wcd <- warn_of(fcd <- mwperm_dyadic(y6, rep(1, N6), row = g6$i, col = g6$j,
+                                    seed = 1, conf_int = FALSE))
+stopifnot(is.na(fcd$estimate), fcd$pvalue == 1,
+          any(grepl("`d`", wcd, fixed = TRUE)))
+wcl <- warn_of(fcl <- mwperm_dyadic(y6, 2 * x6 + 1, x = x6, row = g6$i,
+                                    col = g6$j, seed = 1, conf_int = FALSE))
+stopifnot(is.na(fcl$estimate), fcl$pvalue == 1,
+          any(grepl("`d`", wcl, fixed = TRUE)))
 
 ## ---- 4. scalar-argument validation --------------------------------------------
 for (a in list(0, 1, -0.1, 2, NA_real_, c(0.05, 0.1), "0.05"))

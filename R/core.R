@@ -89,6 +89,13 @@
   K <- Kp1 - 1L                        # number of non-identity permutations
   if (K < 1L) stop("Need at least one non-identity permutation.", call. = FALSE)
   d <- ncol(D)                         # number of coefficients of interest
+  ## Degeneracy floor: when D lies numerically inside span[X | X_k], the
+  ## residualized cross products are pure rounding noise. In exact arithmetic
+  ## that slice has a_k = 0 -- forcing p = 1 through the minorization -- so
+  ## the slice is zeroed to restore the exact answer rather than letting
+  ## ~1e-16 noise decide the a/b comparisons (audit F5.2). Relative tolerance
+  ## in the qr() league (1e-8 on the Frobenius norm).
+  degen_tol2 <- 1e-16 * sum(D * D)
 
   ## One slice of cached cross products per non-identity permutation k.
   ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
@@ -96,6 +103,10 @@
     g   <- obs_perms[[k + 1L]]         # gather-vector of the k-th permutation
     qMk <- qr(cbind(X, X[g, , drop = FALSE]))   # QR of the FWL projector M_k = [X | X_k]
     Dr  <- qr.resid(qMk, D)            # residualized covariate(s),     N x d
+    if (sum(Dr * Dr) <= degen_tol2)    # degenerate slice: exact-arithmetic zero
+      return(list(u = matrix(0, d, 1L), v = matrix(0, d, 1L),
+                  M = matrix(0, d, d),
+                  W = if (need_perm_D) matrix(0, d, d)))
     yr  <- qr.resid(qMk, y)            # residualized outcome,          length N
     ypr <- qr.resid(qMk, y[g])         # residualized permuted outcome, length N
     list(u = crossprod(Dr, yr),        # = t(Dr) %*% yr

@@ -133,6 +133,21 @@
                         "covariates or add data."), N, p), call. = FALSE)
   }
 
+  ## A `d` with no variation after partialling out X (constant, or collinear
+  ## with a nuisance column) leaves beta unidentified: every residualized
+  ## statistic is exactly zero in exact arithmetic, so p = 1 by the
+  ## minorization (.ipt_prepare zeroes the noise-level slices to enforce
+  ## that). Warn once, up front, so the p = 1 is not mistaken for evidence
+  ## (audit F5.2). span(X) is contained in every span[X | X_k], so this check
+  ## catches the global case; per-permutation degeneracy is handled silently
+  ## by the slice floor.
+  D_resid0 <- qr.resid(qr(X), D)
+  if (sum(D_resid0 * D_resid0) <= 1e-16 * sum(D * D))
+    warning(paste0("`d` has no variation after partialling out `x` (it is ",
+                   "constant or collinear with the nuisance covariates): ",
+                   "beta is unidentified, the test is uninformative, and ",
+                   "p = 1 by construction."), call. = FALSE)
+
   ## Reference OLS estimate / scale (centre + step size for the CI search)
   ref <- .ols_reference(y, D, X)
 

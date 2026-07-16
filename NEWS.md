@@ -24,6 +24,14 @@ p-value, or any seeded result unless explicitly noted).
 * A factor `y` is now rejected with an informative error in every front end;
   it was previously coerced silently to its internal level codes (`d` and
   `x` were already protected).
+* **Degenerate `d` is now deterministic:** when `d` has no variation after
+  partialling out the nuisance covariates (constant, or collinear with a
+  column of `x`), the test warns that beta is unidentified and returns
+  p = 1 exactly -- the exact-arithmetic answer, since the residualized
+  statistic is identically zero and the minorized p-value is 1. Previous
+  versions let ~1e-16 rounding noise decide the permutation comparisons,
+  giving an arbitrary, BLAS-dependent p-value with no warning. Only
+  degenerate fits are affected; all seeded reference values are unchanged.
 
 # mwperm 0.1.1
 
