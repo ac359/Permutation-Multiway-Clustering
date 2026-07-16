@@ -124,6 +124,8 @@
   n_cores <- suppressWarnings(as.integer(n_cores))
   if (length(n_cores) != 1L || is.na(n_cores))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
+  if (!is.null(seed) && !(is.numeric(seed) && length(seed) == 1L && is.finite(seed)))
+    stop("`seed` must be NULL or a single finite number.", call. = FALSE)
   conf_level <- 1 - alpha            # always the complement of the test level
   ## Need more observations than the stacked projection [X | X_k] consumes; with
   ## p nuisance columns that projection has up to 2p columns.
@@ -579,6 +581,10 @@
   if (is.null(K)) {
     K <- min(gmax, cap)
   } else {
+    if (!(is.numeric(K) && length(K) == 1L && is.finite(K) && K == trunc(K)
+          && K >= 1))
+      stop("`K` must be a single integer >= 1 (or NULL for the default).",
+           call. = FALSE)
     K <- as.integer(K)
     if (K + 1L > smallest)
       stop(sprintf("K + 1 = %d exceeds the smallest permuted dimension (%d).",
@@ -598,9 +604,22 @@
 #' cross-rep independence of the median aggregation degrades. Deliberately
 #' NOT changed: any new mixing scheme would shift every seeded result and
 #' invalidate the published reference numbers. See REVIEW.md 1.
+#'
+#' Computed in double so a large seed can never overflow to a silent NA
+#' (audit F2.3); values in R's integer seed range are identical to the old
+#' integer arithmetic, so no seeded result changes. Beyond that range the
+#' error names `seed` instead of surfacing as set.seed(NA)'s cryptic message.
 #' @keywords internal
 #' @noRd
-.sub_seed <- function(rep_seed, j) if (is.null(rep_seed)) NULL else rep_seed * 1000L + j
+.sub_seed <- function(rep_seed, j) {
+  if (is.null(rep_seed)) return(NULL)
+  s <- rep_seed * 1000 + j
+  if (abs(s) > .Machine$integer.max)
+    stop(paste0("`seed` is too large for the rep/sub-seed scheme (rep seed x ",
+                "1000 + dimension offset must stay inside R's integer seed ",
+                "range); use |seed| below about 2.1 million."), call. = FALSE)
+  s
+}
 
 #' Column labels for the coefficient(s) of interest.
 #'

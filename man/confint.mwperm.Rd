@@ -8,7 +8,8 @@
 \arguments{
 \item{object}{An object of class \code{"mwperm"}.}
 
-\item{parm}{Ignored; kept for generic compatibility.}
+\item{parm}{Optional subset of coefficients: names (matching the rows of the
+returned matrix) or integer positions. Defaults to all coefficients.}
 
 \item{level}{Confidence level; must match the level used at fitting, otherwise
 an error is raised (the set cannot be re-derived without the stored

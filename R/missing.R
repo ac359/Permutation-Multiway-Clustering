@@ -73,6 +73,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))
   X <- .make_X(x, N)
   .check_lengths(N, list(row = row, col = col))
+  ## Validate the FULL supplied data before the biclique step discards cells
+  ## (audit F5.4): the observed cells are the user's data contract, and an NA
+  ## in a soon-to-be-discarded cell should not pass silently.
+  .check_finite(list(y = y, d = D, x = X))
 
   ri <- .dense_id(row, "row"); ci <- .dense_id(col, "col")
   if (anyDuplicated(cbind(ri, ci)))

@@ -2,10 +2,12 @@
 ## Base-R stopifnot style; fast. Pins the VALIDATION CONTRACT: every bad input
 ## fails early with an error naming the offending user-facing argument
 ## (CLAUDE.md §5.7), degenerate-but-legal designs stay valid, and the S3
-## methods honour their documented guarantees. Behaviours found deficient in
-## the audit (silent factor-y coercion, K validation style, NA in layout
-## `rep`, silent name-based time dispatch) are documented as findings in
-## audit/05_edge_cases.md and are deliberately NOT asserted here.
+## methods honour their documented guarantees. The behaviours the audit found
+## deficient (silent factor-y coercion F5.1, noise-driven degenerate-d p-value
+## F5.2, K/seed validation style F5.3/F2.3, retained-cells-only validation
+## F5.4, NA in layout `rep` F5.7, ignored confint(parm=) F5.8) are FIXED and
+## asserted below; the dispatch findings (F5.5/F3.4) live in
+## test-detection.R.
 library(mwperm)
 
 msg_of <- function(expr) tryCatch({ expr; NA_character_ },
@@ -45,12 +47,18 @@ expect_err(mwperm_panel(yp, dp, row = gp$i, col = gp$j, time = mkNA(gp$t)), "`ti
 expect_err(mwperm_threeway(yp, dp, id1 = gp$i, id2 = gp$j, id3 = mkNA(gp$t)), "`id3`")
 g8 <- expand.grid(i = 1:8, j = 1:8); g8 <- g8[g8$i != g8$j, ]
 y8 <- rnorm(nrow(g8)); d8 <- rnorm(nrow(g8))
-## the NA must sit in a cell the biclique step RETAINS: validation happens on
-## the retained cells only (an NA in a discarded cell passes -- finding F5.4)
+## validation runs on the FULL supplied data, before the biclique step
+## discards cells (F5.4 fix): an NA errors whether its cell is retained...
 bl8v <- find_bicliques(g8$i, g8$j, min_block = 3)
 i_ret <- which(g8$i %in% bl8v[[1]]$rows & g8$j %in% bl8v[[1]]$cols)[1L]
 expect_err(mwperm_missing(mkNA(y8, i_ret), d8, row = g8$i, col = g8$j,
                           min_block = 3), "`y`")
+## ... or discarded
+in_any <- rep(FALSE, nrow(g8))
+for (b in bl8v) in_any <- in_any | (g8$i %in% b$rows & g8$j %in% b$cols)
+if (any(!in_any))
+  expect_err(mwperm_missing(mkNA(y8, which(!in_any)[1L]), d8, row = g8$i,
+                            col = g8$j, min_block = 3), "`y`")
 gl <- expand.grid(l = 1:5, i = 1:4, j = 1:4)
 yl <- rnorm(nrow(gl)); dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
 expect_err(mwperm_layout(mkNA(yl), dl, row = gl$i, col = gl$j), "`y`")
@@ -123,6 +131,18 @@ for (a in list(0, 1, -0.1, 2, NA_real_, c(0.05, 0.1), "0.05"))
   expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, alpha = a), "`alpha`")
 for (r in list(0L, 1.5, NA_integer_, c(2L, 3L)))
   expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_reps = r), "`n_reps`")
+## K validation names the argument, incl. NA / vector / fractional / 0 (F5.3 fix)
+for (k in list(NA, NA_integer_, c(3, 4), 2.5, "3", 0L))
+  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, K = k), "`K`")
+## seed: type validation and a loud, `seed`-named overflow error (F2.3 fix);
+## the last safe seed for this design keeps working (frozen scheme)
+for (s in list(c(1, 2), "1", NA_real_, Inf))
+  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = s), "`seed`")
+expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 2147484,
+                         conf_int = FALSE), "`seed`")
+fs <- mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 2147482,
+                    conf_int = FALSE)
+stopifnot(inherits(fs, "mwperm"))
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, beta_null = Inf),
            "`beta_null`")
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, beta_null = c(0, 1)),
@@ -130,7 +150,9 @@ expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, beta_null = c(0, 1)),
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, grid = c(0, NA, 1)),
            "`grid`")
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, K = 6), "K + 1")
-expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, K = 0), "clusters")
+## K = 0 blames the argument, not the data (F5.3: it used to say "Not enough
+## clusters" as if the design were at fault)
+expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, K = 0), "`K`")
 expect_err(mwperm_layout(yl, dl, row = gl$i, col = gl$j, L0 = 1), "`L0`")
 expect_err(mwperm_layout(yl, dl, row = gl$i, col = gl$j, L0 = 99), "L0 = 99")
 ## a length-d vector null is legal and runs
@@ -177,6 +199,16 @@ stopifnot(nrow(tab) == 2L,
 ci2 <- confint(fit2)
 stopifnot(nrow(ci2) == 2L, identical(rownames(ci2), c("dA", "dB")),
           isTRUE(all.equal(as.numeric(ci2), as.numeric(t(fit2$conf_box)))))
+## confint(parm=) subsets by name or index, keeping labels and the method
+## attribute (F5.8 fix; it was previously accepted and ignored)
+cip <- confint(fit2, parm = "dB")
+stopifnot(nrow(cip) == 1L, identical(rownames(cip), "dB"),
+          identical(cip[1L, ], ci2[2L, ]),
+          identical(attr(cip, "method"), attr(ci2, "method")))
+cin <- confint(fit2, parm = 1L)
+stopifnot(identical(rownames(cin), "dA"), identical(cin[1L, ], ci2[1L, ]))
+expect_err(confint(fit2, parm = "nope"), "`parm`")
+expect_err(confint(fit2, parm = 5), "`parm`")
 expect_err(mwperm_dyadic(y21, cbind(dA, dB), row = g21$i, col = g21$j,
                          grid = list(1:3), seed = 3), "one vector per coefficient")
 ## d = 2 without a region: summary degrades to NA limits, no error
@@ -225,5 +257,9 @@ stopifnot(identical(f0$pvalue, f1$pvalue),
           abs(f0$estimate - f1$estimate) < 1e-10)
 expect_err(mwperm_layout(yl, dl, row = gl$i, col = gl$j, rep = repv[-1]),
            "`rep`")
+## NA in `rep` is rejected like every other identifier (F5.7 fix; it was
+## previously silently ranked last within its cell)
+expect_err(mwperm_layout(yl, dl, row = gl$i, col = gl$j,
+                         rep = mkNA(as.numeric(repv))), "`rep`")
 
 cat("test-edgecases.R: all assertions passed\n")

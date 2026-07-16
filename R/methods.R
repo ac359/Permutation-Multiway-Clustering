@@ -133,7 +133,8 @@ summary.mwperm <- function(object, ...) {
 #' corresponding \code{alpha}.
 #'
 #' @param object An object of class \code{"mwperm"}.
-#' @param parm Ignored; kept for generic compatibility.
+#' @param parm Optional subset of coefficients: names (matching the rows of
+#'   the returned matrix) or integer positions. Defaults to all coefficients.
 #' @param level Confidence level; must match the level used at fitting, otherwise
 #'   an error is raised (the interval cannot be re-derived without the stored
 #'   permutations).
@@ -167,6 +168,24 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
     box <- t(object$conf_box)                       # d x 2 (lower, upper)
     dimnames(box) <- list(object$d_names, lab)
     box
+  }
+  ## Honour the generic's subsetting contract (audit F5.8): names or integer
+  ## positions, keeping the row labels.
+  if (!missing(parm) && !is.null(parm)) {
+    idx <- if (is.numeric(parm)) {
+      if (any(parm < 1 | parm > nrow(out) | parm != trunc(parm)))
+        stop(sprintf("`parm` must index coefficients 1..%d.", nrow(out)),
+             call. = FALSE)
+      as.integer(parm)
+    } else {
+      m <- match(as.character(parm), rownames(out))
+      if (anyNA(m))
+        stop(sprintf("`parm` has no coefficient named %s; available: %s.",
+                     paste(parm[is.na(m)], collapse = ", "),
+                     paste(rownames(out), collapse = ", ")), call. = FALSE)
+      m
+    }
+    out <- out[idx, , drop = FALSE]
   }
   ## Record provenance without touching the percentile column labels the
   ## confint generic promises (downstream code indexes by "2.5 %"/"97.5 %").

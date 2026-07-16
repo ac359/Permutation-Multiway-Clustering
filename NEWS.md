@@ -32,6 +32,17 @@ p-value, or any seeded result unless explicitly noted).
   versions let ~1e-16 rounding noise decide the permutation comparisons,
   giving an arbitrary, BLAS-dependent p-value with no warning. Only
   degenerate fits are affected; all seeded reference values are unchanged.
+* **Validation hardening:** `K` is validated as a single integer >= 1 with
+  an error naming the argument (previously `K = NA`/vector `K` surfaced raw
+  R errors, a fractional `K` truncated silently, and `K = 0` blamed the
+  data); `seed` must be `NULL` or a single finite number, and a seed too
+  large for the rep/sub-seed scheme (|seed| above ~2.1 million) now errors
+  by name instead of via `set.seed(NA)`'s cryptic message -- in-range seeded
+  results are bit-identical; an `NA` in the layout `rep` identifier is
+  rejected (it was silently ranked last within its cell);
+  `mwperm_missing()` validates the full supplied data before the biclique
+  step discards cells; `confint(parm = )` now subsets by coefficient name
+  or position (it was accepted and ignored).
 
 # mwperm 0.1.1
 

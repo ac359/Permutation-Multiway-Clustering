@@ -50,6 +50,9 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   X <- .make_X(x, N)
   .check_lengths(N, list(row = row, col = col,
                          rep = if (is.null(rep)) seq_len(N) else rep))
+  if (!is.null(rep) && anyNA(rep))
+    stop(paste0("`rep` contains missing values (NA); the replication ",
+                "identifier must be complete."), call. = FALSE)
 
   cell <- .dense_id(interaction(.dense_id(row, "row"), .dense_id(col, "col"),
                                 drop = TRUE))  # dense (row,col) cell id
