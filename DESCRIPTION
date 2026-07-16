@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.1.1
+Version: 0.2.0
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = "aut"),
@@ -23,7 +23,7 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     cover two-way (dyadic) designs, three-way clustering, panels with arbitrary
     time effects, replicated two-way layouts, and incomplete arrays via fully
     observed bicliques.
-License: Proprietary
+License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel

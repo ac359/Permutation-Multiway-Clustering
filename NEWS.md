@@ -1,3 +1,16 @@
+# mwperm 0.2.0
+
+Audit-driven release: the changes below implement the fix plan from the
+2026-07 verification audit (finite-sample validity re-verified throughout;
+no change to the test statistic, the permutation group, the minorized
+p-value, or any seeded result unless explicitly noted).
+
+* **License:** the package is now released under the MIT license
+  (`LICENSE`); previous versions carried a placeholder `Proprietary` tag.
+* The test suite (9 base-R files, ~2 s under `R CMD check`) is now tracked
+  in the repository and ships with the package; internal development
+  material is excluded from builds via `.Rbuildignore`.
+
 # mwperm 0.1.1
 
 Publication-standard plotting and provenance-labelled return values (no
