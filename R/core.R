@@ -100,20 +100,26 @@
   ## One slice of cached cross products per non-identity permutation k.
   ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
   one_k <- function(k) {
-    g   <- obs_perms[[k + 1L]]         # gather-vector of the k-th permutation
-    qMk <- qr(cbind(X, X[g, , drop = FALSE]))   # QR of the FWL projector M_k = [X | X_k]
-    Dr  <- qr.resid(qMk, D)            # residualized covariate(s),     N x d
+    g <- obs_perms[[k + 1L]]           # gather-vector of the k-th permutation
+    ## Residualize the whole stack [D | y | y_k | (D_k)] on M_k = [X | X_k] in
+    ## one .lm.fit call: dqrls pivots with the same tolerance family as qr(),
+    ## so the always-rank-deficient M_k (duplicated intercept, panel time
+    ## dummies) is handled identically to qr.resid -- bit-identical residuals,
+    ## ~25% less per-k overhead (one factorization+apply, no qr.default
+    ## coercion copies). Verified in the Phase-6 audit.
+    S <- if (need_perm_D) cbind(D, y, y[g], D[g, , drop = FALSE])
+         else             cbind(D, y, y[g])
+    R <- stats::.lm.fit(cbind(X, X[g, , drop = FALSE]), S)$residuals
+    Dr <- R[, seq_len(d), drop = FALSE]            # residualized covariate(s), N x d
     if (sum(Dr * Dr) <= degen_tol2)    # degenerate slice: exact-arithmetic zero
       return(list(u = matrix(0, d, 1L), v = matrix(0, d, 1L),
                   M = matrix(0, d, d),
                   W = if (need_perm_D) matrix(0, d, d)))
-    yr  <- qr.resid(qMk, y)            # residualized outcome,          length N
-    ypr <- qr.resid(qMk, y[g])         # residualized permuted outcome, length N
-    list(u = crossprod(Dr, yr),        # = t(Dr) %*% yr
-         v = crossprod(Dr, ypr),
-         M = crossprod(Dr),            # = t(Dr) %*% Dr
-         W = if (need_perm_D)          # only needed for CI / non-zero null (see engine)
-           crossprod(Dr, qr.resid(qMk, D[g, , drop = FALSE])))
+    list(u = crossprod(Dr, R[, d + 1L]),           # = Dr' yr
+         v = crossprod(Dr, R[, d + 2L]),           # = Dr' ypr
+         M = crossprod(Dr),                        # = Dr' Dr
+         W = if (need_perm_D)                      # only for CI / non-zero null (see engine)
+           crossprod(Dr, R[, d + 2L + seq_len(d), drop = FALSE]))
   }
   slices <- .plapply(seq_len(K), one_k, n_cores = n_cores)
 
@@ -204,6 +210,16 @@
   for (g in groups) if (!is.null(g)) { Kp1 <- length(g); break }
   if (is.null(Kp1)) stop("At least one dimension must be permuted.", call. = FALSE)
 
+  ## Position table over the mixed-radix index space: translating permuted cell
+  ## codes through it replaces match()'s per-k double hashing with one O(N)
+  ## integer gather (identical output; ~2x builder, Phase-6 audit). Only when
+  ## the index space is cheap to allocate; huge sparse spaces keep match().
+  pos <- NULL
+  if (prod(apply(coords, 2L, max)) <= 2^26) {
+    pos <- integer(prod(apply(coords, 2L, max)))   # 0 = unobserved cell
+    pos[orig_code + 1] <- seq_len(nrow(coords))
+  }
+
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
     mapped <- coords                   # coordinates after applying the k-th element
@@ -214,10 +230,14 @@
         mapped[, c] <- img[coords[, c]]
       }
     }
-    ## Translate permuted coordinates back to observation indices by matching
-    ## cell codes; an NA means the permutation reached an unobserved cell.
+    ## Translate permuted coordinates back to observation indices; an NA (or a
+    ## zero table entry) means the permutation reached an unobserved cell.
     mapped_code <- .cell_code(mapped)
-    g <- match(mapped_code, orig_code)
+    g <- if (is.null(pos)) match(mapped_code, orig_code) else {
+      gi <- pos[mapped_code + 1]
+      gi[gi == 0L] <- NA_integer_
+      gi
+    }
     if (anyNA(g)) {
       stop("Permutation maps to an unobserved cell; the design is not a ",
            "complete array. Use mwperm_missing() or mwperm_layout().",

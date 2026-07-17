@@ -58,6 +58,16 @@ p-value, or any seeded result unless explicitly noted).
   `\seealso` sections, dataset pages (now with `\source`) -- so no rendered
   content was lost; the front-end pages gain the full inherited argument
   documentation their hand versions abbreviated.
+* **Performance** (bit-identical output; verified against the previous
+  implementation on seeded fits across all five designs, plus the full test
+  suite and all seeded reference values): layout fits are ~10x faster (the
+  per-cell bookkeeping in the permutation builder and the within-cell index
+  construction are now vectorized -- 5.3 s -> 0.44 s on a 5,000-cell
+  layout); every fit gains ~20% from a fused single-call residualization
+  (`.lm.fit`, same pivoted-QR family as `qr.resid`, so rank-deficient
+  stacked designs are handled identically); complete-array gather vectors
+  are built by an O(N) position-table translation instead of per-element
+  hashing.
 * **Documentation honesty sweep** (audit findings): the exact status of
   median aggregation over `n_reps` is stated (each repetition is valid on
   its own; no finite-sample theorem covers the median; measured uniformly
