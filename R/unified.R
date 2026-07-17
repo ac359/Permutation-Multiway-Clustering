@@ -107,7 +107,7 @@
 #' \itemize{
 #'   \item \strong{panel vs three-way} (complete balanced 3-index arrays):
 #'     running \code{\link{mwperm_threeway}} on a panel whose errors are
-#'     dependent over time is \emph{invalid}, while running
+#'     dependent over time is \emph{invalid} (size distortion), while running
 #'     \code{\link{mwperm_panel}} on genuinely three-way exchangeable data is
 #'     valid, only less powerful. The default is therefore \code{panel}. The
 #'     time role is assigned by, in order: an explicit \code{time =} tag; a
@@ -493,12 +493,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   ), class = "mwperm_design")
 }
 
-#' Print a design diagnosis
-#'
-#' @param x An object of class \code{"mwperm_design"} from
-#'   \code{\link{mwperm_check}}.
+#' @rdname mwperm_check
+#' @param x An object of class \code{"mwperm_design"} (print method).
 #' @param ... Ignored.
-#' @return \code{x}, invisibly.
 #' @export
 print.mwperm_design <- function(x, ...) {
   cat("\nmwperm design diagnosis\n")
@@ -544,8 +541,10 @@ print.mwperm_design <- function(x, ...) {
 #' gives identical results.
 #'
 #' See \code{\link{mwperm_check}} for the detection rules, in particular the
-#' two assumption-dependent forks (panel-vs-threeway and layout-vs-panel)
-#' that are announced rather than silently resolved.
+#' two assumption-dependent forks (panel-vs-threeway and
+#' layout-vs-suppressed-panel) that are announced rather than silently
+#' resolved. Structural forks (complete vs incomplete arrays, replicated
+#' cells) are resolved silently.
 #'
 #' @param y,d,x Outcome, covariate(s) of interest, and optional nuisance
 #'   covariates, as in \code{\link{mwperm_dyadic}}. With \code{data} given,
@@ -557,8 +556,13 @@ print.mwperm_design <- function(x, ...) {
 #'   \code{x}, \code{index}, \code{time}, \code{rep} are resolved against it.
 #' @param time,rep Optional explicit role tags (vector or column name); see
 #'   \code{\link{mwperm_check}}.
-#' @param design Force a design instead of auto-detecting.
-#' @param time_fe Passed to \code{\link{mwperm_panel}} (panel only).
+#' @param design Force a design instead of auto-detecting (the structure is
+#'   still validated against it).
+#' @param K Number of non-identity permutations; the default and the
+#'   admissible range depend on the dispatched design -- see the dispatched
+#'   function.
+#' @param time_fe Passed to \code{\link{mwperm_panel}} (panel only;
+#'   supplying it for another design warns and ignores it).
 #' @param L0 Passed to \code{\link{mwperm_layout}} (layout only).
 #' @param min_block,block_method Passed to \code{\link{mwperm_missing}}
 #'   (missing only).
@@ -578,6 +582,10 @@ print.mwperm_design <- function(x, ...) {
 #'   coefficients) the IPT inverted-test confidence set, and \code{pvalue}
 #'   the IPT permutation p-value.
 #'
+#' @seealso \code{\link{mwperm_check}} for the diagnosis without any
+#'   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
+#'   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
+#'   \code{\link{mwperm_missing}} for the underlying tests.
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm(y = "log_trade", d = "log_dist",

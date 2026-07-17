@@ -31,6 +31,17 @@
 #'   inference under multi-way clustering and missing data, Section 6.1.
 #'   arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}}.
+#' @examples
+#' ## small balanced 3-way array with a random-effects error
+#' set.seed(1)
+#' m <- 8
+#' g <- expand.grid(i = seq_len(m), j = seq_len(m), l = seq_len(m))
+#' a <- rnorm(m); b <- rnorm(m); cc <- rnorm(m)
+#' g$d <- rnorm(nrow(g))
+#' g$y <- 0.6 * g$d + a[g$i] + b[g$j] + cc[g$l] + rnorm(nrow(g))
+#' fit <- with(g, mwperm_threeway(y = y, d = d, id1 = i, id2 = j, id3 = l,
+#'                                conf_int = FALSE, seed = 1))
+#' fit
 #' @export
 mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             alpha = 0.05, beta_null = 0, conf_int = TRUE,

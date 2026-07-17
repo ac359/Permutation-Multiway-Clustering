@@ -250,8 +250,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'     NP-hard, so a per-block node budget caps the work; if it is hit the
 #'     search falls back to the greedy block for that step (still valid) and a
 #'     warning is issued. For the modest cluster counts this method targets the
-#'     exact search is typically fast and returns strictly larger blocks, giving
-#'     finer p-value resolution.}
+#'     exact search is typically fast and returns blocks at least as large as
+#'     greedy, giving finer p-value resolution.}
 #' }
 #'
 #' @param row,col Integer (or factor-coercible) cluster ids of the observed
@@ -266,9 +266,11 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' @return A list of blocks, each a list with integer components \code{rows} and
 #'   \code{cols} giving the (original-coding) cluster ids in that biclique.
 #'
+#' @seealso \code{\link{mwperm_missing}}.
 #' @examples
 #' ## a 4x4 grid missing its diagonal
-#' g <- expand.grid(i = 1:4, j = 1:4); g <- g[g$i != g$j, ]
+#' g <- expand.grid(i = 1:4, j = 1:4)
+#' g <- g[g$i != g$j, ]
 #' find_bicliques(g$i, g$j, min_block = 2)
 #' find_bicliques(g$i, g$j, min_block = 2, method = "exact")
 #' @export

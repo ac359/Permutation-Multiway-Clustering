@@ -409,22 +409,71 @@
 #'
 #' Publication-style figures for \code{"mwperm"} objects, drawn with base
 #' graphics from fields stored on the object (the test is never re-run).
-#' The default (\code{type = "auto"}) draws the flagship coefficient figure --
-#' the OLS estimate against the inverted-test (IPT) confidence set -- whenever
-#' a confidence set is stored, and otherwise falls back to the Monte-Carlo
-#' stability diagnostic. Every figure carries the design type, per-dimension
-#' cluster counts, N, the attainable p-value resolution 1/(K+1), the null
-#' value, the p-value, and the reject/do-not-reject decision at alpha.
+#' Figures use the colourblind-safe Okabe-Ito palette, and colour never
+#' carries information alone -- marks and line types differ too, so the
+#' figures survive grayscale printing. Every figure carries the design type,
+#' per-dimension cluster counts, N, the attainable p-value resolution
+#' \code{1/(K+1)}, the null value, the p-value, and the
+#' reject/do-not-reject decision at \code{alpha}.
 #'
 #' @param x An object of class \code{"mwperm"}.
-#' @param type One of \code{"auto"}, \code{"coef"}, \code{"region"},
-#'   \code{"null"}, \code{"profile"}, \code{"stability"}, \code{"all"}.
-#' @param ... Style overrides by name (e.g. \code{col_estimate = "black"});
-#'   see Details. Unknown arguments are ignored with a warning.
+#' @param type Which figure to draw:
+#'   \describe{
+#'     \item{\code{"auto"} (default)}{the flagship \code{"coef"} figure whenever
+#'       a confidence set is stored on the object, otherwise the
+#'       \code{"stability"} diagnostic.}
+#'     \item{\code{"coef"}}{the OLS point estimate against the inverted-test
+#'       (IPT) confidence set: for one coefficient, the estimate with the IPT
+#'       interval (end caps; an unbounded side is drawn as an outward arrow)
+#'       and a dashed reference at the null; for several, a forest of the joint
+#'       region's marginal extents (\code{conf_box}), rows ordered by estimate.
+#'       Note the coefficient is the \emph{partialled-out} effect: nuisance
+#'       covariates are projected out by the test.}
+#'     \item{\code{"region"}}{the joint confidence region for exactly two
+#'       coefficients: accepted grid points from \code{conf_region} with a
+#'       convex-hull outline (points stay visible so a non-convex region is not
+#'       overstated), the marginal box, the estimate, and the null.}
+#'     \item{\code{"stability"}}{the Monte-Carlo diagnostic: per-replication
+#'       p-values (histogram for \code{n_reps >= 5}, a dot strip otherwise)
+#'       with the reported median p-value and \code{alpha} marked.}
+#'     \item{\code{"null"}, \code{"profile"}}{reserved for the permutation null
+#'       distribution and the test-inversion p-value curve; they require
+#'       statistics stored at fit time, which this version does not retain, so
+#'       they currently message and fall back to the default figure.}
+#'     \item{\code{"all"}}{every figure available for this object, arranged on
+#'       one page (\code{par("mfrow")} is restored on exit).}
+#'   }
+#'   A requested figure whose ingredients are not stored (e.g. \code{"coef"}
+#'   after \code{conf_int = FALSE}) falls back with a message; it never errors.
+#' @param ... Style overrides by name, e.g. \code{col_estimate = "black"} or
+#'   \code{lwd_interval = 3}. Unknown arguments are ignored with a warning
+#'   (nothing is forwarded blindly to the underlying graphics calls). The
+#'   elements: \code{palette} (the Okabe-Ito colours); \code{col_estimate},
+#'   \code{pch_estimate}, \code{cex_estimate}; \code{col_interval},
+#'   \code{lwd_interval}, \code{cap_len}; \code{col_region}; \code{col_null},
+#'   \code{lty_null}, \code{lwd_null}, \code{pch_null}; \code{col_alpha},
+#'   \code{lty_alpha}, \code{lwd_alpha}; \code{col_fill}, \code{col_border};
+#'   \code{col_box}, \code{lty_box}; \code{col_axis}, \code{col_sub},
+#'   \code{col_annot}; \code{cex_main}, \code{cex_sub}, \code{cex_annot},
+#'   \code{cex_axis}, \code{cex_lab}; \code{tcl}; \code{mar}.
 #' @param main,sub,xlab,ylab Usual title overrides. \code{sub} replaces the
-#'   standard subtitle (design, cluster counts, N, resolution); \code{""}
-#'   suppresses it.
+#'   standard subtitle line (design type, per-dimension cluster counts, N,
+#'   and the p-value resolution \code{1/(K+1)}); \code{sub = ""} suppresses
+#'   it.
 #' @return \code{x}, invisibly.
+#' @seealso \code{\link{mwperm_save}} for export at journal dimensions;
+#'   \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- with(trade_dyadic,
+#'             mwperm_dyadic(y = log_trade, d = log_dist,
+#'                           x = cbind(log_gdp_i, log_gdp_j),
+#'                           row = importer, col = exporter,
+#'                           n_reps = 7, seed = 1))
+#' plot(fit)                     # flagship: OLS estimate + inverted IPT CI
+#' plot(fit, type = "stability") # Monte-Carlo diagnostic across the 7 reps
+#' plot(fit, type = "all")       # both, on one page
+#' plot(fit, col_estimate = "black", main = "Distance elasticity")
 #' @export
 plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
                                     "profile", "stability", "all"), ...,
@@ -499,24 +548,35 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
 
 #' Save an mwperm figure at journal dimensions
 #'
-#' Renders \code{\link{plot.mwperm}} to a file sized for a journal column:
-#' \code{width = "single"} is 3.5 in, \code{"double"} is 7 in (or give a
-#' width in inches), raster formats at \code{res} dpi (default 300). The
-#' format follows the file extension: \code{.pdf} (vector), \code{.png},
-#' \code{.tiff}/\code{.tif}, or \code{.jpeg}/\code{.jpg}.
+#' Renders \code{\link{plot.mwperm}} to a file sized for a journal column,
+#' using only base \code{grDevices} devices. The device is always closed on
+#' exit, even if drawing fails.
 #'
 #' @param x An object of class \code{"mwperm"}.
-#' @param file Output path; the extension selects the graphics device.
-#' @param width \code{"single"} (3.5 in), \code{"double"} (7 in), or a width
-#'   in inches.
+#' @param file Output path; the extension selects the graphics device:
+#'   \code{.pdf} (vector), \code{.png}, \code{.tiff}/\code{.tif}, or
+#'   \code{.jpeg}/\code{.jpg}.
+#' @param width \code{"single"} (3.5 in, a one-column journal figure),
+#'   \code{"double"} (7 in, full text width), or a numeric width in inches.
 #' @param height Height in inches; defaults to \code{0.65 * width}
 #'   (\code{0.9 * width} for \code{type = "all"}).
 #' @param type Figure type, passed to \code{\link{plot.mwperm}}.
-#' @param res Raster resolution in dpi (ignored for pdf).
+#' @param res Raster resolution in dpi (default 300; ignored for pdf).
 #' @param pointsize Base point size; defaults to 8 for single-column widths
-#'   and 10 otherwise.
+#'   and 10 otherwise, so labels stay readable at print size.
 #' @param ... Passed to \code{\link{plot.mwperm}} (style overrides, titles).
 #' @return The file path, invisibly.
+#' @seealso \code{\link{plot.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- with(trade_dyadic,
+#'             mwperm_dyadic(y = log_trade, d = log_dist,
+#'                           x = cbind(log_gdp_i, log_gdp_j),
+#'                           row = importer, col = exporter, seed = 1))
+#' f <- file.path(tempdir(), "distance-elasticity.png")
+#' mwperm_save(fit, f, width = "single")  # 3.5 in x 2.3 in at 300 dpi
+#' mwperm_save(fit, file.path(tempdir(), "fig.pdf"),
+#'             width = "double", type = "stability")
 #' @export
 mwperm_save <- function(x, file, width = c("single", "double"), height = NULL,
                         type = "auto", res = 300, pointsize = NULL, ...) {

@@ -16,7 +16,18 @@
 #' constant within every \eqn{(i, j)} cell (a cell-level covariate), within-cell
 #' permutation yields a trivial test with no power; a warning is issued.
 #'
+#' Supplying \code{L0} balances an unbalanced layout to exactly \code{L0}
+#' replicates per cell (cells with fewer are dropped, denser cells are
+#' uniformly downsampled). A uniform random subset of exchangeable replicates
+#' is itself exchangeable, so validity is preserved while the
+#' permutation-group order becomes the same (\code{L0}) in every cell.
+#'
 #' @inheritParams mwperm_dyadic
+#' @param d Numeric vector or matrix of the covariate(s) of interest. Must
+#'   vary within cells (see Details). With a single covariate a confidence
+#'   interval is produced; with several, a joint confidence region.
+#' @param x Optional numeric matrix or data frame of nuisance covariates; an
+#'   intercept is always added internally. May be \code{NULL}.
 #' @param row,col Cell identifiers along the two layout dimensions.
 #' @param rep Optional replication identifier within each cell; if \code{NULL},
 #'   the order of appearance within a cell is used.
@@ -40,6 +51,19 @@
 #'   inference under multi-way clustering and missing data, Section 6.3.
 #'   arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
+#' @examples
+#' ## 6 x 6 cells, 6 within-cell replicates, treatment varies within cell
+#' set.seed(1)
+#' cells <- expand.grid(i = 1:6, j = 1:6)
+#' dat <- do.call(rbind, lapply(seq_len(nrow(cells)), function(r) {
+#'   data.frame(i = cells$i[r], j = cells$j[r], l = 1:6,
+#'              d = rnorm(6),
+#'              eta = rnorm(1))
+#' }))
+#' dat$y <- 0.6 * dat$d + dat$eta + rnorm(nrow(dat))
+#' fit <- with(dat, mwperm_layout(y = y, d = d, row = i, col = j, rep = l,
+#'                                n_reps = 5, conf_int = FALSE, seed = 1))
+#' fit
 #' @export
 mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                           K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,

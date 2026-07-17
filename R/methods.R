@@ -9,15 +9,21 @@
 
 #' Print a multi-way permutation test
 #'
+#' Compact display of the design, the permutation-group order, the point
+#' estimate and inverted confidence interval (when available), and the
+#' permutation p-value with the reject/retain decision.
+#'
 #' The per-coefficient lines label their two quantities by provenance: the
-#' point estimate is the \emph{OLS} estimate (printed as "OLS estimate"),
-#' while the confidence set comes from inverting the invariant permutation
-#' test (printed as "IPT CI", or "IPT region" for a joint region).
+#' point estimate is the \emph{OLS} estimate (printed as \code{"OLS
+#' estimate"}), while the confidence set comes from inverting the invariant
+#' permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
+#' joint confidence region).
 #'
 #' @param x An object of class \code{"mwperm"}.
 #' @param digits Number of significant digits for the estimate and interval.
 #' @param ... Ignored.
 #' @return \code{x}, invisibly.
+#' @seealso \code{\link{mwperm_dyadic}}, \code{\link{summary.mwperm}}.
 #' @export
 print.mwperm <- function(x, digits = 4L, ...) {
   cat("\nInvariant permutation test (mwperm)\n")
@@ -82,21 +88,26 @@ print.mwperm <- function(x, digits = 4L, ...) {
 #' Summarise a multi-way permutation test
 #'
 #' Returns (invisibly, after printing) a one-row-per-coefficient data frame
-#' whose column names carry the provenance of each quantity. The
-#' \code{ols_estimate} column is the \emph{OLS} point estimate (computed by
-#' least squares on the full design) and \code{ols_se_naive} its naive
-#' homoskedastic OLS standard error (used internally only to centre and scale
-#' the confidence-set search -- not an inferential quantity);
-#' \code{ipt_ci_low}/\code{ipt_ci_high} are the limits of the IPT (inverted
-#' permutation test) confidence set -- the inverted-test interval for a single
-#' coefficient, or the marginal extent of the joint confidence region for
-#' several -- and \code{p_value} is the IPT permutation p-value for
-#' \eqn{H_0:\beta = b} (the joint test; repeated across rows when there are
-#' several coefficients).
+#' with the OLS point estimate, naive standard error, the IPT confidence
+#' limits, and the permutation p-value for \eqn{H_0:\beta = b}; see
+#' \emph{Value} for the exact meaning of each column.
 #'
 #' @param object An object of class \code{"mwperm"}.
 #' @param ... Ignored.
-#' @return A data frame, invisibly.
+#' @return A data frame, invisibly, with one row per coefficient and columns
+#'   \code{term}, \code{ols_estimate}, \code{ols_se_naive},
+#'   \code{ipt_ci_low}, \code{ipt_ci_high} and \code{p_value}; the column
+#'   names carry the provenance of each quantity. \code{ols_estimate} is the
+#'   \emph{OLS} point estimate (least squares on the full design) and
+#'   \code{ols_se_naive} its naive homoskedastic OLS standard error, used
+#'   internally only to centre and scale the confidence-set search -- not an
+#'   inferential quantity; \code{ipt_ci_low}/\code{ipt_ci_high} are the
+#'   limits of the IPT (inverted permutation test) confidence set -- the
+#'   inverted-test interval for a single coefficient, or the marginal extent
+#'   of the joint confidence region for several; \code{p_value} is the IPT
+#'   permutation p-value of the joint test (repeated across rows when there
+#'   are several coefficients).
+#' @seealso \code{\link{print.mwperm}}, \code{\link{confint.mwperm}}.
 #' @export
 summary.mwperm <- function(object, ...) {
   d <- length(object$estimate)         # number of coefficients
@@ -136,8 +147,8 @@ summary.mwperm <- function(object, ...) {
 #' @param parm Optional subset of coefficients: names (matching the rows of
 #'   the returned matrix) or integer positions. Defaults to all coefficients.
 #' @param level Confidence level; must match the level used at fitting, otherwise
-#'   an error is raised (the interval cannot be re-derived without the stored
-#'   permutations).
+#'   an error is raised (the set cannot be re-derived without the stored
+#'   permutations). Defaults to the stored level.
 #' @param ... Ignored.
 #' @return A matrix with the lower and upper limits, one row per coefficient
 #'   (rows are named by coefficient; columns keep the percentile labels the
@@ -148,6 +159,7 @@ summary.mwperm <- function(object, ...) {
 #'   \code{object$conf_region} for the full set of retained vectors). The
 #'   provenance is recorded in the matrix's \code{"method"} attribute,
 #'   \code{"IPT (inverted permutation test)"}.
+#' @seealso \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.
 #' @export
 confint.mwperm <- function(object, parm, level = NULL, ...) {
   has_int <- !is.null(object$conf_int)

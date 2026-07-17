@@ -22,9 +22,10 @@
 #'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest
-#'   \eqn{d_{ijt}} (may be time-varying).
+#'   \eqn{d_{ijt}} (may be time-varying). With a single covariate a confidence
+#'   interval is produced; with several, a joint confidence region.
 #' @param x Optional nuisance covariates \eqn{x_{ijt}}; intercept added
-#'   internally.
+#'   internally. May be \code{NULL}.
 #' @param row,col Row- and column-cluster identifiers (length = number of
 #'   observations).
 #' @param time Time-period identifiers (length = number of observations).
