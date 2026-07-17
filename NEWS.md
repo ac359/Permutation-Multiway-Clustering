@@ -58,6 +58,13 @@ p-value, or any seeded result unless explicitly noted).
   `\seealso` sections, dataset pages (now with `\source`) -- so no rendered
   content was lost; the front-end pages gain the full inherited argument
   documentation their hand versions abbreviated.
+* **Parallel path fixes:** on non-fork platforms (Windows) the engine now
+  creates ONE worker cluster per fit and reuses it across repetitions --
+  previously a fresh PSOCK cluster was spawned inside every repetition,
+  which made `n_cores > 1` about 3x *slower* than serial under the default
+  settings; `n_cores` beyond the detected core count is now clamped with a
+  warning (it was silently oversubscribing). Parallel results remain
+  bit-identical to serial.
 * **Performance** (bit-identical output; verified against the previous
   implementation on seeded fits across all five designs, plus the full test
   suite and all seeded reference values): layout fits are ~10x faster (the

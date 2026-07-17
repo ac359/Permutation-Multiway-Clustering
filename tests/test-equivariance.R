@@ -122,6 +122,30 @@ for (m in c("fork", "psock")) {
   stopifnot(!is.na(msg), grepl("boom", msg))
 }
 
+## a pre-made cluster is reused, not stopped (F6.1 fix: the engine creates ONE
+## PSOCK cluster per fit instead of one per rep on non-fork platforms)
+cl_pre <- parallel::makePSOCKcluster(2L)
+r1 <- mwperm:::.plapply(X10, function(i) i^2 + 1, n_cores = 2L, cl = cl_pre)
+r2 <- mwperm:::.plapply(X10, function(i) i * 2, n_cores = 2L, cl = cl_pre)
+stopifnot(identical(r1, lapply(X10, function(i) i^2 + 1)),
+          identical(r2, lapply(X10, function(i) i * 2)))   # still usable = not stopped
+parallel::stopCluster(cl_pre)
+
+## n_cores is clamped to the detected core count (F6.5 fix): silently inside
+## .plapply, with a warning naming `n_cores` at the engine entry
+stopifnot(identical(
+  mwperm:::.plapply(X10, function(i) i + 1L, n_cores = 9999L),
+  lapply(X10, function(i) i + 1L)))
+w_clamp <- character(0)
+f_over <- withCallingHandlers(
+  mwperm_dyadic(y, d, x = x, row = g$i, col = g$j, seed = 5, n_reps = 15L,
+                n_cores = 9999L),
+  warning = function(cnd) {
+    w_clamp <<- c(w_clamp, conditionMessage(cnd)); invokeRestart("muffleWarning")
+  })
+stopifnot(any(grepl("`n_cores`", w_clamp, fixed = TRUE)),
+          isTRUE(same_fit(f_ser, f_over)))                 # clamped run == serial
+
 ## ---- 7. seed = NULL forces the rep loop serial (the RNG-duplication guard) ---
 ## Instrument .plapply in the namespace to record how each loop is scheduled:
 ## with seed = NULL and n_cores = 2, the rep-axis call (length n_reps) MUST get
@@ -130,9 +154,10 @@ for (m in c("fork", "psock")) {
 calls <- list()
 ns <- asNamespace("mwperm")
 orig_plapply <- get(".plapply", envir = ns)
-wrap <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock")) {
+wrap <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock"),
+                 cl = NULL) {
   calls[[length(calls) + 1L]] <<- c(len = length(X), n_cores = as.integer(n_cores))
-  orig_plapply(X, FUN, n_cores = n_cores, method = method)
+  orig_plapply(X, FUN, n_cores = n_cores, method = method, cl = cl)
 }
 unlockBinding(".plapply", ns); assign(".plapply", wrap, envir = ns); lockBinding(".plapply", ns)
 fit_null <- mwperm_dyadic(y, d, x = x, row = g$i, col = g$j, seed = NULL,

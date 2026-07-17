@@ -81,7 +81,8 @@
 #' @return a list (the "prep" object) consumed by \code{\link{.ipt_eval}}.
 #' @keywords internal
 #' @noRd
-.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L) {
+.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L,
+                         cl = NULL) {
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
@@ -121,7 +122,7 @@
          W = if (need_perm_D)                      # only for CI / non-zero null (see engine)
            crossprod(Dr, R[, d + 2L + seq_len(d), drop = FALSE]))
   }
-  slices <- .plapply(seq_len(K), one_k, n_cores = n_cores)
+  slices <- .plapply(seq_len(K), one_k, n_cores = n_cores, cl = cl)
 
   ## Assemble in k order (order-independent: each slice is self-contained).
   u <- matrix(0, d, K)                 # u[, k]   = Dr' yr    (a-statistic intercept)

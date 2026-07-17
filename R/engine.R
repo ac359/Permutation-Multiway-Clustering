@@ -4,22 +4,29 @@
 #'
 #' Runs \code{lapply(X, FUN)} on \code{n_cores} workers: forked
 #' \code{parallel::mclapply} on Unix, a PSOCK cluster elsewhere (or when
-#' forced via \code{method}, used by the tests). With \code{n_cores = 1} it is
+#' forced via \code{method}, used by the tests). A pre-made cluster can be
+#' supplied via \code{cl} and is then reused, NOT stopped -- the engine
+#' creates one PSOCK cluster per fit and shares it across the per-rep calls
+#' (audit F6.1: spawning a fresh cluster per rep made parallel runs slower
+#' than serial on the Windows path). With \code{n_cores = 1} it is
 #' exactly \code{lapply}, so the default path stays base-R single-threaded.
 #' Because every task in this package is either explicitly seeded or free of
 #' RNG use, scheduling cannot perturb results: parallel output is identical to
 #' serial (asserted by tests). Worker errors are re-thrown in the parent. If a
 #' multithreaded BLAS is in use, R-level parallelism can oversubscribe cores;
 #' where RhpcBLASctl is installed, workers pin BLAS to one thread.
+#' \code{n_cores} beyond the detected core count is clamped silently here
+#' (the engine warns once per fit, naming the argument -- audit F6.5).
 #' @keywords internal
 #' @noRd
-.plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock")) {
+.plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock"),
+                     cl = NULL) {
   method <- match.arg(method)
   n_cores <- suppressWarnings(as.integer(n_cores))
   if (length(n_cores) != 1L || is.na(n_cores))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
-  n_cores <- max(1L, n_cores)
-  if (n_cores == 1L || length(X) < 2L) return(lapply(X, FUN))
+  n_cores <- max(1L, min(n_cores, .n_cores_max()))
+  if (is.null(cl) && (n_cores == 1L || length(X) < 2L)) return(lapply(X, FUN))
   wrap <- function(x) {                # run in the worker
     if (requireNamespace("RhpcBLASctl", quietly = TRUE))
       try(RhpcBLASctl::blas_set_num_threads(1L), silent = TRUE)
@@ -27,12 +34,14 @@
   }
   use_fork <- (method == "fork") ||
     (method == "auto" && .Platform$OS.type == "unix")
-  out <- if (use_fork) {
+  out <- if (!is.null(cl)) {
+    parallel::parLapply(cl, X, wrap)   # caller owns the cluster's lifetime
+  } else if (use_fork) {
     parallel::mclapply(X, wrap, mc.cores = n_cores)
   } else {
-    cl <- parallel::makePSOCKcluster(n_cores)
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-    parallel::parLapply(cl, X, wrap)
+    cl1 <- parallel::makePSOCKcluster(n_cores)
+    on.exit(parallel::stopCluster(cl1), add = TRUE)
+    parallel::parLapply(cl1, X, wrap)
   }
   bad <- vapply(out, inherits, logical(1), what = "try-error")
   if (any(bad)) stop(attr(out[[which(bad)[1L]]], "condition"))
@@ -43,6 +52,15 @@
     stop("A parallel worker died without returning a result; ",
          "rerun with n_cores = 1 to see the underlying error.", call. = FALSE)
   out
+}
+
+#' Detected core count with a safe fallback (Inf when detection fails, so the
+#' clamp becomes a no-op rather than blocking a legitimate request).
+#' @keywords internal
+#' @noRd
+.n_cores_max <- function() {
+  nc <- tryCatch(parallel::detectCores(logical = TRUE), error = function(e) NA)
+  if (is.na(nc) || nc < 1L) Inf else nc
 }
 
 #' OLS reference estimate of the coefficient(s) of interest and a naive SE
@@ -124,6 +142,14 @@
   n_cores <- suppressWarnings(as.integer(n_cores))
   if (length(n_cores) != 1L || is.na(n_cores))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
+  nc_max <- .n_cores_max()
+  if (n_cores > nc_max) {
+    warning(sprintf(paste0("`n_cores` = %d exceeds the %d cores detected; ",
+                           "using %d (more workers than cores only adds ",
+                           "scheduling overhead)."),
+                    n_cores, nc_max, nc_max), call. = FALSE)
+    n_cores <- as.integer(nc_max)
+  }
   if (!is.null(seed) && !(is.numeric(seed) && length(seed) == 1L && is.finite(seed)))
     stop("`seed` must be NULL or a single finite number.", call. = FALSE)
   conf_level <- 1 - alpha            # always the complement of the test level
@@ -176,10 +202,20 @@
   ## loop MUST stay serial: forked workers would inherit identical RNG states
   ## and silently duplicate the permutation draws across reps.
   rep_axis <- n_cores > 1L && n_reps > 1L && !is.null(seed)
+  ## On non-fork platforms the K-axis path used to spawn a fresh PSOCK
+  ## cluster inside every rep's .ipt_prepare (audit F6.1: with the default
+  ## n_reps that made parallel runs 3x SLOWER than serial on Windows).
+  ## Create one cluster per fit and share it across the per-rep calls.
+  psock_cl <- NULL
+  if (!rep_axis && n_cores > 1L && K >= 2L && .Platform$OS.type != "unix") {
+    psock_cl <- parallel::makePSOCKcluster(n_cores)
+    on.exit(parallel::stopCluster(psock_cl), add = TRUE)
+  }
   one_rep <- function(s) {
     op <- perm_builder(s)               # K+1 observation gather-vectors for this rep
     prep <- .ipt_prepare(y, D, X, op, need_perm_D = need_W,
-                         n_cores = if (rep_axis) 1L else n_cores)
+                         n_cores = if (rep_axis) 1L else n_cores,
+                         cl = psock_cl)
     list(prep = prep, pv = .ipt_eval(prep, beta0)$pvalue)
   }
   reps <- .plapply(seeds, one_rep, n_cores = if (rep_axis) n_cores else 1L)
