@@ -12,7 +12,26 @@
 #' The randomness in the relabelling is what makes the resulting test a
 #' \emph{random} invariant test: different seeds yield slightly different
 #' p-values. Aggregating several runs (see the \code{n_reps} argument of the
-#' \code{mwperm_*} functions) by taking the median p-value is recommended.
+#' \code{mwperm_*} functions) by taking the median p-value is recommended;
+#' see \code{\link{mwperm_dyadic}} for the exact status of that aggregation.
+#'
+#' \strong{Reproducibility.} A seeded result is reproducible only under the
+#' same RNG configuration: the same \code{RNGkind()} (generator \emph{and}
+#' sample kind -- R's defaults changed in 3.6.0) and, when cluster ids are
+#' supplied as character strings, the same collation locale
+#' (\code{LC_COLLATE} determines factor level order and hence the dense id
+#' coding the relabelling acts on). Integer or factor cluster ids make seeded
+#' results locale-proof. Validity is unaffected either way: whatever group is
+#' realised is a genuine cyclic group, so the test is exact under any RNG
+#' configuration -- only cross-environment reproducibility depends on it.
+#'
+#' \strong{What certifies the group property.} Closure under composition --
+#' the property Theorem 1 of the paper rests on -- is verified algebraically
+#' by the shipped test suite (full composition tables, including at the
+#' observation level for every design). Monte-Carlo size simulations cannot
+#' detect closure defects, because a broken set whose elements are still
+#' per-dimension permutations continues to control size element-wise;
+#' simulation evidence therefore never certifies the group structure.
 #'
 #' @param n Integer, the number of indices to permute (the cluster count along
 #'   one dimension).

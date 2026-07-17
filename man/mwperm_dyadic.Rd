@@ -66,9 +66,10 @@ when several are run with a \code{seed}, otherwise over the \code{K}
 per-permutation factorizations; either way the result is \emph{identical}
 to the serial one (every random draw is derived from explicit seeds, and
 the statistics are combined by order-independent reductions). Uses forked
-workers on Unix and a PSOCK cluster on Windows. Worthwhile for large
-problems (thousands of cells, large \code{K}); for small ones the fork
-overhead usually exceeds the gain.}
+workers on Unix and a PSOCK cluster on Windows. Only the seeded
+repetition axis parallelises well (near-ideal speedup for large
+problems); the per-permutation fallback axis is at best break-even, so
+with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 }
 \value{
 An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).
@@ -99,6 +100,28 @@ Unlike multi-way cluster-robust standard errors or the wild cluster
 bootstrap, the test makes no assumption on the covariate distribution
 (covariates may be irregular or heavy-tailed) and is valid for a finite
 number of clusters.
+
+\strong{Aggregation over repetitions.} With \code{n_reps > 1} the reported
+p-value is the \emph{median} of the per-repetition p-values and the
+confidence limits are medians of the per-repetition endpoints, following
+Guo, Toulis and Wang (2026, Remark 1). Each repetition's p-value is
+finite-sample valid on its own; no finite-sample theorem covers the median
+of dependent valid p-values in general, so the aggregated p-value should
+be read as a stabilised summary. Extensive simulation (every design, all
+of \code{n_reps} in 1--100) found the median-aggregated test uniformly
+conservative, never anti-conservative; a provably valid fallback is to
+reject only when \emph{twice} the median p-value is at most \code{alpha}
+(see the aggregation references cited in Remark 1 of the paper).
+
+\strong{Numerical notes.} Exactly collinear nuisance columns (such as the
+intercept duplicated in the stacked projection) are handled exactly by the
+rank-revealing QR. A \emph{nearly} collinear column of \code{x} (relative
+QR tolerance about \code{1e-7}) is silently dropped from the projection --
+the fit then behaves exactly as if that column had been deleted, which
+changes what is partialled out; prefer non-redundant nuisance covariates.
+Seeded results are reproducible only under the same \code{RNGkind()}
+(generator and sample kind) and, when cluster ids are character strings,
+the same collation locale; see \code{\link{build_perm_set}}.
 }
 \examples{
 data(trade_dyadic)

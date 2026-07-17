@@ -75,9 +75,10 @@ when several are run with a \code{seed}, otherwise over the \code{K}
 per-permutation factorizations; either way the result is \emph{identical}
 to the serial one (every random draw is derived from explicit seeds, and
 the statistics are combined by order-independent reductions). Uses forked
-workers on Unix and a PSOCK cluster on Windows. Worthwhile for large
-problems (thousands of cells, large \code{K}); for small ones the fork
-overhead usually exceeds the gain.}
+workers on Unix and a PSOCK cluster on Windows. Only the seeded
+repetition axis parallelises well (near-ideal speedup for large
+problems); the per-permutation fallback axis is at best break-even, so
+with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 }
 \value{
 An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}

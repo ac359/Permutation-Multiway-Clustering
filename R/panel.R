@@ -20,6 +20,13 @@
 #' The data must form a complete balanced array: every \eqn{(i, j, t)} cell
 #' present exactly once.
 #'
+#' A feasibility note for long panels: the engine requires \code{N > 2p}
+#' (with \eqn{p} the number of nuisance columns including the intercept and,
+#' with \code{time_fe = TRUE}, the time dummies). This matches the premise of
+#' the validity theorem and is slightly conservative here -- because time is
+#' held fixed, the time dummies are duplicated between the design and its
+#' permuted copy, so the stacked projection's true rank is below \eqn{2p}.
+#'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest
 #'   \eqn{d_{ijt}} (may be time-varying). With a single covariate a confidence

@@ -249,15 +249,20 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'     observed biclique, with area-based pruning. Maximum-edge biclique is
 #'     NP-hard, so a per-block node budget caps the work; if it is hit the
 #'     search falls back to the greedy block for that step (still valid) and a
-#'     warning is issued. For the modest cluster counts this method targets the
-#'     exact search is typically fast and returns blocks at least as large as
-#'     greedy, giving finer p-value resolution.}
+#'     warning is issued. Note what is maximised: each block \emph{in turn},
+#'     not the total covered area of the returned partition -- the greedy
+#'     peeling after each exact block can leave less for later blocks, so
+#'     \code{"exact"} does not always cover more cells than \code{"greedy"}
+#'     overall, and it costs orders of magnitude more time on large masks.
+#'     Worthwhile when a single largest block (finest p-value resolution)
+#'     matters more than total coverage.}
 #' }
 #'
 #' @param row,col Integer (or factor-coercible) cluster ids of the observed
 #'   cells; the two vectors have equal length, one entry per observed cell.
 #' @param min_block Integer; blocks whose smaller side is below this are not
-#'   returned. Defaults to 2.
+#'   returned. Defaults to 2; values below 2 are silently raised to 2 (a
+#'   one-sided block cannot be permuted).
 #' @param method Either \code{"greedy"} (default) or \code{"exact"}; see
 #'   Details.
 #' @param node_budget Integer node cap for the \code{"exact"} branch-and-bound

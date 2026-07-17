@@ -58,6 +58,21 @@ p-value, or any seeded result unless explicitly noted).
   `\seealso` sections, dataset pages (now with `\source`) -- so no rendered
   content was lost; the front-end pages gain the full inherited argument
   documentation their hand versions abbreviated.
+* **Documentation honesty sweep** (audit findings): the exact status of
+  median aggregation over `n_reps` is stated (each repetition is valid on
+  its own; no finite-sample theorem covers the median; measured uniformly
+  conservative; the 2x-median rule is the provable fallback);
+  reproducibility of seeded results is documented as conditional on
+  `RNGkind()` and, for character ids, the collation locale (validity is
+  unaffected); near-collinear nuisance columns are documented as silently
+  dropped at the QR tolerance; `?mwperm_layout` no longer presents a
+  shared-across-cells replicate effect as covered by the within-cell
+  invariance argument; `?find_bicliques` states that `"exact"` maximises
+  each block in turn (not total coverage) and that `min_block` is floored
+  at 2; the panel `N > 2p` feasibility requirement is documented as
+  conservative under `time_fe = TRUE`; `?build_perm_set` records that group
+  closure is certified by the algebraic test suite, not by simulation;
+  parallelism docs now say only the seeded repetition axis pays.
 
 # mwperm 0.1.1
 

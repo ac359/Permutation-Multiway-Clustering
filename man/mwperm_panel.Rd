@@ -74,9 +74,10 @@ when several are run with a \code{seed}, otherwise over the \code{K}
 per-permutation factorizations; either way the result is \emph{identical}
 to the serial one (every random draw is derived from explicit seeds, and
 the statistics are combined by order-independent reductions). Uses forked
-workers on Unix and a PSOCK cluster on Windows. Worthwhile for large
-problems (thousands of cells, large \code{K}); for small ones the fork
-overhead usually exceeds the gain.}
+workers on Unix and a PSOCK cluster on Windows. Only the seeded
+repetition axis parallelises well (near-ideal speedup for large
+problems); the per-permutation fallback axis is at best break-even, so
+with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 }
 \value{
 An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
@@ -106,6 +107,13 @@ errors in such panel models.
 \details{
 The data must form a complete balanced array: every \eqn{(i, j, t)} cell
 present exactly once.
+
+A feasibility note for long panels: the engine requires \code{N > 2p}
+(with \eqn{p} the number of nuisance columns including the intercept and,
+with \code{time_fe = TRUE}, the time dummies). This matches the premise of
+the validity theorem and is slightly conservative here -- because time is
+held fixed, the time dummies are duplicated between the design and its
+permuted copy, so the stacked projection's true rank is below \eqn{2p}.
 }
 \examples{
 data(trade_panel)

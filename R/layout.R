@@ -4,13 +4,21 @@
 #' \deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta + \varepsilon_{ijl}}
 #' in which each \eqn{(i, j)} cell contains \eqn{\ell_{ij}} replicate
 #' observations and the cell sizes may be \emph{unequal}. Permutations are
-#' applied only within cells, over the replication index \eqn{l}. This is valid
-#' under the relaxed condition that errors are exchangeable with respect to
-#' \eqn{l} within each cell (condition InvA restricted to \eqn{l}), e.g.
-#' \eqn{\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}} with arbitrary
-#' \eqn{\eta_{ij}} but i.i.d. \eqn{\zeta_l}. It is appropriate when \eqn{l}
-#' indexes independent replications (two-way layouts in randomised
-#' experiments). See Guo, Toulis and Wang (2026), Section 6.3.
+#' applied only within cells, over the replication index \eqn{l}, drawn
+#' \emph{independently} for each cell. This is valid under the relaxed
+#' condition that errors are exchangeable with respect to \eqn{l} within each
+#' cell (condition InvA restricted to \eqn{l}), e.g.
+#' \eqn{\varepsilon_{ijl} = \eta_{ij} + u_{ijl}} with arbitrary cell effects
+#' \eqn{\eta_{ij}} and \eqn{u_{ijl}} i.i.d. within each cell. Note that a
+#' replicate effect \eqn{\zeta_l} \emph{shared across cells} (the same draw
+#' entering every cell's \eqn{l}-th replicate) is not covered by the
+#' within-cell invariance argument, because the independent per-cell
+#' permutations change the cross-cell alignment of \eqn{\zeta}; simulations
+#' found no measurable size effect from such a component, but validity is
+#' only guaranteed when the within-cell exchangeability holds cell by cell.
+#' The test is appropriate when \eqn{l} indexes independent replications
+#' (two-way layouts in randomised experiments). See Guo, Toulis and Wang
+#' (2026), Section 6.3.
 #'
 #' Note: the covariate of interest must vary within cells. If \eqn{d_{ijl}} is
 #' constant within every \eqn{(i, j)} cell (a cell-level covariate), within-cell
