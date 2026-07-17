@@ -66,7 +66,7 @@
 #' @export
 mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
                          alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                         n_reps = 1L, seed = NULL, grid = NULL, time_fe = TRUE,
+                         n_reps = 10L, seed = NULL, grid = NULL, time_fe = TRUE,
                          n_cores = 1L) {
   cl <- match.call()
   y <- .check_y(y); N <- length(y)

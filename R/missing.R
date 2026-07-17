@@ -69,7 +69,7 @@
 #' @export
 mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                           n_reps = 1L, seed = NULL, grid = NULL,
+                           n_reps = 10L, seed = NULL, grid = NULL,
                            min_block = 3L, block_method = c("greedy", "exact"),
                            n_cores = 1L) {
   cl <- match.call()

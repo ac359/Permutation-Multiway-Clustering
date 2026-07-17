@@ -59,6 +59,11 @@
 #'   confidence region for several.
 #' @param n_reps Number of independent runs whose p-values (and CI end points)
 #'   are aggregated by the median, as recommended for randomised tests.
+#'   Defaults to 10: a single run's p-value depends on the random relabelling
+#'   (a seed lottery), and the median of 10 runs stabilises it at roughly ten
+#'   times the cost -- fractions of a second on typical designs. Set
+#'   \code{n_reps = 1} to reproduce the single-run behaviour of versions
+#'   before 0.2.0. See \emph{Aggregation over repetitions} in Details.
 #' @param seed Optional integer; if supplied, run \code{r} uses seed
 #'   \code{seed + r - 1} for reproducibility.
 #' @param grid Optional candidate \eqn{\beta} values for the confidence set. For
@@ -105,7 +110,7 @@
 #' @export
 mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
                           alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                          n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L) {
+                          n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L) {
   cl <- match.call()                   # stored on the result for printing
   y <- .check_y(y)
   N <- length(y)                       # number of observations

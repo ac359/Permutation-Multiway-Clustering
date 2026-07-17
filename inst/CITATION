@@ -1,0 +1,21 @@
+citHeader("To cite mwperm in publications, please cite the methods paper:")
+
+bibentry(
+  bibtype = "Misc",
+  title   = "Permutation Inference under Multi-way Clustering and Missing Data",
+  author  = c(person("Wenxuan", "Guo"),
+              person("Panos", "Toulis"),
+              person("Y.", "Wang")),
+  year    = "2026",
+  eprint  = "2601.08610",
+  archiveprefix = "arXiv",
+  primaryclass  = "stat.ME",
+  doi     = "10.48550/arXiv.2601.08610",
+  url     = "https://arxiv.org/abs/2601.08610",
+  textVersion = paste(
+    "Guo, W., Toulis, P. and Wang, Y. (2026).",
+    "Permutation Inference under Multi-way Clustering and Missing Data.",
+    "arXiv:2601.08610 [stat.ME]. doi:10.48550/arXiv.2601.08610.")
+)
+
+citFooter("Use citation(auto = meta) for the package itself.")

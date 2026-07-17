@@ -45,7 +45,7 @@
 #' @export
 mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                            n_reps = 1L, seed = NULL, grid = NULL,
+                            n_reps = 10L, seed = NULL, grid = NULL,
                             n_cores = 1L) {
   cl <- match.call()
   y <- .check_y(y); N <- length(y)

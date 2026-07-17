@@ -7,6 +7,17 @@ p-value, or any seeded result unless explicitly noted).
 
 * **License:** the package is now released under the MIT license
   (`LICENSE`); previous versions carried a placeholder `Proprietary` tag.
+* **Default `n_reps` is now 10** (was 1) in every test function and in
+  `mwperm()`. A single run's p-value depends on the random relabelling --
+  the audit documented a real seed lottery -- while the package's own
+  documentation has always recommended median aggregation; ten repetitions
+  cost fractions of a second on typical designs and were measured
+  conservative (never anti-conservative) at every level. **This changes
+  default-argument seeded results** (calls with an explicit `n_reps` are
+  unaffected): reported p-values and confidence limits are now medians over
+  10 runs. Set `n_reps = 1` to reproduce pre-0.2.0 defaults.
+* `DESCRIPTION` gains `URL`, `BugReports`, `Language`, `Date`; a citation
+  entry ships as `inst/CITATION` (`citation("mwperm")`).
 * The test suite (9 base-R files, ~2 s under `R CMD check`) is now tracked
   in the repository and ships with the package; internal development
   material is excluded from builds via `.Rbuildignore`.

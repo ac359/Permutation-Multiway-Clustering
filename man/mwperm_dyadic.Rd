@@ -14,7 +14,7 @@ mwperm_dyadic(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 1L,
+  n_reps = 10L,
   seed = NULL,
   grid = NULL,
   n_cores = 1L
@@ -50,7 +50,12 @@ inversion: an interval for a single covariate, or a joint (grid-based)
 confidence region for several.}
 
 \item{n_reps}{Number of independent runs whose p-values (and CI end points)
-are aggregated by the median, as recommended for randomised tests.}
+are aggregated by the median, as recommended for randomised tests.
+Defaults to 10: a single run's p-value depends on the random relabelling
+(a seed lottery), and the median of 10 runs stabilises it at roughly ten
+times the cost -- fractions of a second on typical designs. Set
+\code{n_reps = 1} to reproduce the single-run behaviour of versions
+before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}

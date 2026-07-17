@@ -75,7 +75,7 @@
 #' @export
 mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                           K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                          n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L) {
+                          n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L) {
   cl <- match.call()
   y <- .check_y(y); N <- length(y)
   D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))

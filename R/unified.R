@@ -598,7 +598,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                    design = c("auto", "dyadic", "threeway", "panel", "layout",
                               "missing"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                   n_reps = 1L, seed = NULL, grid = NULL, n_cores = 1L,
+                   n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
                    time_fe = TRUE, L0 = NULL, min_block = 3L,
                    block_method = c("greedy", "exact"), verbose = TRUE) {
   design <- match.arg(design)

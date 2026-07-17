@@ -148,9 +148,11 @@ for (k in list(NA, NA_integer_, c(3, 4), 2.5, "3", 0L))
 for (s in list(c(1, 2), "1", NA_real_, Inf))
   expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = s), "`seed`")
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 2147484,
-                         conf_int = FALSE), "`seed`")
+                         n_reps = 1, conf_int = FALSE), "`seed`")
+## n_reps = 1 explicitly: the pin is on the frozen sub-seed scheme itself
+## (rep r uses seed + r - 1, so more reps move the boundary down by n_reps-1)
 fs <- mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 2147482,
-                    conf_int = FALSE)
+                    n_reps = 1, conf_int = FALSE)
 stopifnot(inherits(fs, "mwperm"))
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, beta_null = Inf),
            "`beta_null`")
