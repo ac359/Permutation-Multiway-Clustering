@@ -18,6 +18,18 @@ p-value, or any seeded result unless explicitly noted).
   10 runs. Set `n_reps = 1` to reproduce pre-0.2.0 defaults.
 * `DESCRIPTION` gains `URL`, `BugReports`, `Language`, `Date`; a citation
   entry ships as `inst/CITATION` (`citation("mwperm")`).
+* **New formula interface:** `mwperm_formula(y ~ d | x, data, index, ...)`
+  (the nuisance part is optional). Both formula parts are standard formula
+  algebra via `model.matrix()`, so transformed terms and factors work; the
+  result is identical to the data interface with the same seed (pinned by
+  tests). New accessors `coef()` (the OLS estimate, named) and `nobs()`.
+* Shipped-test coverage of `R/` is 94% (audit gate: >= 90%; it was 81% at
+  audit time): new `tests/test-paths.R` exercises the design-diagnosis
+  printer, forced-design validation, name resolution, `L0` balancing, the
+  explicit-grid and joint-region confidence paths, a constructed
+  disconnected acceptance set (the island guard's hull), and every figure
+  export device. GitHub Actions CI runs `R CMD check --as-cran` on
+  ubuntu/macOS/windows across devel/release/oldrel-1 plus a coverage job.
 * The test suite (9 base-R files, ~2 s under `R CMD check`) is now tracked
   in the repository and ships with the package; internal development
   material is excluded from builds via `.Rbuildignore`.
