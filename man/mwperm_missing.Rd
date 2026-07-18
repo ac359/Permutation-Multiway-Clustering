@@ -19,6 +19,7 @@ mwperm_missing(
   grid = NULL,
   min_block = 3L,
   block_method = c("greedy", "exact"),
+  permute = c("both", "rows", "cols"),
   n_cores = 1L
 )
 }
@@ -68,11 +69,23 @@ covariate defining the region search grid.}
 
 \item{min_block}{Integer; only bicliques whose smaller side is at least
 \code{min_block} are used. Larger values give finer p-value resolution
-(larger \code{K}) but discard more data. Defaults to 3.}
+(larger \code{K}) but discard more data. Defaults to 3. With one-sided
+\code{permute}, a scalar binds the permuted side only (the other side is
+floored at 1); a length-2 vector \code{c(rows, cols)} sets both sides
+explicitly (see \code{\link{find_bicliques}}).}
 
 \item{block_method}{Passed to \code{\link{find_bicliques}}: \code{"greedy"}
 (default) for the fast heuristic, or \code{"exact"} for a branch-and-bound
 search of maximum-area blocks (with a node-budget fallback to greedy).}
+
+\item{permute}{Which dimension(s) to permute: \code{"both"} (default,
+Procedure 2), or \code{"rows"}/\code{"cols"} to permute only that
+dimension. One-sided permutation is valid under the same assumption (it
+applies a subgroup of the invariance group) and lets \code{K + 1} be
+capped by the permuted side alone -- with \code{"rows"}, blocks need
+\code{min_block} row clusters but only one column (a scalar
+\code{min_block} then binds the permuted side; pass a length-2 vector to
+\code{min_block} for full control) -- at some cost in power; see Details.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -123,6 +136,19 @@ least \code{ceiling(1/alpha)} (20 for \code{alpha = 0.05}). When the
 default \code{K} makes rejection at \code{alpha} unattainable the fit says
 so in its \code{note}; raise \code{min_block} to stop small blocks from
 setting \code{K}, at the price of discarding their cells.
+
+\strong{One-sided permutation} (\code{permute = "rows"} or \code{"cols"}):
+permuting only one dimension uses a subgroup of the full invariance group,
+so the test remains exactly valid under the same separate-exchangeability
+assumption -- validity needs the errors to be exchangeable under the group
+actually applied, and every subgroup action qualifies. The practical gain
+is that \code{K + 1} is then capped by the \emph{permuted} side only:
+blocks need \code{min_block} clusters on the permuted side but as few as
+one on the other, so designs whose blocks are short in one dimension (many
+rows, few columns, or vice versa) can reach resolutions the two-sided test
+cannot. The price is power: a smaller group ignores invariance information
+in the unpermuted dimension, so when both sides are large enough for
+\code{permute = "both"}, the default is the better choice.
 }
 \examples{
 data(trade_dyadic)
@@ -135,6 +161,15 @@ fit <- with(d, mwperm_missing(y = log_trade, d = log_dist,
                               row = importer, col = exporter,
                               min_block = 3, seed = 1))
 fit
+## permute rows only: the same assumption covers the subgroup action, and
+## K is capped by the permuted (row) side of the blocks alone -- asking
+## for tall blocks (>= 20 rows, any width) restores resolution at
+## alpha = .05, which the two-sided test cannot reach on these blocks
+with(d, mwperm_missing(y = log_trade, d = log_dist,
+                       x = cbind(log_gdp_i, log_gdp_j),
+                       row = importer, col = exporter,
+                       permute = "rows", min_block = c(20, 1),
+                       conf_int = FALSE, seed = 1))
 }
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation

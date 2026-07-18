@@ -16,9 +16,13 @@ find_bicliques(
 \item{row, col}{Integer (or factor-coercible) cluster ids of the observed
 cells; the two vectors have equal length, one entry per observed cell.}
 
-\item{min_block}{Integer; blocks whose smaller side is below this are not
-returned. Defaults to 2; values below 2 are silently raised to 2 (a
-one-sided block cannot be permuted).}
+\item{min_block}{Minimum block side(s). A single integer applies to both
+sides (default 2; values below 2 are silently raised to 2 -- a 1x1
+block cannot be permuted). A length-2 integer vector sets the row and
+column minima separately, e.g. \code{c(3, 1)} admits tall single-column
+blocks for one-dimensional permutations
+(\code{mwperm_missing(permute = "rows")}); each side is floored at 1
+and at least one side must be 2 or more.}
 
 \item{method}{Either \code{"greedy"} (default) or \code{"exact"}; see
 Details.}
@@ -57,6 +61,15 @@ Two ways to find each block are offered through \code{method}:
     Worthwhile when a single largest block (finest p-value resolution)
     matters more than total coverage.}
 }
+
+Both methods maximise \emph{area}, and with an asymmetric \code{min_block}
+an area-maximal block can violate the floor even when conforming blocks
+exist (a tall thin block never maximises area on a dense mask). When that
+happens the growth is retried under the floor -- rows that would push the
+common column set below the column minimum are skipped, and the block is
+grown past the area optimum until the row minimum is met (and vice versa)
+-- so an asymmetric floor finds the tall/wide blocks it asks for. With a
+symmetric floor the behaviour is exactly the historical one.
 }
 \examples{
 ## a 4x4 grid missing its diagonal

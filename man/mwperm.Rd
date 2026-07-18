@@ -25,6 +25,7 @@ mwperm(
   L0 = NULL,
   min_block = 3L,
   block_method = c("greedy", "exact"),
+  permute = c("both", "rows", "cols"),
   verbose = TRUE
 )
 }
@@ -92,8 +93,8 @@ supplying it for another design warns and ignores it).}
 
 \item{L0}{Passed to \code{\link{mwperm_layout}} (layout only).}
 
-\item{min_block, block_method}{Passed to \code{\link{mwperm_missing}}
-(missing only).}
+\item{min_block, block_method, permute}{Passed to
+\code{\link{mwperm_missing}} (missing only).}
 
 \item{verbose}{If \code{TRUE} (default) print one line stating the
 detected design and the dispatched call.}

@@ -23,6 +23,23 @@ p-value, or any seeded result unless explicitly noted).
   algebra via `model.matrix()`, so transformed terms and factors work; the
   result is identical to the data interface with the same seed (pinned by
   tests). New accessors `coef()` (the OLS estimate, named) and `nobs()`.
+* **New `permute` argument on `mwperm_missing()`** (and passed through by
+  `mwperm()`): `"rows"` or `"cols"` permutes only that dimension. One-sided
+  permutation applies a subgroup of the invariance group, so the test stays
+  exactly valid under the same exchangeability assumption, and `K + 1` is
+  then capped by the *permuted* block side alone -- blocks need `min_block`
+  clusters on the permuted side but as few as one on the other, so designs
+  whose fully observed blocks are short in one dimension (down to a single
+  fully observed column) can reach resolutions the two-sided test cannot,
+  at some cost in power. `find_bicliques()` correspondingly accepts a
+  length-2 `min_block = c(rows, cols)` and, when the area-maximal block
+  violates such an asymmetric floor, retries the greedy growth under the
+  floor (a tall thin block never maximises area on a dense mask, so without
+  the retry the tall blocks the floor asks for would not be found). A scalar
+  `min_block` keeps the historical both-sides floor bit-identically, and the
+  default `permute = "both"` path is unchanged. Size control and power of
+  the one-sided test were verified by simulation (2,000-run null cells,
+  including the constrained-retry path; no super-uniformity violation).
 * Shipped-test coverage of `R/` is 94% (audit gate: >= 90%; it was 81% at
   audit time): new `tests/test-paths.R` exercises the design-diagnosis
   printer, forced-design validation, name resolution, `L0` balancing, the

@@ -564,8 +564,8 @@ print.mwperm_design <- function(x, ...) {
 #' @param time_fe Passed to \code{\link{mwperm_panel}} (panel only;
 #'   supplying it for another design warns and ignores it).
 #' @param L0 Passed to \code{\link{mwperm_layout}} (layout only).
-#' @param min_block,block_method Passed to \code{\link{mwperm_missing}}
-#'   (missing only).
+#' @param min_block,block_method,permute Passed to
+#'   \code{\link{mwperm_missing}} (missing only).
 #' @param verbose If \code{TRUE} (default) print one line stating the
 #'   detected design and the dispatched call.
 #' @inheritParams mwperm_dyadic
@@ -600,7 +600,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
                    n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
                    time_fe = TRUE, L0 = NULL, min_block = 3L,
-                   block_method = c("greedy", "exact"), verbose = TRUE) {
+                   block_method = c("greedy", "exact"),
+                   permute = c("both", "rows", "cols"), verbose = TRUE) {
   design <- match.arg(design)
   cl <- match.call()
   ## capture the caller's expression for d BEFORE evaluation: the front ends
@@ -664,6 +665,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   check_arg("L0", "layout")
   check_arg("min_block", "missing")
   check_arg("block_method", "missing")
+  check_arg("permute", "missing")
 
   ## Assumption-fork and weak-evidence detection notices are REAL warnings at
   ## fit time -- they flag branches that can be anti-conservative if the
@@ -686,7 +688,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
     missing = do.call(mwperm_missing,
                       c(common, list(row = ix[[1L]], col = ix[[2L]],
                                      min_block = min_block,
-                                     block_method = block_method))),
+                                     block_method = block_method,
+                                     permute = permute))),
     panel = do.call(mwperm_panel,
                     c(common, list(row = ix[[1L]], col = ix[[2L]],
                                    time = chk$time, time_fe = time_fe))),
