@@ -1,0 +1,21 @@
+==== 02 Power vs. the true effect size ====
+mwperm 0.2.0 | 1500 sims/cell | dyadic n=30, normal, phi2_err=0.15 | 2026-07-18 15:52:42
+
+  beta = 0.00   reject@.05 = 0.4% (MC SE 0.2%)   mean est = -0.000
+  beta = 0.05   reject@.05 = 12.1% (MC SE 0.8%)   mean est = +0.050
+  beta = 0.10   reject@.05 = 66.0% (MC SE 1.2%)   mean est = +0.100
+  beta = 0.15   reject@.05 = 97.3% (MC SE 0.4%)   mean est = +0.150
+  beta = 0.20   reject@.05 = 99.9% (MC SE 0.1%)   mean est = +0.200
+
+---- summary ----
+  power monotone increasing in beta : yes
+  size at beta = 0                  : 0.4%
+  power at the largest beta = 0.20   : 99.9%
+
+full table:
+ beta reject05  mean_est
+ 0.00    0.004 -0.000439
+ 0.05    0.121  0.049561
+ 0.10    0.660  0.099561
+ 0.15    0.973  0.149561
+ 0.20    0.999  0.199561

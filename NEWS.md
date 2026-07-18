@@ -40,6 +40,15 @@ p-value, or any seeded result unless explicitly noted).
   default `permute = "both"` path is unchanged. Size control and power of
   the one-sided test were verified by simulation (2,000-run null cells,
   including the constrained-retry path; no super-uniformity violation).
+* **Replication material** ships in `inst/replication/`: numbered,
+  self-contained Monte-Carlo scripts (base R + `mwperm` only) that reproduce
+  the package's headline claims -- finite-sample size control versus the
+  invalid classical OLS *t*-test, power rising to 1, confidence-interval
+  coverage, the trending-panel negative control behind the panel-by-default
+  policy, and the one-sided `permute` option -- with a `make.R` driver,
+  cached/resumable runners, reference outputs under `expected/`, and a
+  recorded `sessionInfo()`. See `system.file("replication", package =
+  "mwperm")`.
 * **Style and documentation-completeness pass** (no behaviour change; the
   full suite and every seeded reference value verified bit-identical): all
   code lines are now <= 80 characters with no compound/trailing semicolons;

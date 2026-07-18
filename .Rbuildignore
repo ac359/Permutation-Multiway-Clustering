@@ -26,3 +26,5 @@
 ^Extra info$
 ^Extra.info$
 ^LICENSE\.md$
+^inst/replication/out$
+^inst/replication/cache$

@@ -22,6 +22,10 @@ src/*.so
 src/*.dll
 inst/doc/
 
+# generated replication artifacts (the scripts + expected/ are tracked)
+inst/replication/out/
+inst/replication/cache/
+
 # ----- R / RStudio machine-local state -----
 .Rhistory
 .Rapp.history

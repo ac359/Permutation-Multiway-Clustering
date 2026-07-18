@@ -1,0 +1,15 @@
+==== 04 Negative control: three-way vs panel on a trending panel ====
+mwperm 0.2.0 | 1000 sims/cell | n=25 x T=6, common time trend, beta=0 | 2026-07-18 15:43:47
+rejection measured at alpha = 0.2
+
+  three-way (permutes time, INVALID here) : reject = 41.3% (CP lower 38.7%)
+  panel     (holds time, valid)           : reject = 6.5% (CP upper 7.9%)
+
+---- summary ----
+  three-way over-rejects (reject >> alpha)      : yes -- invalid on a trend, as expected
+  panel controls size (CP upper <= alpha + MC)  : yes -- valid under an arbitrary trend
+
+full table:
+     test reject alpha
+ threeway  0.413   0.2
+    panel  0.065   0.2
