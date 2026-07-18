@@ -23,7 +23,17 @@
 #' @param digits Number of significant digits for the estimate and interval.
 #' @param ... Ignored.
 #' @return \code{x}, invisibly.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{summary.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- with(trade_dyadic,
+#'             mwperm_dyadic(log_trade, log_dist,
+#'                           x = cbind(log_gdp_i, log_gdp_j),
+#'                           row = importer, col = exporter,
+#'                           n_reps = 2, seed = 1))
+#' print(fit)
 #' @export
 print.mwperm <- function(x, digits = 4L, ...) {
   cat("\nInvariant permutation test (mwperm)\n")
@@ -41,7 +51,7 @@ print.mwperm <- function(x, digits = 4L, ...) {
   cat("\n")
 
   est <- x$estimate
-  has_box <- !is.null(x$conf_box)      # TRUE when a joint region (d > 1) was computed
+  has_box <- !is.null(x$conf_box)      # a joint region (d > 1) was computed
   ## One line per coefficient: estimate, plus a CI (coef 1, scalar case) or the
   ## marginal region bracket (joint case).
   for (k in seq_along(est)) {
@@ -51,13 +61,17 @@ print.mwperm <- function(x, digits = 4L, ...) {
     if (k == 1L && !is.null(x$conf_int) && length(x$conf_int) == 2L) {
       line <- paste0(line, sprintf("   %.0f%% IPT CI [%s, %s]",
                                    100 * x$conf_level,
-                                   formatC(x$conf_int[1], digits = digits, format = "g"),
-                                   formatC(x$conf_int[2], digits = digits, format = "g")))
+                                   formatC(x$conf_int[1], digits = digits,
+                                           format = "g"),
+                                   formatC(x$conf_int[2], digits = digits,
+                                           format = "g")))
     } else if (has_box) {
       line <- paste0(line, sprintf("   %.0f%% IPT region [%s, %s]",
                                    100 * x$conf_level,
-                                   formatC(x$conf_box[1, k], digits = digits, format = "g"),
-                                   formatC(x$conf_box[2, k], digits = digits, format = "g")))
+                                   formatC(x$conf_box[1, k], digits = digits,
+                                           format = "g"),
+                                   formatC(x$conf_box[2, k], digits = digits,
+                                           format = "g")))
     }
     cat(line, "\n")
   }
@@ -107,17 +121,30 @@ print.mwperm <- function(x, digits = 4L, ...) {
 #'   of the joint confidence region for several; \code{p_value} is the IPT
 #'   permutation p-value of the joint test (repeated across rows when there
 #'   are several coefficients).
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{print.mwperm}}, \code{\link{confint.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- with(trade_dyadic,
+#'             mwperm_dyadic(log_trade, log_dist,
+#'                           x = cbind(log_gdp_i, log_gdp_j),
+#'                           row = importer, col = exporter,
+#'                           n_reps = 2, seed = 1))
+#' summary(fit)
 #' @export
 summary.mwperm <- function(object, ...) {
   d <- length(object$estimate)         # number of coefficients
   ## Confidence limits per coefficient: a scalar interval populates only row 1,
   ## a joint region contributes the marginal box extents for every coefficient.
-  ci_lo <- rep(NA_real_, d); ci_hi <- rep(NA_real_, d)
+  ci_lo <- rep(NA_real_, d)
+  ci_hi <- rep(NA_real_, d)
   if (!is.null(object$conf_int) && length(object$conf_int) == 2L) {
-    ci_lo[1] <- object$conf_int[1]; ci_hi[1] <- object$conf_int[2]
-  } else if (!is.null(object$conf_box)) {            # joint region: marginal extents
-    ci_lo <- object$conf_box[1, ]; ci_hi <- object$conf_box[2, ]
+    ci_lo[1] <- object$conf_int[1]
+    ci_hi[1] <- object$conf_int[2]
+  } else if (!is.null(object$conf_box)) {   # joint region: marginal extents
+    ci_lo <- object$conf_box[1, ]
+    ci_hi <- object$conf_box[2, ]
   }
   tab <- data.frame(
     term         = object$d_names,
@@ -135,7 +162,8 @@ summary.mwperm <- function(object, ...) {
 
 #' Confidence interval from an inverted permutation test
 #'
-#' Extracts the test-inversion confidence set stored in a \code{"mwperm"} object:
+#' Extracts the test-inversion confidence set stored in a \code{"mwperm"}
+#'   object:
 #' the interval for a single coefficient, or the marginal extent of the joint
 #' confidence region for several. This is the IPT (inverted permutation test)
 #' set -- obtained by inverting the finite-sample-valid test, \emph{not} a Wald
@@ -146,7 +174,8 @@ summary.mwperm <- function(object, ...) {
 #' @param object An object of class \code{"mwperm"}.
 #' @param parm Optional subset of coefficients: names (matching the rows of
 #'   the returned matrix) or integer positions. Defaults to all coefficients.
-#' @param level Confidence level; must match the level used at fitting, otherwise
+#' @param level Confidence level; must match the level used at fitting,
+#'   otherwise
 #'   an error is raised (the set cannot be re-derived without the stored
 #'   permutations). Defaults to the stored level.
 #' @param ... Ignored.
@@ -159,17 +188,30 @@ summary.mwperm <- function(object, ...) {
 #'   \code{object$conf_region} for the full set of retained vectors). The
 #'   provenance is recorded in the matrix's \code{"method"} attribute,
 #'   \code{"IPT (inverted permutation test)"}.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- with(trade_dyadic,
+#'             mwperm_dyadic(log_trade, log_dist,
+#'                           x = cbind(log_gdp_i, log_gdp_j),
+#'                           row = importer, col = exporter,
+#'                           n_reps = 2, seed = 1))
+#' confint(fit)
+#' confint(fit, parm = "log_dist")
 #' @export
 confint.mwperm <- function(object, parm, level = NULL, ...) {
   has_int <- !is.null(object$conf_int)
   has_box <- !is.null(object$conf_box)
   if (!has_int && !has_box)
-    stop("No confidence set is stored in this object (it was not requested or the ",
-         "resolution was too coarse). Refit with conf_int = TRUE.", call. = FALSE)
+    stop("No confidence set is stored in this object (it was not requested ",
+         "or the resolution was too coarse). Refit with conf_int = TRUE.",
+         call. = FALSE)
   if (!is.null(level) && !isTRUE(all.equal(level, object$conf_level)))
-    stop(sprintf(paste0("This object stores a %.0f%% set; `level = %g` would need ",
-                        "refitting with alpha = %g (the permutations are fixed at fit time)."),
+    stop(sprintf(paste0("This object stores a %.0f%% set; `level = %g` ",
+                        "would need refitting with alpha = %g (the ",
+                        "permutations are fixed at fit time)."),
                  100 * object$conf_level, level, 1 - level), call. = FALSE)
   ## Two-sided percentile column labels, e.g. "2.5 %" / "97.5 %" for a 95% set.
   pct <- 100 * c((1 - object$conf_level) / 2, 1 - (1 - object$conf_level) / 2)

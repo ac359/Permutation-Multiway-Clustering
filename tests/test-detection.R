@@ -35,7 +35,8 @@ w1 <- warns_of(fit1 <- mwperm(y = yv, d = dv, index = idx_f55,
                               conf_int = FALSE, seed = 1, verbose = FALSE))
 stopifnot(inherits(fit1, "mwperm"),
           any(grepl("name", w1, ignore.case = TRUE)),
-          any(grepl("name", fit1$note, ignore.case = TRUE)))  # kept on the object
+          any(grepl("name", fit1$note,
+                    ignore.case = TRUE)))  # kept on the object
 
 ## ---- 2. a values-corroborated name assignment stays silent -----------------
 ## 'year' is regularly spaced with strictly fewer levels than both clusters:
@@ -61,9 +62,11 @@ w3 <- warns_of(fit3 <- mwperm(y = yv, d = dv, index = idx_ok,
 stopifnot(inherits(fit3, "mwperm"), any(grepl("time-like", w3)))
 
 ## forced threeway with no time-like evidence stays silent
-g5 <- expand.grid(a = 1:5, b = 1:5, cc = 1:5)   # equal levels: nothing stands out
+g5 <- expand.grid(a = 1:5, b = 1:5,
+                  cc = 1:5)   # equal levels: nothing stands out
 set.seed(7)
-y5 <- rnorm(nrow(g5)); d5 <- rnorm(nrow(g5))
+y5 <- rnorm(nrow(g5))
+d5 <- rnorm(nrow(g5))
 idx_ex <- list(a = g5$a, b = g5$b, cc = g5$cc)
 chk4 <- mwperm_check(index = idx_ex, design = "threeway")
 stopifnot(length(chk4$warnings) == 0L)
@@ -86,7 +89,8 @@ stopifnot(identical(chk5$design, "panel"),
 g2 <- expand.grid(i = 1:5, j = 1:5)
 g2 <- rbind(g2, g2, g2)                          # three replicates per cell
 set.seed(11)
-yl <- rnorm(nrow(g2)); dl <- rnorm(nrow(g2))
+yl <- rnorm(nrow(g2))
+dl <- rnorm(nrow(g2))
 w5 <- warns_of(fit5 <- mwperm(y = yl, d = dl,
                               index = list(i = g2$i, j = g2$j),
                               conf_int = FALSE, seed = 1, verbose = FALSE))

@@ -78,6 +78,10 @@ g <- g[g$i != g$j, ]
 find_bicliques(g$i, g$j, min_block = 2)
 find_bicliques(g$i, g$j, min_block = 2, method = "exact")
 }
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{mwperm_missing}}.
 }

@@ -1,7 +1,8 @@
-## Edge-case / adversarial-input regression tests (audit Phase 5, brief §5).
+## Edge-case / adversarial-input regression tests (audit Phase 5, brief
+## section 5).
 ## Base-R stopifnot style; fast. Pins the VALIDATION CONTRACT: every bad input
 ## fails early with an error naming the offending user-facing argument
-## (CLAUDE.md §5.7), degenerate-but-legal designs stay valid, and the S3
+## (CLAUDE.md section 5.7), degenerate-but-legal designs stay valid, and the S3
 ## methods honour their documented guarantees. The behaviours the audit found
 ## deficient (silent factor-y coercion F5.1, noise-driven degenerate-d p-value
 ## F5.2, K/seed validation style F5.3/F2.3, retained-cells-only validation
@@ -10,8 +11,11 @@
 ## test-detection.R.
 library(mwperm)
 
-msg_of <- function(expr) tryCatch({ expr; NA_character_ },
-                                  error = function(e) conditionMessage(e))
+msg_of <- function(expr)
+  tryCatch({
+    expr
+    NA_character_
+  }, error = function(e) conditionMessage(e))
 expect_err <- function(expr, pattern) {
   m <- msg_of(expr)
   stopifnot(!is.na(m), grepl(pattern, m, fixed = TRUE))
@@ -19,34 +23,48 @@ expect_err <- function(expr, pattern) {
 
 ## ---- shared fixtures --------------------------------------------------------
 set.seed(101)
-g6 <- expand.grid(i = 1:6, j = 1:6); N6 <- nrow(g6)
+g6 <- expand.grid(i = 1:6, j = 1:6)
+N6 <- nrow(g6)
 d6 <- rnorm(6)[g6$i] + rnorm(N6)
 y6 <- rnorm(6)[g6$i] + rnorm(6)[g6$j] + 0.4 * d6 + rnorm(N6)
 x6 <- rnorm(N6)
-mkNA <- function(v, i = 3L, val = NA) { v[i] <- val; v }
+mkNA <- function(v, i = 3L, val = NA) {
+  v[i] <- val
+  v
+}
 
 ## ---- 1. NA / NaN / Inf / non-numeric error EARLY, naming the argument -------
 expect_err(mwperm_dyadic(mkNA(y6), d6, row = g6$i, col = g6$j), "`y`")
-expect_err(mwperm_dyadic(mkNA(y6, val = NaN), d6, row = g6$i, col = g6$j), "`y`")
-expect_err(mwperm_dyadic(mkNA(y6, val = Inf), d6, row = g6$i, col = g6$j), "`y`")
+expect_err(mwperm_dyadic(mkNA(y6, val = NaN), d6, row = g6$i, col = g6$j),
+           "`y`")
+expect_err(mwperm_dyadic(mkNA(y6, val = Inf), d6, row = g6$i, col = g6$j),
+           "`y`")
 expect_err(mwperm_dyadic(y6, mkNA(d6), row = g6$i, col = g6$j), "`d`")
 expect_err(mwperm_dyadic(y6, d6, x = mkNA(x6), row = g6$i, col = g6$j), "`x`")
 expect_err(mwperm_dyadic(y6, d6, row = mkNA(g6$i), col = g6$j), "`row`")
 expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = mkNA(g6$j)), "`col`")
 expect_err(mwperm_dyadic(y6, factor(round(d6)), row = g6$i, col = g6$j), "`d`")
-expect_err(mwperm_dyadic(y6, as.character(round(d6)), row = g6$i, col = g6$j), "`d`")
+expect_err(mwperm_dyadic(y6, as.character(round(d6)), row = g6$i, col = g6$j),
+           "`d`")
 expect_err(mwperm_dyadic(y6, d6, x = data.frame(a = x6, f = factor(g6$i)),
                          row = g6$i, col = g6$j), "`x`")
-## non-numeric character y coerces to NA (with R's own warning) then errors on `y`
+## non-numeric character y coerces to NA (with R's own warning) then errors on
+## `y`
 expect_err(suppressWarnings(
-  mwperm_dyadic(letters[1 + (seq_len(N6) %% 5)], d6, row = g6$i, col = g6$j)), "`y`")
+  mwperm_dyadic(letters[1 + (seq_len(N6) %% 5)], d6, row = g6$i,
+                col = g6$j)), "`y`")
 ## the other front ends share the same validation layer -- one NA case each
 gp <- expand.grid(i = 1:4, j = 1:4, t = 1:3)
-yp <- rnorm(nrow(gp)); dp <- rnorm(nrow(gp))
-expect_err(mwperm_panel(yp, dp, row = gp$i, col = gp$j, time = mkNA(gp$t)), "`time`")
-expect_err(mwperm_threeway(yp, dp, id1 = gp$i, id2 = gp$j, id3 = mkNA(gp$t)), "`id3`")
-g8 <- expand.grid(i = 1:8, j = 1:8); g8 <- g8[g8$i != g8$j, ]
-y8 <- rnorm(nrow(g8)); d8 <- rnorm(nrow(g8))
+yp <- rnorm(nrow(gp))
+dp <- rnorm(nrow(gp))
+expect_err(mwperm_panel(yp, dp, row = gp$i, col = gp$j, time = mkNA(gp$t)),
+           "`time`")
+expect_err(mwperm_threeway(yp, dp, id1 = gp$i, id2 = gp$j, id3 = mkNA(gp$t)),
+           "`id3`")
+g8 <- expand.grid(i = 1:8, j = 1:8)
+g8 <- g8[g8$i != g8$j, ]
+y8 <- rnorm(nrow(g8))
+d8 <- rnorm(nrow(g8))
 ## validation runs on the FULL supplied data, before the biclique step
 ## discards cells (F5.4 fix): an NA errors whether its cell is retained...
 bl8v <- find_bicliques(g8$i, g8$j, min_block = 3)
@@ -69,26 +87,32 @@ fm40 <- mwperm_missing(y8, d8, row = g8$i, col = g8$j, min_block = 3,
                        seed = 1, conf_int = FALSE, alpha = 0.4)
 stopifnot(!any(grepl("smallest selected block", fm40$note)))
 gl <- expand.grid(l = 1:5, i = 1:4, j = 1:4)
-yl <- rnorm(nrow(gl)); dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
+yl <- rnorm(nrow(gl))
+dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
 expect_err(mwperm_layout(mkNA(yl), dl, row = gl$i, col = gl$j), "`y`")
 ## factor y is rejected in every front end, never coerced to its level codes
 ## (audit F5.1: as.numeric(factor) is silent data corruption)
-yf6 <- factor(round(y6)); yfp <- factor(round(yp))
-yf8 <- factor(round(y8)); yfl <- factor(round(yl))
+yf6 <- factor(round(y6))
+yfp <- factor(round(yp))
+yf8 <- factor(round(y8))
+yfl <- factor(round(yl))
 expect_err(mwperm_dyadic(yf6, d6, row = g6$i, col = g6$j), "`y`")
 expect_err(mwperm_panel(yfp, dp, row = gp$i, col = gp$j, time = gp$t), "`y`")
 expect_err(mwperm_threeway(yfp, dp, id1 = gp$i, id2 = gp$j, id3 = gp$t), "`y`")
-expect_err(mwperm_missing(yf8, d8, row = g8$i, col = g8$j, min_block = 3), "`y`")
+expect_err(mwperm_missing(yf8, d8, row = g8$i, col = g8$j, min_block = 3),
+           "`y`")
 expect_err(mwperm_layout(yfl, dl, row = gl$i, col = gl$j), "`y`")
 ## logicals are documented as allowed
 fl <- mwperm_dyadic(y6 > 0, d6 > 0, row = g6$i, col = g6$j, seed = 1,
                     conf_int = FALSE)
 stopifnot(inherits(fl, "mwperm"))
 
-## ---- 2. structural validation ------------------------------------------------
-expect_err(mwperm_dyadic(c(y6, 1), c(d6, 1), row = c(g6$i, 1), col = c(g6$j, 1)),
+## ---- 2. structural validation -----------------------------------------------
+expect_err(mwperm_dyadic(c(y6, 1), c(d6, 1), row = c(g6$i, 1), col = c(g6$j,
+                                                                       1)),
            "one observation per (row, col) cell")
-expect_err(mwperm_missing(c(y8, 1), c(d8, 1), row = c(g8$i, 1), col = c(g8$j, 2)),
+expect_err(mwperm_missing(c(y8, 1), c(d8, 1), row = c(g8$i, 1), col = c(g8$j,
+                                                                        2)),
            "one observation per (row, col) cell")
 expect_err(mwperm_dyadic(y6, d6, x = matrix(rnorm(N6 * 18), N6),
                          row = g6$i, col = g6$j), "N > 2p")
@@ -110,7 +134,7 @@ fnc <- mwperm_dyadic(y6, d6, row = c(10L, 20L, 35L, 40L, 70L, 99L)[g6$i],
 fpl <- mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 1, conf_int = FALSE)
 stopifnot(identical(fch$pvalue, fpl$pvalue), identical(fnc$pvalue, fpl$pvalue))
 
-## ---- 3. degenerate-but-legal inputs -------------------------------------------
+## ---- 3. degenerate-but-legal inputs -----------------------------------------
 ## constant y: statistic identically zero, p = 1 (never spuriously small)
 fcy <- mwperm_dyadic(rep(2, N6), d6, row = g6$i, col = g6$j, seed = 1,
                      conf_int = FALSE)
@@ -122,7 +146,8 @@ stopifnot(fcy$pvalue == 1)
 warn_of <- function(expr) {
   w <- character(0)
   withCallingHandlers(expr, warning = function(cnd) {
-    w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning")
+    w <<- c(w, conditionMessage(cnd))
+    invokeRestart("muffleWarning")
   })
   w
 }
@@ -135,12 +160,15 @@ wcl <- warn_of(fcl <- mwperm_dyadic(y6, 2 * x6 + 1, x = x6, row = g6$i,
 stopifnot(is.na(fcl$estimate), fcl$pvalue == 1,
           any(grepl("`d`", wcl, fixed = TRUE)))
 
-## ---- 4. scalar-argument validation --------------------------------------------
+## ---- 4. scalar-argument validation ------------------------------------------
 for (a in list(0, 1, -0.1, 2, NA_real_, c(0.05, 0.1), "0.05"))
-  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, alpha = a), "`alpha`")
+  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, alpha = a),
+             "`alpha`")
 for (r in list(0L, 1.5, NA_integer_, c(2L, 3L)))
-  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_reps = r), "`n_reps`")
-## K validation names the argument, incl. NA / vector / fractional / 0 (F5.3 fix)
+  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_reps = r),
+             "`n_reps`")
+## K validation names the argument, incl. NA / vector / fractional / 0 (F5.3
+## fix)
 for (k in list(NA, NA_integer_, c(3, 4), 2.5, "3", 0L))
   expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, K = k), "`K`")
 ## seed: type validation and a loud, `seed`-named overflow error (F2.3 fix);
@@ -171,8 +199,9 @@ fv <- mwperm_dyadic(y6, cbind(a = d6, b = x6), row = g6$i, col = g6$j,
                     beta_null = c(0.4, 0), seed = 1, conf_int = FALSE)
 stopifnot(length(fv$beta_null) == 2L)
 
-## ---- 5. resolution rule ---------------------------------------------------------
-## K = 5 -> p_min = 1/6 > .05: p-value valid and on the grid, CI refused with a note
+## ---- 5. resolution rule -----------------------------------------------------
+## K = 5 -> p_min = 1/6 > .05: p-value valid and on the grid, CI refused with a
+## note
 f6 <- mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 1)   # alpha = .05
 stopifnot(is.null(f6$conf_int),
           any(grepl("1/(K+1)", f6$note, fixed = TRUE)),
@@ -182,30 +211,35 @@ stopifnot(is.null(f6$conf_int),
 f6b <- mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, seed = 1, alpha = 0.2)
 stopifnot(length(f6b$conf_int) == 2L, !anyNA(f6b$conf_int))
 
-## ---- 6. confint contract (H3) ----------------------------------------------------
+## ---- 6. confint contract (H3) -----------------------------------------------
 set.seed(2)
-g21 <- expand.grid(i = 1:21, j = 1:21); N21 <- nrow(g21)
+g21 <- expand.grid(i = 1:21, j = 1:21)
+N21 <- nrow(g21)
 dA <- rnorm(21)[g21$i] + rnorm(N21)
 dB <- rnorm(21)[g21$j] + rnorm(N21)
 y21 <- rnorm(21)[g21$i] + rnorm(21)[g21$j] + 0.4 * dA - 0.2 * dB + rnorm(N21)
 fit1 <- mwperm_dyadic(y21, dA, row = g21$i, col = g21$j, seed = 3)
-expect_err(confint(fit1, level = 0.90), "refitting")     # wrong level: error, never mislabel
+expect_err(confint(fit1, level = 0.90),
+           "refitting")     # wrong level: error, never mislabel
 ci <- confint(fit1, level = 0.95)                        # matching level: fine
 stopifnot(identical(colnames(ci), c("2.5 %", "97.5 %")),
           isTRUE(all.equal(as.numeric(ci), as.numeric(fit1$conf_int))),
           identical(attr(ci, "method"), "IPT (inverted permutation test)"))
-fitn <- mwperm_dyadic(y21, dA, row = g21$i, col = g21$j, seed = 3, conf_int = FALSE)
+fitn <- mwperm_dyadic(y21, dA, row = g21$i, col = g21$j, seed = 3,
+                      conf_int = FALSE)
 expect_err(confint(fitn), "No confidence set")
 
-## ---- 7. d > 1: summary/confint carry the joint region for EVERY term (H12) -------
+## ---- 7. d > 1: summary/confint carry the joint region for EVERY term (H12) --
 fit2 <- mwperm_dyadic(y21, cbind(dA = dA, dB = dB), row = g21$i, col = g21$j,
                       seed = 3)
 stopifnot(is.null(fit2$conf_int), !is.null(fit2$conf_box),
           nrow(fit2$conf_region) >= 1L)
 o <- capture.output(tab <- summary(fit2))
 stopifnot(nrow(tab) == 2L,
-          isTRUE(all.equal(unname(tab$ipt_ci_low),  unname(fit2$conf_box[1, ]))),
-          isTRUE(all.equal(unname(tab$ipt_ci_high), unname(fit2$conf_box[2, ]))),
+          isTRUE(all.equal(unname(tab$ipt_ci_low),  unname(fit2$conf_box[1,
+                                                                         ]))),
+          isTRUE(all.equal(unname(tab$ipt_ci_high), unname(fit2$conf_box[2,
+                                                                         ]))),
           all(tab$p_value == fit2$pvalue))
 ci2 <- confint(fit2)
 stopifnot(nrow(ci2) == 2L, identical(rownames(ci2), c("dA", "dB")),
@@ -221,16 +255,18 @@ stopifnot(identical(rownames(cin), "dA"), identical(cin[1L, ], ci2[1L, ]))
 expect_err(confint(fit2, parm = "nope"), "`parm`")
 expect_err(confint(fit2, parm = 5), "`parm`")
 expect_err(mwperm_dyadic(y21, cbind(dA, dB), row = g21$i, col = g21$j,
-                         grid = list(1:3), seed = 3), "one vector per coefficient")
+                         grid = list(1:3), seed = 3),
+           "one vector per coefficient")
 ## d = 2 without a region: summary degrades to NA limits, no error
 o <- capture.output(tabn <- summary(
   mwperm_dyadic(y21, cbind(dA = dA, dB = dB), row = g21$i, col = g21$j,
                 seed = 3, conf_int = FALSE)))
 stopifnot(all(is.na(tabn$ipt_ci_low)), all(is.na(tabn$ipt_ci_high)))
 
-## ---- 8. print / summary / plot run on every design (incl. n_reps = 1) ------------
+## ---- 8. print / summary / plot run on every design (incl. n_reps = 1) -------
 g3 <- expand.grid(i = 1:4, j = 1:4, k = 1:4)
-y3 <- rnorm(4)[g3$i] + rnorm(4)[g3$j] + rnorm(nrow(g3)); d3 <- rnorm(nrow(g3))
+y3 <- rnorm(4)[g3$i] + rnorm(4)[g3$j] + rnorm(nrow(g3))
+d3 <- rnorm(nrow(g3))
 fits <- list(
   dyadic   = fpl,
   panel    = mwperm_panel(yp, dp, row = gp$i, col = gp$j, time = gp$t,
@@ -252,11 +288,12 @@ for (f in fits) {
   dev.off()
 }
 
-## ---- 9. .cell_code exactness guard (2^53) -----------------------------------------
+## ---- 9. .cell_code exactness guard (2^53) -----------------------------------
 stopifnot(is.numeric(mwperm:::.cell_code(cbind(1:3, 1:3))))
 expect_err(mwperm:::.cell_code(rbind(c(2^18, 2^18, 2^18))), "2^53")
 
-## ---- 10. layout: explicit within-cell-unique `rep` makes the fit row-order invariant
+## ---- 10. layout: explicit within-cell-unique `rep` makes the fit row-order
+## invariant
 set.seed(77)
 repv <- gl$l
 f0 <- mwperm_layout(yl, dl, row = gl$i, col = gl$j, rep = repv, seed = 3,

@@ -68,13 +68,14 @@
 #' @keywords internal
 #' @noRd
 .ols_reference <- function(y, D, X) {
-  D <- as.matrix(D); X <- as.matrix(X)
+  D <- as.matrix(D)
+  X <- as.matrix(X)
   d <- ncol(D)                         # number of coefficients of interest
-  p <- ncol(X)                         # number of nuisance columns (incl. intercept)
-  W <- cbind(X, D)                     # full design: [nuisance | covariate(s) of interest]
+  p <- ncol(X)                         # nuisance columns (incl. intercept)
+  W <- cbind(X, D)                     # full design [nuisance | interest]
   fit <- stats::lm.fit(W, y)
   cf <- fit$coefficients
-  idx <- (p + 1L):(p + d)              # positions of the D coefficients within `cf`
+  idx <- (p + 1L):(p + d)              # D coefficient positions in `cf`
   est <- cf[idx]                       # OLS point estimate(s) of beta
   ## naive homoskedastic SE -- used only as a centre/scale for the CI search,
   ## never reported as an inferential quantity.
@@ -83,7 +84,8 @@
   se <- rep(NA_real_, d)
   if (dfres > 0L) {
     sigma2 <- sum(res^2) / dfres       # homoskedastic error-variance estimate
-    XtXi <- tryCatch(solve(crossprod(W)), error = function(e) NULL)  # (W'W)^{-1}, or NULL if singular
+    ## (W'W)^{-1}, or NULL if singular
+    XtXi <- tryCatch(solve(crossprod(W)), error = function(e) NULL)
     if (!is.null(XtXi)) se <- sqrt(sigma2 * diag(XtXi)[idx])
   }
   list(estimate = as.numeric(est), se = as.numeric(se))
@@ -115,10 +117,12 @@
 .ipt_engine <- function(y, D, X, perm_builder, K, n_reps, seed,
                         alpha, conf_int, beta_null, grid,
                         type, d_names, n_clusters, call, n_cores = 1L) {
-  y <- as.numeric(y); D <- as.matrix(D); X <- as.matrix(X)
+  y <- as.numeric(y)
+  D <- as.matrix(D)
+  X <- as.matrix(X)
   N <- length(y)                     # number of observations
   d <- ncol(D)                       # number of coefficients of interest
-  p <- ncol(X)                       # number of nuisance columns (incl. intercept)
+  p <- ncol(X)                       # nuisance columns (incl. intercept)
   ## Validate before any linear algebra so bad input fails with its own name,
   ## not as an NA/coercion error deep inside lm.fit or a QR decomposition.
   .check_finite(list(y = y, d = D, x = X))
@@ -132,11 +136,13 @@
   if (!(is.numeric(beta_null) && all(is.finite(beta_null))))
     stop("`beta_null` must be numeric and finite.", call. = FALSE)
   if (!length(beta_null) %in% c(1L, d))
-    stop(sprintf("`beta_null` must have length 1 or %d (one per column of `d`).",
-                 d), call. = FALSE)
+    stop(sprintf(
+      "`beta_null` must have length 1 or %d (one per column of `d`).", d),
+      call. = FALSE)
   if (!is.null(grid) &&
       !all(vapply(if (is.list(grid)) grid else list(grid),
-                  function(g) is.numeric(g) && length(g) >= 1L && all(is.finite(g)),
+                  function(g) is.numeric(g) && length(g) >= 1L &&
+                    all(is.finite(g)),
                   logical(1))))
     stop("`grid` must contain only finite numeric values.", call. = FALSE)
   n_cores <- suppressWarnings(as.integer(n_cores))
@@ -150,7 +156,8 @@
                     n_cores, nc_max, nc_max), call. = FALSE)
     n_cores <- as.integer(nc_max)
   }
-  if (!is.null(seed) && !(is.numeric(seed) && length(seed) == 1L && is.finite(seed)))
+  if (!is.null(seed) &&
+      !(is.numeric(seed) && length(seed) == 1L && is.finite(seed)))
     stop("`seed` must be NULL or a single finite number.", call. = FALSE)
   conf_level <- 1 - alpha            # always the complement of the test level
   ## Need more observations than the stacked projection [X | X_k] consumes; with
@@ -180,21 +187,23 @@
   ref <- .ols_reference(y, D, X)
 
   ## res_min: the p-value resolution, i.e. the smallest attainable p-value
-  ## 1/(K+1). If it already exceeds alpha no confidence set can exclude anything.
+  ## 1/(K+1). If it already exceeds alpha no confidence set can exclude
+  ## anything.
   res_min <- 1 / (K + 1L)
   ## The permuted-D projections (W in the prep object) are needed for CI / joint
   ## region inversion and, in the point p-value, whenever the null is non-zero
   ## (they carry the b-statistic slope). They can be skipped only for a no-CI
   ## test of beta = 0 (e.g. a Monte-Carlo size simulation) to save work.
-  want_ci     <- isTRUE(conf_int) && d == 1L && res_min <= alpha   # scalar interval feasible
-  want_region <- isTRUE(conf_int) && d >  1L && res_min <= alpha   # joint region feasible
-  beta0 <- rep(beta_null, length.out = d)                          # null value(s), recycled to length d
+  want_ci     <- isTRUE(conf_int) && d == 1L && res_min <= alpha  # interval
+  want_region <- isTRUE(conf_int) && d >  1L && res_min <= alpha  # region
+  beta0 <- rep(beta_null, length.out = d)  # null value(s), recycled to d
   need_W <- want_ci || want_region || any(beta0 != 0)
 
   ## Build + prepare the permutations once per rep, then reuse the cached prep
   ## objects for the CI search (so the QR work is never repeated).
   ## seeds: one per rep (NULL = use the ambient RNG, no reproducibility).
-  seeds <- if (is.null(seed)) rep(list(NULL), n_reps) else as.list(seed + seq_len(n_reps) - 1L)
+  seeds <- if (is.null(seed)) rep(list(NULL), n_reps)
+           else as.list(seed + seq_len(n_reps) - 1L)
   ## Parallel axis (n_cores > 1): the rep loop when it offers several
   ## explicitly seeded tasks -- each worker rebuilds its permutations from its
   ## own seed, so scheduling cannot change any draw -- otherwise the K loop
@@ -212,7 +221,7 @@
     on.exit(parallel::stopCluster(psock_cl), add = TRUE)
   }
   one_rep <- function(s) {
-    op <- perm_builder(s)               # K+1 observation gather-vectors for this rep
+    op <- perm_builder(s)               # K+1 gather-vectors for this rep
     prep <- .ipt_prepare(y, D, X, op, need_perm_D = need_W,
                          n_cores = if (rep_axis) 1L else n_cores,
                          cl = psock_cl)
@@ -226,16 +235,19 @@
 
   ## Confidence set by test inversion: an interval for a single coefficient,
   ## a joint region (grid-based) for several.
-  ci <- NULL; conf_region <- NULL; conf_box <- NULL
+  ci <- NULL
+  conf_region <- NULL
+  conf_box <- NULL
   note <- character(0)                  # human-readable caveats appended below
-  warned_res <- FALSE                   # guard so the coarse-resolution note is added once
+  warned_res <- FALSE                   # coarse-resolution note added once
   if (isTRUE(conf_int)) {
     if (res_min > alpha) {
-      note <- c(note, sprintf(paste0("No %.0f%% confidence %s: the smallest attainable ",
-                                     "p-value is 1/(K+1) = %.3g > alpha = %.3g, so every value ",
-                                     "is retained. Increase K (more clusters/larger blocks)."),
-                              100 * conf_level, if (d == 1L) "interval" else "region",
-                              res_min, alpha))
+      note <- c(note, sprintf(
+        paste0("No %.0f%% confidence %s: the smallest attainable p-value is ",
+               "1/(K+1) = %.3g > alpha = %.3g, so every value is retained. ",
+               "Increase K (more clusters/larger blocks)."),
+        100 * conf_level, if (d == 1L) "interval" else "region",
+        res_min, alpha))
       warned_res <- TRUE
     } else if (d == 1L) {
       ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
@@ -253,15 +265,17 @@
       reg <- .invert_region(prep_list, alpha = 1 - conf_level,
                             centre = ref$estimate, scale = ref$se,
                             d_names = d_names, grid = grid)
-      conf_region <- reg$points; conf_box <- reg$box
+      conf_region <- reg$points
+      conf_box <- reg$box
       if (length(reg$note)) note <- c(note, reg$note)
     }
   }
 
   if (res_min > alpha && !warned_res) {
-    note <- c(note, sprintf(paste0("Smallest attainable p-value is 1/(K+1) = %.3g > alpha = %.3g; ",
-                                   "the test cannot reject at this level. Increase K (needs more ",
-                                   "clusters per dimension)."), res_min, alpha))
+    note <- c(note, sprintf(
+      paste0("Smallest attainable p-value is 1/(K+1) = %.3g > alpha = %.3g; ",
+             "the test cannot reject at this level. Increase K (needs more ",
+             "clusters per dimension)."), res_min, alpha))
   }
 
   ## Assemble the returned "mwperm" object. Field meanings (read by the S3
@@ -269,18 +283,20 @@
   structure(
     list(
       pvalue      = pvalue,        # reported p-value (median over reps)
-      pvalues_rep = pv,            # the per-rep p-values (plotted by plot.mwperm)
-      estimate    = stats::setNames(ref$estimate, d_names),  # OLS point estimate(s)
-      se_naive    = stats::setNames(ref$se, d_names),        # naive homoskedastic SE(s)
-      conf_int    = ci,            # length-2 inverted interval (d == 1), else NULL
-      conf_region = conf_region,   # matrix of retained beta vectors (d > 1), else NULL
-      conf_box    = conf_box,      # 2 x d marginal extent of the region, else NULL
+      pvalues_rep = pv,            # per-rep p-values (used by plot.mwperm)
+      estimate    = stats::setNames(ref$estimate,
+                                    d_names),  # OLS point estimate(s)
+      se_naive    = stats::setNames(ref$se,
+                                    d_names),        # naive homoskedastic SE(s)
+      conf_int    = ci,            # inverted interval (d == 1), else NULL
+      conf_region = conf_region,   # retained beta vectors (d > 1), or NULL
+      conf_box    = conf_box,      # 2 x d extent of the region, or NULL
       conf_level  = conf_level,    # 1 - alpha
       alpha       = alpha,         # test level
       beta_null   = beta_null,     # null value tested
       K           = Kp1 - 1L,      # number of non-identity permutations
       n_perm      = Kp1,           # group order (K + 1)
-      n_reps      = n_reps,        # number of independent repetitions aggregated
+      n_reps      = n_reps,        # independent repetitions aggregated
       type        = type,          # design label, e.g. "dyadic"
       d_names     = d_names,       # coefficient name(s)
       n_obs       = N,             # observations actually used
@@ -309,7 +325,8 @@
 #' explicit-`grid` mode retains a point accepted in ANY rep (a union), which
 #' is more conservative and also covers disconnected acceptance regions by
 #' returning the hull of the retained grid points. See REVIEW.md 3.
-#' @param prep_list list of per-rep prep objects (each with `has_perm_D = TRUE`).
+#' @param prep_list list of per-rep prep objects (each with `has_perm_D =
+#'   TRUE`).
 #' @param y,D the (unshifted) outcome and single covariate, used only to derive
 #'   a sensible step size when the naive SE is unavailable.
 #' @keywords internal
@@ -327,7 +344,7 @@
   }
   tol <- step * tol_factor             # bisection stopping width
 
-  pval_at <- function(b, prep) .ipt_eval(prep, b)$pvalue   # p-value at null b, one rep
+  pval_at <- function(b, prep) .ipt_eval(prep, b)$pvalue  # p at null b
 
   ## Per-permutation FWL point estimates u_j / M_j cached in the prep object.
   ## Each has p-value 1 (its identity statistic a_j is exactly zero there), so
@@ -354,19 +371,22 @@
     lo <- start                        # last value known to be accepted
     hi <- NA_real_                     # first value known to be rejected
     h <- step                          # current step out from the start
-    for (i in seq_len(max_expand)) {   # phase 1: expand outward to bracket the edge
+    for (i in seq_len(max_expand)) {   # phase 1: expand out to bracket
       cand <- start + direction * h
-      if (pval_at(cand, prep) <= alpha) { hi <- cand; break }
+      if (pval_at(cand, prep) <= alpha) {
+        hi <- cand
+        break
+      }
       lo <- cand                       # cand accepted: advance the bracket
-      h <- h * 1.6                     # geometric growth so few steps are needed
+      h <- h * 1.6                     # geometric growth: few steps needed
     }
-    if (is.na(hi)) return(direction * Inf)  # never rejected: unbounded this side
+    if (is.na(hi)) return(direction * Inf)  # never rejected: unbounded
     ## phase 2: bisect, maintaining pval(lo) > alpha >= pval(hi)
     while (abs(hi - lo) > tol) {
       mid <- (lo + hi) / 2
       if (pval_at(mid, prep) > alpha) lo <- mid else hi <- mid
     }
-    lo                                 # the accepted side of the converged bracket
+    lo                                 # accepted side of the bracket
   }
 
   if (!is.null(grid)) {
@@ -388,14 +408,16 @@
   ## certifies a disconnected region. In that case extend the interval to the
   ## boundary of the outlying component(s) (a conservative hull; never narrower
   ## than before) and flag it so the engine can attach a note.
-  lowers <- numeric(length(prep_list)); uppers <- numeric(length(prep_list))
+  lowers <- numeric(length(prep_list))
+  uppers <- numeric(length(prep_list))
   disconnected <- FALSE
   for (r in seq_along(prep_list)) {
     prep <- prep_list[[r]]
     lo_r <- one_side(prep, -1)
     up_r <- one_side(prep, +1)
     bh <- bhat_of(prep)
-    out_lo <- bh[bh < lo_r]; out_hi <- bh[bh > up_r]
+    out_lo <- bh[bh < lo_r]
+    out_hi <- bh[bh > up_r]
     if (length(out_lo)) {
       disconnected <- TRUE
       lo_r <- one_side(prep, -1, start = min(out_lo))
@@ -404,7 +426,8 @@
       disconnected <- TRUE
       up_r <- one_side(prep, +1, start = max(out_hi))
     }
-    lowers[r] <- lo_r; uppers[r] <- up_r
+    lowers[r] <- lo_r
+    uppers[r] <- up_r
   }
   ci <- c(stats::median(lowers), stats::median(uppers))
   attr(ci, "disconnected") <- disconnected
@@ -432,20 +455,24 @@
 #'   vectors, `box` a 2 x d matrix of marginal (lower, upper) extents.
 #' @keywords internal
 #' @noRd
-.invert_region <- function(prep_list, alpha, centre, scale, d_names, grid = NULL,
+.invert_region <- function(prep_list, alpha, centre, scale, d_names,
+                           grid = NULL,
                            n_grid = 21L, spread = 6, max_points = 2e4L,
                            max_expand = 6L) {
   d <- length(centre)                              # number of coefficients
-  ck <- ifelse(is.finite(centre), centre, 0)       # per-coord grid centre (0 if estimate missing)
-  sk <- ifelse(is.finite(scale) & scale > 0, scale, 1)  # per-coord grid scale (1 if SE missing)
+  ck <- ifelse(is.finite(centre), centre,
+               0)       # per-coord grid centre (0 if estimate missing)
+  sk <- ifelse(is.finite(scale) & scale > 0, scale,
+               1)  # per-coord grid scale (1 if SE missing)
 
   ## Evaluate acceptance over a Cartesian grid: a point b is retained when its
   ## median p-value across reps exceeds alpha. `axes` is a list of d coordinate
   ## value-vectors; returns NULL (caller treats as "too large") if the product
   ## grid would exceed max_points.
   eval_grid <- function(axes) {
-    if (prod(vapply(axes, length, numeric(1))) > max_points) return(NULL)  # too big
-    G <- as.matrix(expand.grid(axes))             # all candidate beta vectors (rows)
+    if (prod(vapply(axes, length,
+                    numeric(1))) > max_points) return(NULL)  # too big
+    G <- as.matrix(expand.grid(axes))    # candidate beta vectors (rows)
     acc <- vapply(seq_len(nrow(G)), function(i) {  # retained-flag per candidate
       b <- G[i, ]
       stats::median(vapply(prep_list, function(pp) .ipt_eval(pp, b)$pvalue,
@@ -459,7 +486,8 @@
     if (!any(res$acc)) return(FALSE)
     pts <- res$G[res$acc, , drop = FALSE]         # retained points only
     any(vapply(seq_len(d), function(k)
-      min(pts[, k]) <= min(res$axes[[k]]) || max(pts[, k]) >= max(res$axes[[k]]),
+      min(pts[, k]) <= min(res$axes[[k]]) || max(pts[,
+                                                     k]) >= max(res$axes[[k]]),
       logical(1)))
   }
 
@@ -487,19 +515,22 @@
     ## single vector reused for every coefficient.
     axes <- if (is.list(grid)) {
       if (length(grid) != d)
-        stop(sprintf("`grid` list must have one vector per coefficient (d = %d).", d),
-             call. = FALSE)
+        stop(sprintf(
+          "`grid` list must have one vector per coefficient (d = %d).", d),
+          call. = FALSE)
       grid
     } else rep(list(grid), d)
     res <- eval_grid(axes)
     if (is.null(res))
-      return(list(points = NULL, box = NULL, note = sprintf(paste0(
-        "Joint confidence region skipped: `grid` has > %d points."), max_points)))
+      return(list(points = NULL, box = NULL, note = sprintf(
+        "Joint confidence region skipped: `grid` has > %d points.",
+        max_points)))
   }
 
   if (!any(res$acc))
     return(list(points = res$G[0, , drop = FALSE], box = NULL,
-                note = "Joint confidence region is empty on the searched grid; pass a finer/shifted `grid`."))
+                note = paste0("Joint confidence region is empty on the ",
+                              "searched grid; pass a finer/shifted `grid`.")))
 
   pts <- res$G[res$acc, , drop = FALSE]            # retained beta vectors
   colnames(pts) <- d_names
@@ -507,7 +538,8 @@
   box <- rbind(apply(pts, 2L, min), apply(pts, 2L, max))
   dimnames(box) <- list(c("lower", "upper"), d_names)
   note <- if (touches(res))
-    "Joint confidence region still reaches the grid boundary (it may be unbounded); pass an explicit `grid` to widen it."
+    paste0("Joint confidence region still reaches the grid boundary (it may ",
+           "be unbounded); pass an explicit `grid` to widen it.")
   else character(0)
   list(points = pts, box = box, note = note)
 }
@@ -521,8 +553,9 @@
 .dense_id <- function(x, what = "index") {
   f <- as.integer(factor(x))
   if (anyNA(f))
-    stop(sprintf("`%s` contains missing values (NA); cluster identifiers must be complete.",
-                 what), call. = FALSE)
+    stop(sprintf(paste0("`%s` contains missing values (NA); cluster ",
+                        "identifiers must be complete."), what),
+         call. = FALSE)
   f
 }
 
@@ -539,8 +572,8 @@
   if (is.factor(y))
     stop(paste0("`y` is a factor; the outcome must be numeric. Factors are ",
                 "not coerced to their level codes -- if the labels are ",
-                "numbers, convert explicitly with as.numeric(as.character(y))."),
-         call. = FALSE)
+                "numbers, convert explicitly with ",
+                "as.numeric(as.character(y))."), call. = FALSE)
   as.numeric(y)
 }
 
@@ -588,7 +621,8 @@
     X <- matrix(numeric(0), nrow = N, ncol = 0)
   } else {
     X <- as.matrix(x)
-    if (nrow(X) != N) stop("`x` must have the same number of rows as `y`.", call. = FALSE)
+    if (nrow(X) != N) stop("`x` must have the same number of rows as `y`.",
+                           call. = FALSE)
   }
   if (intercept) X <- cbind(`(Intercept)` = 1, X)
   X
@@ -626,7 +660,8 @@
       stop(sprintf("K + 1 = %d exceeds the smallest permuted dimension (%d).",
                    K + 1L, smallest), call. = FALSE)
   }
-  if (K < 1L) stop("Not enough clusters to permute (need >= 2 in each dimension).",
+  if (K < 1L)
+    stop("Not enough clusters to permute (need >= 2 in each dimension).",
                    call. = FALSE)
   K
 }
@@ -634,7 +669,7 @@
 #' Derive a per-rep, per-dimension seed from a rep-level seed (or NULL).
 #'
 #' Rep seeds are `seed + r - 1` (see .ipt_engine), so two (rep, j) pairs can
-#' only collide when the j-range spans >= 1000 — i.e. layouts with >= 1000
+#' only collide when the j-range spans >= 1000 -- i.e. layouts with >= 1000
 #' occupied cells or missing designs with >= 250 blocks. Even then each rep's
 #' test remains valid (the seed only picks the random relabelling); only the
 #' cross-rep independence of the median aggregation degrades. Deliberately
@@ -686,7 +721,8 @@
 .require_complete_array <- function(coords, sizes, N, what) {
   dims <- paste(names(sizes), collapse = ", ")
   if (anyDuplicated(coords))
-    stop(sprintf("Each (%s) cell must appear at most once.", dims), call. = FALSE)
+    stop(sprintf("Each (%s) cell must appear at most once.", dims),
+         call. = FALSE)
   expected <- prod(sizes)
   if (N != expected)
     stop(sprintf(paste0("%s must be a complete balanced array: expected %d ",

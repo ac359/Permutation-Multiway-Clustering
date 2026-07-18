@@ -88,6 +88,10 @@ plot(fit, type = "stability") # Monte-Carlo diagnostic across the 7 reps
 plot(fit, type = "all")       # both, on one page
 plot(fit, col_estimate = "black", main = "Distance elasticity")
 }
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{mwperm_save}} for export at journal dimensions;
   \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.

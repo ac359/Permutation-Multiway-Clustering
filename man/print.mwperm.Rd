@@ -28,6 +28,19 @@ estimate"}), while the confidence set comes from inverting the invariant
 permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
 joint confidence region).
 }
+\examples{
+data(trade_dyadic)
+fit <- with(trade_dyadic,
+            mwperm_dyadic(log_trade, log_dist,
+                          x = cbind(log_gdp_i, log_gdp_j),
+                          row = importer, col = exporter,
+                          n_reps = 2, seed = 1))
+print(fit)
+}
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{summary.mwperm}}.
 }

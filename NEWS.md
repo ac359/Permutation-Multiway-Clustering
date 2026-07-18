@@ -40,6 +40,12 @@ p-value, or any seeded result unless explicitly noted).
   default `permute = "both"` path is unchanged. Size control and power of
   the one-sided test were verified by simulation (2,000-run null cells,
   including the constrained-retry path; no super-uniformity violation).
+* **Style and documentation-completeness pass** (no behaviour change; the
+  full suite and every seeded reference value verified bit-identical): all
+  code lines are now <= 80 characters with no compound/trailing semicolons;
+  source and tests are pure ASCII; every exported function's help page has
+  runnable examples, references, and cross-references, and the package
+  spell-checks clean against a shipped `inst/WORDLIST`.
 * Shipped-test coverage of `R/` is 94% (audit gate: >= 90%; it was 81% at
   audit time): new `tests/test-paths.R` exercises the design-diagnosis
   printer, forced-design validation, name resolution, `L0` balancing, the

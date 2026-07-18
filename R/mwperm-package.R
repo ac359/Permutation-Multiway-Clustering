@@ -1,4 +1,5 @@
-#' mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
+#' mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel
+#'   Regression
 #'
 #' Finite-sample valid tests and confidence intervals for regression
 #' coefficients under multi-way (e.g. dyadic) clustering, including panel and

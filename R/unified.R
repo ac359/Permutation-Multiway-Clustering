@@ -27,7 +27,8 @@
   if (is.character(index) && is.null(dim(index))) {
     ## character vector of column names against `data`
     if (is.null(data))
-      stop("`index` is a character vector of column names but `data` was not supplied.",
+      stop(paste0("`index` is a character vector of column names but ",
+                  "`data` was not supplied."),
            call. = FALSE)
     bad <- setdiff(index, names(data))
     if (length(bad))
@@ -156,6 +157,8 @@
 #'   assumption-fork notices etc.). Its \code{print} method lays this out as
 #'   a short human diagnosis.
 #'
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm}} for one-call dispatch.
 #' @examples
 #' data(trade_dyadic)
@@ -173,7 +176,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   if (any(vapply(idx, length, integer(1)) != N))
     stop("All index dimensions must have the same length.", call. = FALSE)
 
-  notes <- character(0); warns <- character(0)
+  notes <- character(0)
+  warns <- character(0)
 
   ## Explicit role tags. A character tag naming an index column CLAIMS that
   ## column (removes it from `idx` via <<-, so it no longer counts as a
@@ -190,7 +194,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       }
       if (!is.null(data) && tag %in% names(data))
         return(stats::setNames(list(data[[tag]]), tag))
-      stop(sprintf("`%s = \"%s\"` matches neither an index column nor a column of `data`.",
+      stop(sprintf(paste0("`%s = \"%s\"` matches neither an index column ",
+                          "nor a column of `data`."),
                    what, tag), call. = FALSE)
     }
     if (length(tag) != N)
@@ -206,7 +211,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   if (any(lvls < 2L)) {
     dropped <- names(idx)[lvls < 2L]
     notes <- c(notes, sprintf(
-      "Index dimension(s) %s have a single level and were dropped (no clustering).",
+      paste0("Index dimension(s) %s have a single level and were dropped ",
+             "(no clustering)."),
       paste0("'", dropped, "'", collapse = ", ")))
     idx <- idx[lvls >= 2L]
   }
@@ -225,9 +231,13 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   dup2 <- anyDuplicated(cells2) > 0L
 
   ## defaults filled per design below
-  roles <- NULL; chosen <- NULL; reason <- NULL
-  K_default <- NA_integer_; balance <- NA_character_
-  cells_obs <- NA_integer_; cells_exp <- NA_integer_
+  roles <- NULL
+  chosen <- NULL
+  reason <- NULL
+  K_default <- NA_integer_
+  balance <- NA_character_
+  cells_obs <- NA_integer_
+  cells_exp <- NA_integer_
 
   finish_layout <- function(why, warn_txt = NULL) {
     cell <- .dense_id(interaction(dense[[1L]], dense[[2L]], drop = TRUE))
@@ -240,7 +250,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     K_default <<- min(sizes) - 1L
     balance <<- sprintf("replicated (%d cells, %d-%d replicates)",
                         length(sizes), min(sizes), max(sizes))
-    cells_obs <<- length(sizes); cells_exp <<- prod(dims[1:2])
+    cells_obs <<- length(sizes)
+    cells_exp <<- prod(dims[1:2])
     if (!is.null(warn_txt)) warns <<- c(warns, warn_txt)
     ## no-power diagnostic when d is available
     if (!is.null(d)) {
@@ -249,9 +260,11 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         any(apply(D[ii, , drop = FALSE], 2L, function(v) diff(range(v)) > 0)))
       if (!any(unlist(wv)))
         warns <<- c(warns, paste0(
-          "`d` is constant within every (row, col) cell: the within-cell layout ",
+          "`d` is constant within every (row, col) cell: the within-cell ",
+          "layout ",
           "test would have NO power. If the repeats are time periods, pass ",
-          "`time =`; if `d` is a dyad-level covariate, this design cannot test it."))
+          "`time =`; if `d` is a dyad-level covariate, this design cannot ",
+          "test it."))
     }
   }
 
@@ -285,17 +298,25 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     chosen <- design
     reason <- "forced via design ="
     if (design %in% c("dyadic", "missing")) {
-      if (C != 2L) stop(sprintf("design = \"%s\" needs exactly 2 index dimensions.", design), call. = FALSE)
-      if (dup2) stop(sprintf(paste0("design = \"%s\" requires one observation per cell, ",
-                                    "but some (row, col) cells repeat. Use layout (rep) or panel (time)."),
+      if (C != 2L)
+        stop(sprintf("design = \"%s\" needs exactly 2 index dimensions.",
+                     design), call. = FALSE)
+      if (dup2)
+        stop(sprintf(paste0("design = \"%s\" requires one observation per ",
+                            "cell, but some (row, col) cells repeat. Use ",
+                            "layout (rep) or panel (time)."),
                              design), call. = FALSE)
       roles <- list(row = names(idx)[1L], col = names(idx)[2L])
       K_default <- min(dims[1:2]) - 1L
-      cells_obs <- N; cells_exp <- prod(dims[1:2])
-      balance <- if (N == cells_exp) "complete" else sprintf("incomplete (%d of %d cells)", N, cells_exp)
+      cells_obs <- N
+      cells_exp <- prod(dims[1:2])
+      balance <- if (N == cells_exp) "complete"
+                 else sprintf("incomplete (%d of %d cells)", N, cells_exp)
       if (design == "dyadic" && N != cells_exp)
-        stop(sprintf(paste0("design = \"dyadic\" requires a complete array but only ",
-                            "%d of %d cells are observed. Use design = \"missing\" ",
+        stop(sprintf(paste0("design = \"dyadic\" requires a complete ",
+                            "array but only ",
+                            "%d of %d cells are observed. Use ",
+                            "design = \"missing\" ",
                             "(Procedure 2, fully observed bicliques) instead."),
                      N, cells_exp), call. = FALSE)
       if (design == "missing") {
@@ -303,16 +324,27 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       }
     } else if (design == "panel") {
       if (is.null(time_v) && C != 3L)
-        stop("design = \"panel\" needs a time dimension: pass 3 index columns or `time =`.", call. = FALSE)
-      if (is.null(time_v)) { time_v <- idx[3L]; idx <- idx[1:2]; dims <- dims[1:2]; dense <- dense[1:2] }
-      roles <- list(row = names(idx)[1L], col = names(idx)[2L], time = names(time_v))
+        stop(paste0("design = \"panel\" needs a time dimension: pass 3 ",
+                    "index columns or `time =`."), call. = FALSE)
+      if (is.null(time_v)) {
+        time_v <- idx[3L]
+        idx <- idx[1:2]
+        dims <- dims[1:2]
+        dense <- dense[1:2]
+      }
+      roles <- list(row = names(idx)[1L], col = names(idx)[2L],
+                    time = names(time_v))
       K_default <- min(dims[1:2]) - 1L
-      cells_obs <- N; cells_exp <- require_complete_panel()
+      cells_obs <- N
+      cells_exp <- require_complete_panel()
       balance <- "complete"
     } else if (design == "threeway") {
-      if (C != 3L) stop("design = \"threeway\" needs exactly 3 index dimensions.", call. = FALSE)
+      if (C != 3L)
+        stop("design = \"threeway\" needs exactly 3 index dimensions.",
+             call. = FALSE)
       cells3 <- .cell_code(cbind(dense[[1L]], dense[[2L]], dense[[3L]]))
-      cells_obs <- N; cells_exp <- prod(dims)
+      cells_obs <- N
+      cells_exp <- prod(dims)
       if (anyDuplicated(cells3) > 0L || N != cells_exp)
         stop(sprintf(paste0(
           "design = \"threeway\" needs a complete balanced crossed array: %d ",
@@ -322,7 +354,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           cells_exp,
           if (anyDuplicated(cells3) > 0L) "; some cells repeat" else ""),
           call. = FALSE)
-      roles <- list(id1 = names(idx)[1L], id2 = names(idx)[2L], id3 = names(idx)[3L])
+      roles <- list(id1 = names(idx)[1L], id2 = names(idx)[2L],
+                    id3 = names(idx)[3L])
       K_default <- min(dims) - 1L
       balance <- "complete"
       ## Forcing threeway permutes EVERY index (audit F3.4): if one looks
@@ -344,22 +377,30 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           "index. Proceed only if the errors are exchangeable in every ",
           "index."))
     } else if (design == "layout") {
-      if (C != 2L) stop("design = \"layout\" needs exactly 2 index dimensions (cells).", call. = FALSE)
+      if (C != 2L)
+        stop("design = \"layout\" needs exactly 2 index dimensions (cells).",
+             call. = FALSE)
       finish_layout("forced via design =")
       reason <- "forced via design ="
     }
   } else if (!is.null(rep_v)) {
     ## user declared within-cell replication
-    if (C != 2L) stop("With `rep =`, pass exactly 2 index dimensions (the cells).", call. = FALSE)
+    if (C != 2L)
+      stop("With `rep =`, pass exactly 2 index dimensions (the cells).",
+           call. = FALSE)
     finish_layout("`rep =` declares within-cell replication")
   } else if (!is.null(time_v)) {
     ## user declared a time dimension -> panel
-    if (C != 2L) stop("With `time =`, pass exactly 2 index dimensions (the cross-section).", call. = FALSE)
+    if (C != 2L)
+      stop(paste0("With `time =`, pass exactly 2 index dimensions (the ",
+                  "cross-section)."), call. = FALSE)
     chosen <- "panel"
-    roles <- list(row = names(idx)[1L], col = names(idx)[2L], time = names(time_v))
+    roles <- list(row = names(idx)[1L], col = names(idx)[2L],
+                  time = names(time_v))
     reason <- "`time =` declares a panel"
     K_default <- min(dims[1:2]) - 1L
-    cells_obs <- N; cells_exp <- require_complete_panel()
+    cells_obs <- N
+    cells_exp <- require_complete_panel()
     balance <- "complete"
   } else if (C == 2L) {
     if (dup2) {
@@ -372,25 +413,30 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                "invalid -- pass the time variable via `time =` to run the ",
                "panel test instead."))
     } else {
-      cells_obs <- N; cells_exp <- prod(dims[1:2])
+      cells_obs <- N
+      cells_exp <- prod(dims[1:2])
       roles <- list(row = names(idx)[1L], col = names(idx)[2L])
       K_default <- min(dims[1:2]) - 1L
       if (N == cells_exp) {
-        chosen <- "dyadic"; balance <- "complete"
+        chosen <- "dyadic"
+        balance <- "complete"
         reason <- "2 indices, one observation per cell, complete array"
       } else {
-        chosen <- "missing"; balance <- sprintf("incomplete (%d of %d cells)", N, cells_exp)
+        chosen <- "missing"
+        balance <- sprintf("incomplete (%d of %d cells)", N, cells_exp)
         reason <- sprintf("2 indices, %d of %d cells observed", N, cells_exp)
         K_default <- NA_integer_          # depends on the biclique blocks
         notes <- c(notes, paste0(
           "The permutation-group order under missingness is set by the fully ",
-          "observed biclique blocks; see find_bicliques() for the achievable K."))
+          "observed biclique blocks; see find_bicliques() for the ",
+          "achievable K."))
       }
     }
   } else {
     ## C == 3, no tags: complete balanced crossed array required
     cells3 <- .cell_code(cbind(dense[[1L]], dense[[2L]], dense[[3L]]))
-    cells_obs <- N; cells_exp <- prod(dims)
+    cells_obs <- N
+    cells_exp <- prod(dims)
     if (anyDuplicated(cells3) > 0L || N != cells_exp) {
       stop(sprintf(paste0(
         "3 index dimensions but not a complete balanced crossed array ",
@@ -410,9 +456,11 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       .timelike_values(idx[[k]], dims[k], max(dims[-k])), logical(1)))
     strong_hit <- which(vapply(seq_len(3L), function(k)
       .timelike_strong(idx[[k]], dims[k], min(dims[-k])), logical(1)))
-    t_k <- NULL; t_why <- NULL
+    t_k <- NULL
+    t_why <- NULL
     if (length(name_hit) == 1L) {
-      t_k <- name_hit; t_why <- sprintf("'%s' identified as time by name", names(idx)[t_k])
+      t_k <- name_hit
+      t_why <- sprintf("'%s' identified as time by name", names(idx)[t_k])
       ## A name match alone is weak evidence (audit F5.5): warn unless the
       ## values single this index out. Assigning the time role to a mere
       ## cluster sends the TRUE time dimension into the permuted pair, and a
@@ -435,13 +483,15 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       }
     } else if (length(val_hit) == 1L) {
       t_k <- val_hit
-      t_why <- sprintf("'%s' identified as time by its values (temporal/regularly spaced)",
+      t_why <- sprintf(paste0("'%s' identified as time by its values ",
+                              "(temporal/regularly spaced)"),
                        names(idx)[t_k])
     }
     if (is.null(t_k)) {
       ## ASSUMPTION FORK: ambiguous -> panel default on the third index
       t_k <- 3L
-      t_why <- sprintf("ambiguous third dimension; '%s' held fixed by default", names(idx)[3L])
+      t_why <- sprintf("ambiguous third dimension; '%s' held fixed by default",
+                       names(idx)[3L])
       warns <- c(warns, paste0(
         "No index is clearly the time dimension, so the PANEL design was ",
         "chosen with '", names(idx)[3L], "' held fixed. That default is ",
@@ -452,9 +502,11 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         "design = \"threeway\" to recover power."))
     }
     chosen <- "panel"
-    time_v <- idx[t_k]; idx <- idx[-t_k]
+    time_v <- idx[t_k]
+    idx <- idx[-t_k]
     dims_cs <- dims[-t_k]
-    roles <- list(row = names(idx)[1L], col = names(idx)[2L], time = names(time_v))
+    roles <- list(row = names(idx)[1L], col = names(idx)[2L],
+                  time = names(time_v))
     reason <- t_why
     K_default <- min(dims_cs) - 1L
     balance <- "complete"
@@ -471,7 +523,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           missing = "mwperm_missing")[[chosen]]
   args <- switch(chosen,
     dyadic = sprintf("row = %s, col = %s", roles$row, roles$col),
-    missing = sprintf("row = %s, col = %s, min_block = ...", roles$row, roles$col),
+    missing = sprintf("row = %s, col = %s, min_block = ...", roles$row,
+                      roles$col),
     panel = sprintf("row = %s, col = %s, time = %s, time_fe = TRUE",
                     roles$row, roles$col, roles$time),
     threeway = sprintf("id1 = %s, id2 = %s, id3 = %s",
@@ -509,12 +562,15 @@ print.mwperm_design <- function(x, ...) {
       sprintf("| %d observations\n", x$n_obs))
   cat("Balance         :", x$balance, "\n")
   if (is.na(x$K_default)) {
-    cat("Resolution      : depends on the biclique blocks (see find_bicliques)\n")
+    cat("Resolution      : depends on the biclique blocks",
+        "(see find_bicliques)\n")
   } else {
-    cat(sprintf("Resolution      : default K = %d, smallest attainable p = 1/%d %s\n",
+    cat(sprintf(paste0("Resolution      : default K = %d, smallest ",
+                       "attainable p = 1/%d %s\n"),
                 x$K_default, x$K_default + 1L,
                 if (isTRUE(x$resolution_ok)) "(95% confidence set attainable)"
-                else "(TOO COARSE for a 95% confidence set; needs >= 20 clusters)"))
+                else paste0("(TOO COARSE for a 95% confidence set; ",
+                            "needs >= 20 clusters)")))
   }
   cat("Would run       :", x$call_str, "\n")
   for (w in x$warnings)
@@ -582,6 +638,8 @@ print.mwperm_design <- function(x, ...) {
 #'   coefficients) the IPT inverted-test confidence set, and \code{pvalue}
 #'   the IPT permutation p-value.
 #'
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_check}} for the diagnosis without any
 #'   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
 #'   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
@@ -634,7 +692,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   for (nm in c("y", "d", "x")) {                 # names that failed to resolve
     v <- get(nm)
     if (is.character(v))
-      stop(sprintf(paste0("`%s` is a character vector; to use column names, pass ",
+      stop(sprintf(paste0("`%s` is a character vector; to use column ",
+                          "names, pass ",
                           "`data` containing column(s) %s."),
                    nm, paste0("'", v, "'", collapse = ", ")), call. = FALSE)
   }
@@ -658,7 +717,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   supplied <- names(cl)
   check_arg <- function(arg, ok_design) {
     if (arg %in% supplied && chk$design != ok_design)
-      warning(sprintf("`%s` applies to the %s design only; it was ignored for '%s'.",
+      warning(sprintf(paste0("`%s` applies to the %s design only; it was ",
+                             "ignored for '%s'."),
                       arg, ok_design, chk$design), call. = FALSE)
   }
   check_arg("time_fe", "panel")

@@ -53,4 +53,8 @@ data(trade_dyadic)
 str(trade_dyadic)
 attr(trade_dyadic, "true_coef")
 }
+\seealso{
+\code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}},
+  \code{\link{mwperm}}.
+}
 \keyword{datasets}

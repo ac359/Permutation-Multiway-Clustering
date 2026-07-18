@@ -63,7 +63,8 @@
   if (length(ov)) {
     bad <- setdiff(names(ov), names(s))
     if (length(bad))
-      stop(sprintf("Unknown style element(s): %s. See ?plot.mwperm for the list.",
+      stop(sprintf(paste0("Unknown style element(s): %s. See ?plot.mwperm ",
+                          "for the list."),
                    paste0("`", bad, "`", collapse = ", ")), call. = FALSE)
     s[names(ov)] <- ov
   }
@@ -180,7 +181,8 @@
     on.exit(graphics::par(op), add = TRUE)
     ci <- as.numeric(x$conf_int)
     xlim <- .pad_range(c(est, b0, ci), f = 0.18)
-    ylim <- c(0, 2)                    # single row at y = 1; headroom for labels
+    ylim <- c(0,
+              2)                    # single row at y = 1; headroom for labels
     .mwperm_frame(x, style, xlim, ylim,
                   main = if (is.null(main))
                     sprintf("OLS estimate and %.0f%% IPT confidence interval",
@@ -196,8 +198,9 @@
     ## interval with end caps; an unbounded side becomes an outward arrow
     cap <- style$cap_len * diff(ylim) / graphics::par("pin")[2L]
     y0 <- 1
-    lo <- ci[1L]; hi <- ci[2L]
-    tail <- if (is.finite(est)) est else b0[1L]   # arrow tail for unbounded sides
+    lo <- ci[1L]
+    hi <- ci[2L]
+    tail <- if (is.finite(est)) est else b0[1L]  # arrow tail if unbounded
     xl <- if (is.finite(lo)) lo else xlim[1L]
     xr <- if (is.finite(hi)) hi else xlim[2L]
     graphics::segments(xl, y0, xr, y0, col = style$col_interval,
@@ -231,8 +234,11 @@
     ## forest of the joint region's marginal extents, rows ordered by estimate
     box <- x$conf_box
     ord <- order(est)                  # smallest at the bottom row
-    lo <- box[1L, ord]; hi <- box[2L, ord]
-    eo <- est[ord]; nn <- x$d_names[ord]; b0o <- b0[ord]
+    lo <- box[1L, ord]
+    hi <- box[2L, ord]
+    eo <- est[ord]
+    nn <- x$d_names[ord]
+    b0o <- b0[ord]
     ## widen the left margin so horizontal (las = 1) names fit
     mar <- style$mar
     mar[2L] <- max(mar[2L], min(10, 1.6 + 0.55 * max(nchar(nn))))
@@ -243,7 +249,8 @@
     ylim <- c(0.4, d + 0.6)
     .mwperm_frame(x, style, xlim, ylim,
                   main = if (is.null(main))
-                    sprintf("OLS estimates and joint %.0f%% IPT confidence region",
+                    sprintf(paste0("OLS estimates and joint %.0f%% IPT ",
+                                   "confidence region"),
                             100 * x$conf_level) else main,
                   sub = sub,
                   xlab = if (is.null(xlab)) "coefficient value" else xlab,
@@ -268,7 +275,8 @@
     ## honesty note: these are marginal extents of one joint region, not
     ## per-coefficient intervals
     graphics::mtext(sprintf(
-      "whiskers: marginal extent of the joint %.0f%% region (not per-coefficient intervals)",
+      paste0("whiskers: marginal extent of the joint %.0f%% region ",
+             "(not per-coefficient intervals)"),
       100 * x$conf_level), side = 1, line = 3.2,
       col = style$col_sub, cex = .shrink_cex("m", style$cex_sub))
   }
@@ -318,7 +326,8 @@
                    lwd = 2, cex = 1.1)
   ## four distinct marks share the panel: a legend is unavoidable here
   graphics::legend("topright", bty = "n", cex = style$cex_annot,
-                   legend = c(sprintf("accepted (%.0f%% region)", 100 * x$conf_level),
+                   legend = c(sprintf("accepted (%.0f%% region)",
+                                      100 * x$conf_level),
                               "marginal box", "OLS estimate", "H0 (null)"),
                    col = c(style$col_region, style$col_box,
                            style$col_estimate, style$col_null),
@@ -461,6 +470,8 @@
 #'   and the p-value resolution \code{1/(K+1)}); \code{sub = ""} suppresses
 #'   it.
 #' @return \code{x}, invisibly.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_save}} for export at journal dimensions;
 #'   \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.
 #' @examples
@@ -484,17 +495,20 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
   ## e.g. `col` used to crash hist() with "matched by multiple actual
   ## arguments").
   dots <- list(...)
-  nm <- names(dots); if (is.null(nm)) nm <- rep("", length(dots))
+  nm <- names(dots)
+  if (is.null(nm)) nm <- rep("", length(dots))
   is_sty <- nzchar(nm) & nm %in% names(.mwperm_style())
   if (any(!is_sty) && length(dots))
-    warning(sprintf("Ignoring unsupported argument(s): %s. See ?plot.mwperm for the style elements.",
+    warning(sprintf(paste0("Ignoring unsupported argument(s): %s. See ",
+                           "?plot.mwperm for the style elements."),
                     paste0("`", nm[!is_sty], "`", collapse = ", ")),
             call. = FALSE)
   style <- do.call(.mwperm_style, dots[is_sty])
 
   ## what the stored fields support
   d <- length(x$estimate)
-  has_ci   <- !is.null(x$conf_int) && length(x$conf_int) == 2L && !anyNA(x$conf_int)
+  has_ci   <- !is.null(x$conf_int) && length(x$conf_int) == 2L &&
+    !anyNA(x$conf_int)
   has_box  <- !is.null(x$conf_box)
   has_reg  <- d == 2L && !is.null(x$conf_region) && nrow(x$conf_region) >= 1L
   has_coef <- (d == 1L && has_ci) || (d > 1L && has_box)
@@ -503,10 +517,11 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
   ## error), so plot(fit) works for every design and option combination
   resolve <- function(tp) {
     if (tp %in% c("null", "profile")) {
-      message(sprintf(paste0("type = \"%s\" needs permutation %s stored at fit ",
-                             "time, which this object does not carry; falling ",
-                             "back to the default figure."),
-                      tp, if (tp == "null") "statistics" else "p-value profiles"))
+      message(sprintf(paste0("type = \"%s\" needs permutation %s stored at ",
+                             "fit time, which this object does not carry; ",
+                             "falling back to the default figure."),
+                      tp,
+                      if (tp == "null") "statistics" else "p-value profiles"))
       tp <- "auto"
     }
     if (tp == "auto") tp <- if (has_coef) "coef" else "stability"
@@ -518,9 +533,11 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
     }
     if (tp == "region" && !has_reg) {
       message(if (d != 2L)
-        "type = \"region\" needs exactly two coefficients (d = 2); showing the default figure instead."
+        paste0("type = \"region\" needs exactly two coefficients (d = 2); ",
+               "showing the default figure instead.")
         else
-          "No joint confidence region is stored on this object; showing the default figure instead.")
+          paste0("No joint confidence region is stored on this object; ",
+                 "showing the default figure instead."))
       tp <- if (has_coef) "coef" else "stability"
     }
     tp
@@ -566,6 +583,8 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
 #'   and 10 otherwise, so labels stay readable at print size.
 #' @param ... Passed to \code{\link{plot.mwperm}} (style overrides, titles).
 #' @return The file path, invisibly.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{plot.mwperm}}.
 #' @examples
 #' data(trade_dyadic)
@@ -588,7 +607,8 @@ mwperm_save <- function(x, file, width = c("single", "double"), height = NULL,
     width <- switch(match.arg(width), single = 3.5, double = 7)
   } else if (!(is.numeric(width) && length(width) == 1L && is.finite(width) &&
                width > 0)) {
-    stop("`width` must be \"single\", \"double\", or a positive width in inches.",
+    stop(paste0("`width` must be \"single\", \"double\", or a positive ",
+                "width in inches."),
          call. = FALSE)
   }
   if (is.null(height)) {
@@ -602,7 +622,8 @@ mwperm_save <- function(x, file, width = c("single", "double"), height = NULL,
   if (is.null(pointsize)) pointsize <- if (width <= 4.5) 8 else 10
   ext <- tolower(sub(".*\\.", "", basename(file)))
   if (identical(ext, tolower(basename(file))))
-    stop("`file` needs an extension: .pdf, .png, .tiff or .jpeg.", call. = FALSE)
+    stop("`file` needs an extension: .pdf, .png, .tiff or .jpeg.",
+         call. = FALSE)
   switch(ext,
          pdf  = grDevices::pdf(file, width = width, height = height,
                                pointsize = pointsize),
@@ -616,7 +637,8 @@ mwperm_save <- function(x, file, width = c("single", "double"), height = NULL,
          jpeg = grDevices::jpeg(file, width = width, height = height,
                                 units = "in", res = res, pointsize = pointsize,
                                 quality = 95),
-         stop(sprintf("Unsupported extension \".%s\"; use .pdf, .png, .tiff or .jpeg.",
+         stop(sprintf(paste0("Unsupported extension \".%s\"; use .pdf, ",
+                             ".png, .tiff or .jpeg."),
                       ext), call. = FALSE))
   on.exit(grDevices::dev.off(), add = TRUE)
   plot(x, type = type, ...)

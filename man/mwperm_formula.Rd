@@ -48,6 +48,10 @@ fit
 coef(fit)
 nobs(fit)
 }
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{mwperm}}; \code{\link{coef.mwperm}} /
   \code{\link{nobs.mwperm}} for accessors.

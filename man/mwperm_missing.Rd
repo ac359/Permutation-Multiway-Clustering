@@ -34,7 +34,8 @@ with several, a joint confidence region (see \code{conf_int}).}
 (\eqn{x_{ij}}); an intercept is always added internally. May be
 \code{NULL}.}
 
-\item{row, col}{Cluster identities of each observed cell. Cells that are absent
+\item{row, col}{Cluster identities of each observed cell. Cells that are
+absent
 from the data are treated as missing.}
 
 \item{K}{Number of non-identity permutations. Defaults to
@@ -63,7 +64,8 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \code{seed + r - 1} for reproducibility.}
 
 \item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
-a single covariate, a numeric vector (the interval becomes the range of grid
+a single covariate, a numeric vector (the interval becomes the range of
+grid
 points not rejected). For several, a list of one numeric vector per
 covariate defining the region search grid.}
 

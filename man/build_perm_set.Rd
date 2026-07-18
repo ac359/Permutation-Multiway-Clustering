@@ -68,3 +68,7 @@ attr(G, "block_size")
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
 multi-way clustering and missing data. arXiv:2601.08610.
 }
+\seealso{
+\code{\link{mwperm_dyadic}} and the other front ends, which
+  compose these groups into observation-level permutations.
+}

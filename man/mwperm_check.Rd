@@ -99,6 +99,10 @@ mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)
 data(trade_panel)
 mwperm_check(index = c("importer", "exporter", "year"), data = trade_panel)
 }
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{mwperm}} for one-call dispatch.
 }

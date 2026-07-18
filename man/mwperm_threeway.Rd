@@ -59,7 +59,8 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \code{seed + r - 1} for reproducibility.}
 
 \item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
-a single covariate, a numeric vector (the interval becomes the range of grid
+a single covariate, a numeric vector (the interval becomes the range of
+grid
 points not rejected). For several, a list of one numeric vector per
 covariate defining the region search grid.}
 
@@ -83,7 +84,8 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
 }
 \description{
 Finite-sample valid test of \eqn{H_0: \beta = b} in the three-way model
-\deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta + \varepsilon_{ijl},}
+\deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta +
+  \varepsilon_{ijl},}
 \eqn{i \in [m], j \in [n], l \in [\ell]}, under full three-way
 exchangeability of the errors (condition InvA of Guo, Toulis and Wang,
 2026),

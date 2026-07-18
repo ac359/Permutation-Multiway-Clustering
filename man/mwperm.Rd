@@ -73,7 +73,8 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \code{seed + r - 1} for reproducibility.}
 
 \item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
-a single covariate, a numeric vector (the interval becomes the range of grid
+a single covariate, a numeric vector (the interval becomes the range of
+grid
 points not rejected). For several, a list of one numeric vector per
 covariate defining the region search grid.}
 
@@ -136,6 +137,10 @@ fit <- mwperm(y = "log_trade", d = "log_dist",
               index = c("importer", "exporter"),
               data = trade_dyadic, seed = 1)
 fit
+}
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_check}} for the diagnosis without any

@@ -50,6 +50,8 @@
 #' Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
 #' multi-way clustering and missing data. arXiv:2601.08610.
 #'
+#' @seealso \code{\link{mwperm_dyadic}} and the other front ends, which
+#'   compose these groups into observation-level permutations.
 #' @examples
 #' G <- build_perm_set(n = 8, K = 3, seed = 1)
 #' length(G)          # 4 permutations (identity + 3)
@@ -64,12 +66,14 @@ build_perm_set <- function(n, K, seed = NULL) {
   B <- K + 1L                      # block size = group order
   if (B > n) {
     stop(sprintf(
-      "K + 1 = %d exceeds n = %d: no non-trivial permutation exists. Use K <= n - 1.",
+      paste0("K + 1 = %d exceeds n = %d: no non-trivial permutation ",
+             "exists. Use K <= n - 1."),
       B, n), call. = FALSE)
   }
 
   ## Reproducible relabelling without disturbing the caller's RNG stream: save
-  ## the global seed, reseed, and restore on exit (see .save_seed/.restore_seed).
+  ## the global seed, reseed, and restore on exit (see
+  ## .save_seed/.restore_seed).
   if (!is.null(seed)) {
     old <- .save_seed()
     on.exit(.restore_seed(old), add = TRUE)
@@ -77,13 +81,15 @@ build_perm_set <- function(n, K, seed = NULL) {
   }
 
   ## Random relabelling pi (a permutation of 1..n) and its inverse. pi is what
-  ## makes the test a *random* invariant test; different seeds give different pi.
+  ## makes the test a *random* invariant test; different seeds give different
+  ## pi.
   pi_vec <- sample.int(n)           # pi_vec[i] = pi(i)
   pi_inv <- integer(n)              # pi_inv[pi(i)] = i  (the inverse map)
   pi_inv[pi_vec] <- seq_len(n)
 
   ## Split 1..n into consecutive blocks of size B; any tail of < B leftover
-  ## indices is held fixed (it cannot be cyclically shifted within a full block).
+  ## indices is held fixed (it cannot be cyclically shifted within a full
+  ## block).
   nb <- n %/% B                     # number of full blocks
   in_block <- seq_len(nb * B)       # the indices that live in a full block
   pos0 <- (in_block - 1L) %% B      # 0-based position within the block
@@ -94,12 +100,13 @@ build_perm_set <- function(n, K, seed = NULL) {
   ## the set is a cyclic group of order B (closed under composition).
   perms <- vector("list", B)
   for (k in 0:K) {
-    psit <- seq_len(n)              # psi-tilde_k as an image vector; default = identity
+    psit <- seq_len(n)              # psi-tilde_k image vector; identity
     if (k > 0L && nb > 0L) {
       new_pos0 <- (pos0 + k) %% B   # shifted position within the block
       psit[in_block] <- blk_start + new_pos0
     }
-    ## Conjugate the block shift by the relabelling: psi_k(i) = pi^{-1}( psi-tilde_k( pi(i) ) )
+    ## Conjugate the block shift by the relabelling: psi_k(i) = pi^{-1}(
+    ## psi-tilde_k( pi(i) ) )
     perms[[k + 1L]] <- pi_inv[psit[pi_vec]]
   }
   attr(perms, "block_size") <- B

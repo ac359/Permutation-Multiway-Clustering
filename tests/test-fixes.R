@@ -2,13 +2,17 @@
 ## and the input-validation & display fixes. Base-R stopifnot style; fast.
 library(mwperm)
 
-msg_of <- function(expr) tryCatch({expr; NA_character_},
-                                  error = function(e) conditionMessage(e))
+msg_of <- function(expr)
+  tryCatch({
+    expr
+    NA_character_
+  }, error = function(e) conditionMessage(e))
 
 ## ---- shared toy data -------------------------------------------------------
 set.seed(1)
 n <- 21L                               # >= 20 clusters/dim so a 95% CI exists
-g <- expand.grid(i = seq_len(n), j = seq_len(n)); N <- nrow(g)
+g <- expand.grid(i = seq_len(n), j = seq_len(n))
+N <- nrow(g)
 d1 <- rnorm(n)[g$i] + rnorm(N)
 y1 <- rnorm(n)[g$i] + rnorm(n)[g$j] + 0.4 * d1 + rnorm(N)
 
@@ -43,22 +47,26 @@ fitj <- mwperm_dyadic(y2, D2, row = g$i, col = g$j, seed = 7,
 h0 <- grep("H0: beta =", capture.output(print(fitj)), value = TRUE)
 stopifnot(length(h0) == 1L, grepl("0.4, -0.2", h0, fixed = TRUE))
 grDevices::pdf(NULL)
-plot(fitj)                             # errored pre-fix (barplot names.arg mismatch)
+plot(fitj)                       # errored pre-fix (barplot names.arg bug)
 grDevices::dev.off()
 
 ## ---- 3. NA cluster ids error early with the argument's name ----------------
-rowNA <- g$i; rowNA[1L] <- NA
+rowNA <- g$i
+rowNA[1L] <- NA
 m <- msg_of(mwperm_dyadic(y1, d1, row = rowNA, col = g$j, seed = 1))
 stopifnot(grepl("`row`", m, fixed = TRUE), grepl("missing values", m))
 
 ## ---- 4. non-finite / non-numeric y, d, x error early by name ---------------
-yy <- y1; yy[3L] <- NA
+yy <- y1
+yy[3L] <- NA
 m <- msg_of(mwperm_dyadic(yy, d1, row = g$i, col = g$j, seed = 1))
 stopifnot(grepl("`y`", m, fixed = TRUE), grepl("non-finite", m))
-dd <- d1; dd[5L] <- Inf
+dd <- d1
+dd[5L] <- Inf
 m <- msg_of(mwperm_dyadic(y1, dd, row = g$i, col = g$j, seed = 1))
 stopifnot(grepl("`d`", m, fixed = TRUE))
-xx <- cbind(z = rnorm(N)); xx[7L, 1L] <- NaN
+xx <- cbind(z = rnorm(N))
+xx[7L, 1L] <- NaN
 m <- msg_of(mwperm_dyadic(y1, d1, x = xx, row = g$i, col = g$j, seed = 1))
 stopifnot(grepl("`x`", m, fixed = TRUE))
 m <- msg_of(mwperm_dyadic(y1, rep(letters[1:3], length.out = N),
@@ -66,8 +74,10 @@ m <- msg_of(mwperm_dyadic(y1, rep(letters[1:3], length.out = N),
 stopifnot(grepl("`d` must be numeric", m, fixed = TRUE))
 
 ## layout reaches its own early check (the within-cell diagnostic reads `d`)
-gl <- expand.grid(i = 1:4, j = 1:4, l = 1:5); Nl <- nrow(gl)
-dl <- rnorm(Nl); dl[2L] <- NA
+gl <- expand.grid(i = 1:4, j = 1:4, l = 1:5)
+Nl <- nrow(gl)
+dl <- rnorm(Nl)
+dl[2L] <- NA
 m <- msg_of(mwperm_layout(rnorm(Nl), dl, row = gl$i, col = gl$j, seed = 1))
 stopifnot(grepl("`d`", m, fixed = TRUE), grepl("non-finite", m))
 

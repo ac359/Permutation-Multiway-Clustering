@@ -67,7 +67,8 @@
 #' @param seed Optional integer; if supplied, run \code{r} uses seed
 #'   \code{seed + r - 1} for reproducibility.
 #' @param grid Optional candidate \eqn{\beta} values for the confidence set. For
-#'   a single covariate, a numeric vector (the interval becomes the range of grid
+#'   a single covariate, a numeric vector (the interval becomes the range of
+#'   grid
 #'   points not rejected). For several, a list of one numeric vector per
 #'   covariate defining the region search grid.
 #' @param n_cores Number of CPU cores for the permutation computations
@@ -110,22 +111,27 @@
 #' @export
 mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
                           alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                          n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L) {
+                          n_reps = 10L, seed = NULL, grid = NULL,
+                          n_cores = 1L) {
   cl <- match.call()                   # stored on the result for printing
   y <- .check_y(y)
   N <- length(y)                       # number of observations
-  D <- as.matrix(d); d_names <- .coef_names(D, deparse(substitute(d)))  # covariate(s) of interest + label(s)
+  D <- as.matrix(d)
+  d_names <- .coef_names(D, deparse(substitute(d)))  # coefficient label(s)
   X <- .make_X(x, N)                   # nuisance design with intercept
   .check_lengths(N, list(row = row, col = col))
 
-  ri <- .dense_id(row, "row"); ci <- .dense_id(col, "col")   # dense 1-based row/col cluster ids
-  n_row <- max(ri); n_col <- max(ci)           # number of row / col clusters
+  ri <- .dense_id(row, "row")
+  ci <- .dense_id(col, "col")   # dense 1-based row/col cluster ids
+  n_row <- max(ri)
+  n_col <- max(ci)           # number of row / col clusters
   if (anyDuplicated(cbind(ri, ci)))
     stop("Dyadic regression expects one observation per (row, col) cell. ",
          "For repeated observations use mwperm_layout() or mwperm_panel().",
          call. = FALSE)
 
-  K <- .default_K(K, c(n_row, n_col))  # group order capped by the smaller dimension
+  K <- .default_K(K, c(n_row,
+                       n_col))  # group order capped by the smaller dimension
   coords <- cbind(ri, ci)              # per-observation (row, col) coordinates
 
   ## Per-rep permutations: draw an independent row group and column group and

@@ -12,7 +12,8 @@
 \item{parm}{Optional subset of coefficients: names (matching the rows of
 the returned matrix) or integer positions. Defaults to all coefficients.}
 
-\item{level}{Confidence level; must match the level used at fitting, otherwise
+\item{level}{Confidence level; must match the level used at fitting,
+otherwise
 an error is raised (the set cannot be re-derived without the stored
 permutations). Defaults to the stored level.}
 
@@ -30,13 +31,28 @@ A matrix with the lower and upper limits, one row per coefficient
   \code{"IPT (inverted permutation test)"}.
 }
 \description{
-Extracts the test-inversion confidence set stored in a \code{"mwperm"} object:
+Extracts the test-inversion confidence set stored in a \code{"mwperm"}
+  object:
 the interval for a single coefficient, or the marginal extent of the joint
 confidence region for several. This is the IPT (inverted permutation test)
 set -- obtained by inverting the finite-sample-valid test, \emph{not} a Wald
 interval around the OLS estimate. Note that \code{level} is fixed at fitting
 time (\code{1 - alpha}); a different level requires refitting with the
 corresponding \code{alpha}.
+}
+\examples{
+data(trade_dyadic)
+fit <- with(trade_dyadic,
+            mwperm_dyadic(log_trade, log_dist,
+                          x = cbind(log_gdp_i, log_gdp_j),
+                          row = importer, col = exporter,
+                          n_reps = 2, seed = 1))
+confint(fit)
+confint(fit, parm = "log_dist")
+}
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.

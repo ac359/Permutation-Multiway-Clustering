@@ -28,6 +28,8 @@
 #'   \code{seed}, \code{verbose}, ...).
 #' @return The \code{"mwperm"} object of the dispatched test; see
 #'   \code{\link{mwperm}} for the fields and their provenance.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm}}; \code{\link{coef.mwperm}} /
 #'   \code{\link{nobs.mwperm}} for accessors.
 #' @examples
@@ -45,9 +47,11 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
     stop("`formula` must be two-sided: y ~ d or y ~ d | x.", call. = FALSE)
   rhs <- formula[[3L]]
   if (is.call(rhs) && identical(rhs[[1L]], as.name("|"))) {
-    d_part <- rhs[[2L]]; x_part <- rhs[[3L]]
+    d_part <- rhs[[2L]]
+    x_part <- rhs[[3L]]
   } else {
-    d_part <- rhs; x_part <- NULL
+    d_part <- rhs
+    x_part <- NULL
   }
   mm <- function(part) {
     f <- stats::as.formula(call("~", part), env = environment(formula))
@@ -75,7 +79,17 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
 #' @param object An object of class \code{"mwperm"}.
 #' @param ... Ignored.
 #' @return \code{coef()}: a named numeric vector; \code{nobs()}: an integer.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{confint.mwperm}}, \code{\link{summary.mwperm}}.
+#' @examples
+#' data(trade_dyadic)
+#' fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
+#'                       data = trade_dyadic,
+#'                       index = c("importer", "exporter"),
+#'                       n_reps = 2, seed = 1, verbose = FALSE)
+#' coef(fit)
+#' nobs(fit)
 #' @name mwperm-accessors
 NULL
 

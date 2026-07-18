@@ -4,17 +4,21 @@
 ## front end must unlock K via the permuted side only. Base-R stopifnot.
 library(mwperm)
 
-msg_of <- function(expr) tryCatch({ expr; NA_character_ },
-                                  error = function(e) conditionMessage(e))
+msg_of <- function(expr)
+  tryCatch({
+    expr
+    NA_character_
+  }, error = function(e) conditionMessage(e))
 warns_of <- function(expr) {
   w <- character(0)
   withCallingHandlers(expr, warning = function(cnd) {
-    w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning")
+    w <<- c(w, conditionMessage(cnd))
+    invokeRestart("muffleWarning")
   })
   w
 }
 
-## ---- 1. builder contract: rows-only is a subgroup, columns untouched ---------
+## ---- 1. builder contract: rows-only is a subgroup, columns untouched --------
 blocks <- list(list(rows = 1:6, cols = 1:4), list(rows = 7:10, cols = 5:6))
 cells <- do.call(rbind, lapply(seq_along(blocks), function(q) {
   b <- blocks[[q]]
@@ -44,7 +48,7 @@ opc <- mwperm:::.build_obs_perms_blocks(11L, 1L, blocks,
 for (g in opc) stopifnot(identical(cells$ri[g], cells$ri))
 stopifnot(any(cells$ci[opc[[2L]]] != cells$ci))
 
-## ---- 2. find_bicliques: length-2 min_block contract ---------------------------
+## ---- 2. find_bicliques: length-2 min_block contract -------------------------
 ## a 4x1 strip: usable for one-sided permutation, invisible to the scalar floor
 strip <- data.frame(i = 1:4, j = rep(1L, 4))
 b31 <- find_bicliques(strip$i, strip$j, min_block = c(3, 1))
@@ -52,7 +56,8 @@ stopifnot(length(b31) == 1L, length(b31[[1L]]$rows) == 4L,
           length(b31[[1L]]$cols) == 1L)
 stopifnot(length(find_bicliques(strip$i, strip$j, min_block = 2)) == 0L)
 ## scalar behaviour is unchanged: min_block = m == c(m, m)
-g2 <- expand.grid(i = 1:6, j = 1:6); gm <- g2[g2$i != g2$j, ]
+g2 <- expand.grid(i = 1:6, j = 1:6)
+gm <- g2[g2$i != g2$j, ]
 stopifnot(identical(find_bicliques(gm$i, gm$j, min_block = 2),
                     find_bicliques(gm$i, gm$j, min_block = c(2, 2))))
 stopifnot(grepl("at least one side",
@@ -69,7 +74,7 @@ stopifnot(length(b81) == 1L, identical(b81[[1L]]$rows, as.numeric(1:10)),
 b18 <- find_bicliques(wide$j, wide$i, min_block = c(1, 8))
 stopifnot(length(b18) == 1L, length(b18[[1L]]$cols) == 10L)
 
-## ---- 3. K unlock: the permuted side alone caps the group order ----------------
+## ---- 3. K unlock: the permuted side alone caps the group order --------------
 ## single fully observed column, 30 rows: two-sided has no usable block at
 ## all; rows-only reaches K = 29 (resolution 1/30 <= 0.05)
 set.seed(7)
@@ -92,7 +97,7 @@ stopifnot(identical(f1$pvalue, f1b$pvalue),
           identical(f1$estimate, f1b$estimate),
           identical(f1$conf_int, f1b$conf_int))
 
-## ---- 4. resolution note names the permuted side -------------------------------
+## ---- 4. resolution note names the permuted side -----------------------------
 ## rows-only on short blocks: the cap message must exist and cite the side
 gs <- expand.grid(i = 1:3, j = 1:8)                # 3 rows x 8 cols, complete
 fs <- mwperm_missing(rnorm(24), rnorm(24), row = gs$i, col = gs$j,
@@ -105,8 +110,9 @@ fc <- mwperm_missing(rnorm(24), rnorm(24), row = gs$i, col = gs$j,
                      conf_int = FALSE)
 stopifnot(fc$K == 7L, fc$type == "missing (bicliques, cols-only)")
 
-## ---- 5. mwperm() passthrough + wrong-design warning ---------------------------
-ym <- rnorm(nrow(gm)); dm <- rnorm(nrow(gm))
+## ---- 5. mwperm() passthrough + wrong-design warning -------------------------
+ym <- rnorm(nrow(gm))
+dm <- rnorm(nrow(gm))
 dir5 <- mwperm_missing(ym, dm, row = gm$i, col = gm$j, permute = "rows",
                        min_block = 3, seed = 5, n_reps = 2, conf_int = FALSE)
 via5 <- mwperm(y = ym, d = dm, index = list(i = gm$i, j = gm$j),

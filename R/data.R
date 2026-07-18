@@ -38,6 +38,8 @@
 #' @source Seeded simulation; the generator script is
 #'   \code{data-raw/make_data.R} in the package's source repository (not
 #'   installed with the package).
+#' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}},
+#'   \code{\link{mwperm}}.
 #' @examples
 #' data(trade_dyadic)
 #' str(trade_dyadic)
@@ -80,6 +82,7 @@
 #' @source Seeded simulation; the generator script is
 #'   \code{data-raw/make_data.R} in the package's source repository (not
 #'   installed with the package).
+#' @seealso \code{\link{mwperm_panel}}, \code{\link{mwperm}}.
 #' @examples
 #' data(trade_panel)
 #' str(trade_panel)

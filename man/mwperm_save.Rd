@@ -56,6 +56,10 @@ mwperm_save(fit, f, width = "single")  # 3.5 in x 2.3 in at 300 dpi
 mwperm_save(fit, file.path(tempdir(), "fig.pdf"),
             width = "double", type = "stability")
 }
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{plot.mwperm}}.
 }

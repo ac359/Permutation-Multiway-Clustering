@@ -3,7 +3,8 @@
 \docType{package}
 \name{mwperm-package}
 \alias{mwperm-package}
-\title{mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression}
+\title{mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel
+  Regression}
 \description{
 Finite-sample valid tests and confidence intervals for regression
 coefficients under multi-way (e.g. dyadic) clustering, including panel and

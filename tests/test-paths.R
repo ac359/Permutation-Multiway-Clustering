@@ -6,8 +6,11 @@
 ## R/ above 90% (audit F7.5). Base-R stopifnot style; fast.
 library(mwperm)
 
-msg_of <- function(expr) tryCatch({ expr; NA_character_ },
-                                  error = function(e) conditionMessage(e))
+msg_of <- function(expr)
+  tryCatch({
+    expr
+    NA_character_
+  }, error = function(e) conditionMessage(e))
 expect_err <- function(expr, pattern) {
   m <- msg_of(expr)
   stopifnot(!is.na(m), grepl(pattern, m, fixed = TRUE))
@@ -15,7 +18,8 @@ expect_err <- function(expr, pattern) {
 warns_of <- function(expr) {
   w <- character(0)
   withCallingHandlers(expr, warning = function(cnd) {
-    w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning")
+    w <<- c(w, conditionMessage(cnd))
+    invokeRestart("muffleWarning")
   })
   w
 }
@@ -23,12 +27,15 @@ warns_of <- function(expr) {
 ## ---- fixtures ---------------------------------------------------------------
 set.seed(202)
 g2 <- expand.grid(i = 1:6, j = 1:6)
-y2 <- rnorm(36); d2 <- rnorm(36)
+y2 <- rnorm(36)
+d2 <- rnorm(36)
 df2 <- data.frame(i = g2$i, j = g2$j, yy = y2, dd = d2, xx = rnorm(36))
 g3 <- expand.grid(i = 1:5, j = 1:5, year = 1:3)
-y3 <- rnorm(nrow(g3)); d3 <- rnorm(nrow(g3))
+y3 <- rnorm(nrow(g3))
+d3 <- rnorm(nrow(g3))
 gm <- g2[g2$i != g2$j, ]
-ym <- rnorm(nrow(gm)); dm <- rnorm(nrow(gm))
+ym <- rnorm(nrow(gm))
+dm <- rnorm(nrow(gm))
 
 ## ---- 1. the design-diagnosis printer ----------------------------------------
 out_d <- paste(capture.output(print(
@@ -48,7 +55,7 @@ out_w <- paste(capture.output(print(
   collapse = "\n")
 stopifnot(grepl("!", out_w, fixed = TRUE))
 
-## ---- 2. index resolution + forced-design validation --------------------------
+## ---- 2. index resolution + forced-design validation -------------------------
 expect_err(mwperm_check(index = c("i", "j")), "`data`")
 expect_err(mwperm_check(index = c("i", "nope"), data = df2), "not found")
 expect_err(mwperm_check(index = 1:5), "`index`")
@@ -77,7 +84,8 @@ expect_err(mwperm_check(index = list(i = g3$i, j = g3$j, t = g3$year),
                         time = g3$year), "Too many clustering dimensions")
 expect_err(mwperm_check(index = list(i = g3$i, j = g3$j, t = g3$year),
                         rep = g3$year), "Too many clustering dimensions")
-expect_err(mwperm_check(index = list(i = gm$i, j = gm$j), time = rep(1, nrow(gm))),
+expect_err(mwperm_check(index = list(i = gm$i, j = gm$j), time = rep(1,
+                                                                     nrow(gm))),
            "complete")
 ## forced missing on 2 complete/incomplete indices: K depends on the blocks
 chk_fm <- mwperm_check(index = list(i = gm$i, j = gm$j), design = "missing")
@@ -96,10 +104,11 @@ w_arg <- warns_of(mwperm(y = "yy", d = "dd", index = c("i", "j"), data = df2,
 stopifnot(any(grepl("`time_fe`", w_arg, fixed = TRUE)),
           any(grepl("`L0`", w_arg, fixed = TRUE)))
 
-## ---- 3. layout: L0 balancing and the no-power warning -------------------------
+## ---- 3. layout: L0 balancing and the no-power warning -----------------------
 gl <- expand.grid(l = 1:6, i = 1:5, j = 1:5)
 gl <- gl[!(gl$l > 3 & gl$i == 1), ]               # unequal cell sizes
-yl <- rnorm(nrow(gl)); dl <- rnorm(nrow(gl))
+yl <- rnorm(nrow(gl))
+dl <- rnorm(nrow(gl))
 fL  <- mwperm_layout(yl, dl, row = gl$i, col = gl$j, L0 = 3, seed = 2,
                      n_reps = 2, conf_int = FALSE)
 fL2 <- mwperm_layout(yl, dl, row = gl$i, col = gl$j, L0 = 3, seed = 2,
@@ -112,7 +121,7 @@ w_cc <- warns_of(mwperm_layout(yl, dcc, row = gl$i, col = gl$j, seed = 1,
                                n_reps = 1, conf_int = FALSE))
 stopifnot(any(grepl("constant within every cell", w_cc)))
 
-## ---- 4. explicit-grid and joint-region confidence paths ----------------------
+## ---- 4. explicit-grid and joint-region confidence paths ---------------------
 ## (alpha = 0.4 keeps 1/(K+1) = 1/6 attainable on these 6x6 fixtures)
 f_g1 <- mwperm_dyadic(y2, d2, row = g2$i, col = g2$j, seed = 1, n_reps = 2,
                       alpha = 0.4, grid = seq(-3, 3, by = 0.25))
@@ -137,7 +146,7 @@ w_dg <- warns_of(f_dg <- mwperm_dyadic(y2, rep(1, 36), row = g2$i, col = g2$j,
 stopifnot(any(grepl("`d`", w_dg, fixed = TRUE)),
           f_dg$pvalue == 1, all(is.infinite(f_dg$conf_int)))
 
-## ---- 5. island guard: constructed disconnected acceptance set ----------------
+## ---- 5. island guard: constructed disconnected acceptance set ---------------
 ## (ported from the audit's 05_island_guard.R): a_k(b) = |t_k - b|,
 ## b_k(b) = |b|/2 with t = (-5 x10, +5 x9) gives the exact acceptance set
 ## [-10, -10/3] U [10/3, 10] at alpha = .05; the reported interval must be
@@ -152,7 +161,7 @@ ci_i <- mwperm:::.invert_ci(list(prep_i), alpha = 0.05, centre = 0, scale = 1,
 stopifnot(isTRUE(attr(ci_i, "disconnected")),
           ci_i[1] <= -10 + 0.01, ci_i[2] >= 10 - 0.01)
 
-## ---- 6. internal one-liners ---------------------------------------------------
+## ---- 6. internal one-liners -------------------------------------------------
 stopifnot(mwperm:::.fmt_p(NA) == "NA",
           mwperm:::.fmt_p(1e-5) == "< 0.001")
 expect_err(mwperm:::.build_obs_perms(cbind(1:4, 1:4), list(NULL, NULL)),
@@ -164,7 +173,7 @@ expect_err(mwperm_panel(c(rnorm(nrow(gp)), 1), rnorm(nrow(gp) + 1L),
                         row = c(gp$i, 1), col = c(gp$j, 1),
                         time = c(gp$t, 1)), "at most once")
 
-## ---- 7. figure export: every device + argument validation --------------------
+## ---- 7. figure export: every device + argument validation -------------------
 fitp <- mwperm_dyadic(y2, d2, row = g2$i, col = g2$j, seed = 1, n_reps = 6,
                       alpha = 0.4)
 for (ext in c("pdf", "png", "tiff", "jpeg")) {

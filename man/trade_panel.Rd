@@ -52,4 +52,7 @@ data(trade_panel)
 str(trade_panel)
 attr(trade_panel, "true_coef")
 }
+\seealso{
+\code{\link{mwperm_panel}}, \code{\link{mwperm}}.
+}
 \keyword{datasets}

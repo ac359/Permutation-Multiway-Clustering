@@ -26,6 +26,19 @@ the inferential quantity is the IPT confidence set, see
 observations the fit used (for \code{\link{mwperm_missing}}, the cells
 inside the selected blocks).
 }
+\examples{
+data(trade_dyadic)
+fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
+                      data = trade_dyadic,
+                      index = c("importer", "exporter"),
+                      n_reps = 2, seed = 1, verbose = FALSE)
+coef(fit)
+nobs(fit)
+}
+\references{
+Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
+  inference under multi-way clustering and missing data. arXiv:2601.08610.
+}
 \seealso{
 \code{\link{confint.mwperm}}, \code{\link{summary.mwperm}}.
 }
