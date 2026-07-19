@@ -121,7 +121,8 @@
 #' @noRd
 .ipt_engine <- function(y, D, X, perm_builder, K, n_reps, seed,
                         alpha, conf_int, beta_null, grid,
-                        type, d_names, n_clusters, call, n_cores = 1L) {
+                        type, d_names, n_clusters, call, n_cores = 1L,
+                        ci_agg = "median") {
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
@@ -257,7 +258,7 @@
     } else if (d == 1L) {
       ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
                        centre = ref$estimate, scale = ref$se,
-                       y = y, D = D, grid = grid)
+                       y = y, D = D, grid = grid, agg = ci_agg)
       if (isTRUE(attr(ci, "disconnected"))) {
         note <- c(note, paste0(
           "The acceptance region of the inverted test is disconnected ",
@@ -265,7 +266,24 @@
           "around the OLS estimate). The reported interval was widened to the ",
           "hull of the detected components; it is conservative."))
       }
-      ci <- as.numeric(ci)             # drop the internal flag attribute
+      ## Grid-mode caveats: an acceptance region that runs off an edge of the
+      ## supplied `grid` is reported as infinite there (the grid cannot certify
+      ## a finite bound), and the finite limits are only accurate to the grid
+      ## spacing.
+      trunc <- attr(ci, "truncated")
+      if (!is.null(trunc) && any(trunc))
+        note <- c(note, sprintf(paste0(
+          "The acceptance region reaches the %s of the supplied `grid`; that ",
+          "side is reported as infinite because the grid does not certify a ",
+          "finite limit. Widen `grid` to bound it."),
+          paste(c("lower end", "upper end")[trunc], collapse = " and ")))
+      gs <- attr(ci, "grid_step")
+      if (!is.null(gs))
+        note <- c(note, sprintf(paste0(
+          "Grid-mode interval: end points are the outermost retained grid ",
+          "points, so each limit is accurate to the grid spacing (%.3g) and is ",
+          "conservative inward by at most that much."), gs))
+      ci <- as.numeric(ci)             # drop the internal flag attributes
     } else {
       reg <- .invert_region(prep_list, alpha = 1 - conf_level,
                             centre = ref$estimate, scale = ref$se,
@@ -319,25 +337,38 @@
 #' Permutations are held fixed across candidate values of `b`, so the p-value
 #' is a deterministic step function of `b` within each rep; the acceptance set
 #' is taken to be an interval and its end points are located by outward
-#' bracketing then bisection. The reported interval is the median over reps of
-#' the per-rep interval end points. The p-value at each candidate `b` is read
-#' off the cached prep objects (\code{\link{.ipt_prepare}}) in O(K), so the
-#' whole search costs no extra QR decompositions.
+#' bracketing then bisection. The p-value at each candidate `b` is read off the
+#' cached prep objects (\code{\link{.ipt_prepare}}) in O(K), so the whole
+#' search costs no extra QR decompositions.
 #'
-#' Note the two modes aggregate across reps differently, both deliberately:
-#' the default (bracketing) mode takes the MEDIAN of the per-rep end points
-#' (matching the median-p-value aggregation of the test itself), while the
-#' explicit-`grid` mode retains a point accepted in ANY rep (a union), which
-#' is more conservative and also covers disconnected acceptance regions by
-#' returning the hull of the retained grid points. See REVIEW.md 3.
+#' Both modes now de-randomise across reps by the MEDIAN, matching the reported
+#' p-value, the joint-region path (\code{\link{.invert_region}}), and Remark 1
+#' of Guo, Toulis and Wang (2026). The default (bracketing) mode returns the
+#' median of the per-rep interval end points; the explicit-`grid` mode returns
+#' the hull of \eqn{\{b : \mathrm{median}_r\, p_r(b) > \alpha\}}. The two
+#' coincide whenever each rep's acceptance set is a single interval; they can
+#' differ only through the grid's discretisation or a disconnected acceptance
+#' region (flagged, and widened to the hull). The old explicit-`grid` behaviour
+#' -- retaining a point accepted in ANY rep, i.e. inverting the MAXIMUM p-value
+#' across reps (a union) -- over-covered and grew with `n_reps`; it survives
+#' only as \code{agg = "union"} for regression testing (see NEWS 0.2.0).
 #' @param prep_list list of per-rep prep objects (each with `has_perm_D =
 #'   TRUE`).
 #' @param y,D the (unshifted) outcome and single covariate, used only to derive
 #'   a sensible step size when the naive SE is unavailable.
+#' @param grid optional explicit numeric grid of candidate `b`; when supplied
+#'   the interval is the hull of the retained grid points (see Details).
+#' @param agg cross-rep aggregation of the p-value: \code{"median"} (default,
+#'   Remark 1), \code{"median2"} (\eqn{\min(1, 2\,\mathrm{median})}, valid under
+#'   arbitrary dependence across reps; Ruschendorf 1982, Vovk & Wang 2020), or
+#'   \code{"union"} (the legacy maximum-over-reps behaviour, kept only for
+#'   regression tests). Applies to the explicit-`grid` mode.
 #' @keywords internal
 #' @noRd
 .invert_ci <- function(prep_list, alpha, centre, scale, y, D, grid = NULL,
+                       agg = c("median", "median2", "union"),
                        max_expand = 60L, tol_factor = 1e-3) {
+  agg <- match.arg(agg)
   ## centre: where the bracketing starts (the OLS point estimate).
   if (!is.finite(centre)) centre <- 0
   ## step: initial bracketing increment. Prefer the naive SE; if it is
@@ -395,15 +426,49 @@
   }
 
   if (!is.null(grid)) {
-    ## explicit grid mode: a point is retained if accepted in ANY rep (union),
-    ## and the reported interval is the range of retained points.
-    acc <- rep(FALSE, length(grid))    # accepted-anywhere flag per grid point
-    for (prep in prep_list) {
-      pg <- vapply(grid, pval_at, numeric(1), prep = prep)
-      acc <- acc | (pg > alpha)
-    }
+    ## Explicit grid mode. A candidate b is retained when the ACROSS-REP
+    ## aggregated p-value exceeds alpha, using the same de-randomisation rule
+    ## as the reported p-value and as .invert_region(): the median over reps
+    ## (Guo, Toulis & Wang 2026, Remark 1). The interval is the hull of the
+    ## retained grid points; holes (disconnected acceptance) are flagged, and a
+    ## retained set touching a grid edge yields an infinite limit on that side
+    ## rather than a silently truncated finite one.
+    g <- sort(unique(as.numeric(grid)))
+    g <- g[is.finite(g)]
+    if (length(g) < 2L)
+      stop("`grid` must contain at least two distinct finite values.",
+           call. = FALSE)
+
+    ## length(g) x n_reps matrix of per-rep p-values
+    P <- matrix(
+      vapply(prep_list, function(pp) vapply(g, pval_at, numeric(1), prep = pp),
+             numeric(length(g))),
+      nrow = length(g))
+
+    p_agg <- switch(agg,
+      median  = apply(P, 1L, stats::median),
+      ## 2 x median: valid under arbitrary dependence across reps
+      ## (Ruschendorf 1982; Vovk & Wang 2020). Never narrower than "median".
+      median2 = pmin(1, 2 * apply(P, 1L, stats::median)),
+      ## legacy union == max over reps; kept only for regression testing.
+      union   = apply(P, 1L, max))
+
+    acc <- !is.na(p_agg) & p_agg > alpha   # NA-safe: a degenerate rep can't leak
     if (!any(acc)) return(c(NA_real_, NA_real_))
-    return(range(grid[acc]))
+
+    idx  <- which(acc)
+    i_lo <- idx[1L]
+    i_hi <- idx[length(idx)]
+    ## An acceptance set that reaches a grid edge is unbounded on that side as
+    ## far as the grid can tell: report Inf there, but keep the finite outermost
+    ## retained point in "grid_limit" so the caller can recover it if wanted.
+    ci <- c(if (i_lo == 1L)        -Inf else g[i_lo],
+            if (i_hi == length(g))  Inf else g[i_hi])
+    attr(ci, "disconnected") <- any(diff(idx) > 1L)
+    attr(ci, "truncated")    <- c(i_lo == 1L, i_hi == length(g))
+    attr(ci, "grid_step")    <- max(diff(g))
+    attr(ci, "grid_limit")   <- c(g[i_lo], g[i_hi])
+    return(ci)
   }
 
   ## default mode: bracket each side in every rep, report the median endpoints.

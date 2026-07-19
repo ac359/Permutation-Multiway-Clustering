@@ -123,6 +123,9 @@ stopifnot(any(grepl("constant within every cell", w_cc)))
 
 ## ---- 4. explicit-grid and joint-region confidence paths ---------------------
 ## (alpha = 0.4 keeps 1/(K+1) = 1/6 attainable on these 6x6 fixtures)
+## NB grid mode now inverts the MEDIAN p-value across reps (not the old union /
+## maximum); the median-vs-union contrast and the edge/NA guards are covered in
+## detail by test-invert-ci-grid.R (NEWS 0.2.0 "Bug fix (changes intervals)").
 f_g1 <- mwperm_dyadic(y2, d2, row = g2$i, col = g2$j, seed = 1, n_reps = 2,
                       alpha = 0.4, grid = seq(-3, 3, by = 0.25))
 stopifnot(!is.null(f_g1$conf_int), all(is.finite(f_g1$conf_int)))
