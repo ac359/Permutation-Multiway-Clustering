@@ -1,8 +1,8 @@
 #' Construct a random block-cyclic permutation group (Algorithm 1)
 #'
 #' Builds a set of \code{K + 1} permutations of \code{seq_len(n)} that form a
-#' cyclic algebraic group, following Algorithm 1 of Guo, Toulis and Wang (2026)
-#' (adapted from Wen, Wang and Wang, 2025). A random one-to-one relabelling
+#' cyclic algebraic group, following Algorithm 1 of Guo, Toulis and Wang
+#' (2026). A random one-to-one relabelling
 #' \eqn{\pi} is drawn, the index set is split into consecutive blocks of size
 #' \code{K + 1}, and each non-identity element cyclically shifts every block by
 #' \eqn{k} positions. Because the elements are powers of a single generator,
@@ -12,7 +12,26 @@
 #' The randomness in the relabelling is what makes the resulting test a
 #' \emph{random} invariant test: different seeds yield slightly different
 #' p-values. Aggregating several runs (see the \code{n_reps} argument of the
-#' \code{mwperm_*} functions) by taking the median p-value is recommended.
+#' \code{mwperm_*} functions) by taking the median p-value is recommended;
+#' see \code{\link{mwperm_dyadic}} for the exact status of that aggregation.
+#'
+#' \strong{Reproducibility.} A seeded result is reproducible only under the
+#' same RNG configuration: the same \code{RNGkind()} (generator \emph{and}
+#' sample kind -- R's defaults changed in 3.6.0) and, when cluster ids are
+#' supplied as character strings, the same collation locale
+#' (\code{LC_COLLATE} determines factor level order and hence the dense id
+#' coding the relabelling acts on). Integer or factor cluster ids make seeded
+#' results locale-proof. Validity is unaffected either way: whatever group is
+#' realised is a genuine cyclic group, so the test is exact under any RNG
+#' configuration -- only cross-environment reproducibility depends on it.
+#'
+#' \strong{What certifies the group property.} Closure under composition --
+#' the property Theorem 1 of the paper rests on -- is verified algebraically
+#' by the shipped test suite (full composition tables, including at the
+#' observation level for every design). Monte-Carlo size simulations cannot
+#' detect closure defects, because a broken set whose elements are still
+#' per-dimension permutations continues to control size element-wise;
+#' simulation evidence therefore never certifies the group structure.
 #'
 #' @param n Integer, the number of indices to permute (the cluster count along
 #'   one dimension).
@@ -28,13 +47,11 @@
 #'   attribute \code{"block_size"} equal to \code{K + 1}.
 #'
 #' @references
-#' Guo, F. R., Toulis, P. and Wang, Y. (2026). Permutation inference under
-#' multi-way clustering and missing data.
+#' Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
+#' multi-way clustering and missing data. arXiv:2601.08610.
 #'
-#' Wen, K., Wang, T. and Wang, Y. (2025). Residual permutation test for
-#' regression coefficient testing. \emph{The Annals of Statistics} 53(2),
-#' 724--748.
-#'
+#' @seealso \code{\link{mwperm_dyadic}} and the other front ends, which
+#'   compose these groups into observation-level permutations.
 #' @examples
 #' G <- build_perm_set(n = 8, K = 3, seed = 1)
 #' length(G)          # 4 permutations (identity + 3)
@@ -49,12 +66,14 @@ build_perm_set <- function(n, K, seed = NULL) {
   B <- K + 1L                      # block size = group order
   if (B > n) {
     stop(sprintf(
-      "K + 1 = %d exceeds n = %d: no non-trivial permutation exists. Use K <= n - 1.",
+      paste0("K + 1 = %d exceeds n = %d: no non-trivial permutation ",
+             "exists. Use K <= n - 1."),
       B, n), call. = FALSE)
   }
 
   ## Reproducible relabelling without disturbing the caller's RNG stream: save
-  ## the global seed, reseed, and restore on exit (see .save_seed/.restore_seed).
+  ## the global seed, reseed, and restore on exit (see
+  ## .save_seed/.restore_seed).
   if (!is.null(seed)) {
     old <- .save_seed()
     on.exit(.restore_seed(old), add = TRUE)
@@ -62,13 +81,15 @@ build_perm_set <- function(n, K, seed = NULL) {
   }
 
   ## Random relabelling pi (a permutation of 1..n) and its inverse. pi is what
-  ## makes the test a *random* invariant test; different seeds give different pi.
+  ## makes the test a *random* invariant test; different seeds give different
+  ## pi.
   pi_vec <- sample.int(n)           # pi_vec[i] = pi(i)
   pi_inv <- integer(n)              # pi_inv[pi(i)] = i  (the inverse map)
   pi_inv[pi_vec] <- seq_len(n)
 
   ## Split 1..n into consecutive blocks of size B; any tail of < B leftover
-  ## indices is held fixed (it cannot be cyclically shifted within a full block).
+  ## indices is held fixed (it cannot be cyclically shifted within a full
+  ## block).
   nb <- n %/% B                     # number of full blocks
   in_block <- seq_len(nb * B)       # the indices that live in a full block
   pos0 <- (in_block - 1L) %% B      # 0-based position within the block
@@ -79,12 +100,13 @@ build_perm_set <- function(n, K, seed = NULL) {
   ## the set is a cyclic group of order B (closed under composition).
   perms <- vector("list", B)
   for (k in 0:K) {
-    psit <- seq_len(n)              # psi-tilde_k as an image vector; default = identity
+    psit <- seq_len(n)              # psi-tilde_k image vector; identity
     if (k > 0L && nb > 0L) {
       new_pos0 <- (pos0 + k) %% B   # shifted position within the block
       psit[in_block] <- blk_start + new_pos0
     }
-    ## Conjugate the block shift by the relabelling: psi_k(i) = pi^{-1}( psi-tilde_k( pi(i) ) )
+    ## Conjugate the block shift by the relabelling: psi_k(i) = pi^{-1}(
+    ## psi-tilde_k( pi(i) ) )
     perms[[k + 1L]] <- pi_inv[psit[pi_vec]]
   }
   attr(perms, "block_size") <- B

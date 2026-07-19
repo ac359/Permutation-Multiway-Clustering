@@ -1,3 +1,172 @@
+# mwperm (development version)
+
+* **Bug fix (changes reported intervals).** With an explicit `grid` and
+  `n_reps > 1`, the single-coefficient confidence interval retained any value
+  accepted in *any* repetition (a union, i.e. inversion of the maximum
+  p-value across reps). It now inverts the **median** p-value across reps,
+  matching the reported p-value, the joint-region path, and Remark 1 of Guo,
+  Toulis & Wang (2026). Grid-mode intervals are now narrower and no longer
+  grow with `n_reps`. Intervals whose acceptance region reaches the edge of
+  the supplied `grid` are now reported as unbounded on that side rather than
+  silently truncated.
+
+# mwperm 0.2.0
+
+Audit-driven release: the changes below implement the fix plan from the
+2026-07 verification audit (finite-sample validity re-verified throughout;
+no change to the test statistic, the permutation group, the minorized
+p-value, or any seeded result unless explicitly noted).
+
+* **License:** the package is now released under the MIT license
+  (`LICENSE`); previous versions carried a placeholder `Proprietary` tag.
+* **Default `n_reps` is now 10** (was 1) in every test function and in
+  `mwperm()`. A single run's p-value depends on the random relabelling --
+  the audit documented a real seed lottery -- while the package's own
+  documentation has always recommended median aggregation; ten repetitions
+  cost fractions of a second on typical designs and were measured
+  conservative (never anti-conservative) at every level. **This changes
+  default-argument seeded results** (calls with an explicit `n_reps` are
+  unaffected): reported p-values and confidence limits are now medians over
+  10 runs. Set `n_reps = 1` to reproduce pre-0.2.0 defaults.
+* `DESCRIPTION` gains `URL`, `BugReports`, `Language`, `Date`; a citation
+  entry ships as `inst/CITATION` (`citation("mwperm")`).
+* **New formula interface:** `mwperm_formula(y ~ d | x, data, index, ...)`
+  (the nuisance part is optional). Both formula parts are standard formula
+  algebra via `model.matrix()`, so transformed terms and factors work; the
+  result is identical to the data interface with the same seed (pinned by
+  tests). New accessors `coef()` (the OLS estimate, named) and `nobs()`.
+* **New `permute` argument on `mwperm_missing()`** (and passed through by
+  `mwperm()`): `"rows"` or `"cols"` permutes only that dimension. One-sided
+  permutation applies a subgroup of the invariance group, so the test stays
+  exactly valid under the same exchangeability assumption, and `K + 1` is
+  then capped by the *permuted* block side alone -- blocks need `min_block`
+  clusters on the permuted side but as few as one on the other, so designs
+  whose fully observed blocks are short in one dimension (down to a single
+  fully observed column) can reach resolutions the two-sided test cannot,
+  at some cost in power. `find_bicliques()` correspondingly accepts a
+  length-2 `min_block = c(rows, cols)` and, when the area-maximal block
+  violates such an asymmetric floor, retries the greedy growth under the
+  floor (a tall thin block never maximises area on a dense mask, so without
+  the retry the tall blocks the floor asks for would not be found). A scalar
+  `min_block` keeps the historical both-sides floor bit-identically, and the
+  default `permute = "both"` path is unchanged. Size control and power of
+  the one-sided test were verified by simulation (2,000-run null cells,
+  including the constrained-retry path; no super-uniformity violation).
+* `R CMD check --as-cran` passes with no errors and no package-level
+  warnings. Two fixes were needed: the `coef()`/`nobs()` S3 methods (new in
+  this release) registered without importing their generics from `stats`, so
+  loading the namespace in isolation failed with `object 'nobs' not found`
+  (ordinary `library(mwperm)` masked it because `stats` is always attached) --
+  both generics are now imported; and `n_cores` is now additionally capped by
+  `getOption("mc.cores")` when set, so the standard core-throttling option
+  (and R CMD check's core limit) is honoured. The `.github/` CI directory is
+  excluded from the build tarball.
+* **Replication material** ships in `inst/replication/`: numbered,
+  self-contained Monte-Carlo scripts (base R + `mwperm` only) that reproduce
+  the package's headline claims -- finite-sample size control versus the
+  invalid classical OLS *t*-test, power rising to 1, confidence-interval
+  coverage, the trending-panel negative control behind the panel-by-default
+  policy, and the one-sided `permute` option -- with a `make.R` driver,
+  cached/resumable runners, reference outputs under `expected/`, and a
+  recorded `sessionInfo()`. See `system.file("replication", package =
+  "mwperm")`.
+* **Style and documentation-completeness pass** (no behaviour change; the
+  full suite and every seeded reference value verified bit-identical): all
+  code lines are now <= 80 characters with no compound/trailing semicolons;
+  source and tests are pure ASCII; every exported function's help page has
+  runnable examples, references, and cross-references, and the package
+  spell-checks clean against a shipped `inst/WORDLIST`.
+* Shipped-test coverage of `R/` is 94% (audit gate: >= 90%; it was 81% at
+  audit time): new `tests/test-paths.R` exercises the design-diagnosis
+  printer, forced-design validation, name resolution, `L0` balancing, the
+  explicit-grid and joint-region confidence paths, a constructed
+  disconnected acceptance set (the island guard's hull), and every figure
+  export device. GitHub Actions CI runs `R CMD check --as-cran` on
+  ubuntu/macOS/windows across devel/release/oldrel-1 plus a coverage job.
+* The test suite (9 base-R files, ~2 s under `R CMD check`) is now tracked
+  in the repository and ships with the package; internal development
+  material is excluded from builds via `.Rbuildignore`.
+* **Detection safety** (`mwperm()`/`mwperm_check()`): the time role is never
+  assigned anti-conservatively in silence. A name-based time assignment that
+  the values do not corroborate now warns (a column merely *named* "period"/
+  "year" may be a cluster; permuting the true time dimension can over-reject
+  badly -- the audit measured 87% rejection at a nominal 12.5% on such a
+  case). Forcing `design = "threeway"` when an index looks time-like also
+  warns, and the ambiguous-fork message now states correctly that the panel
+  default protects only if the *permuted pair* is exchangeable. All
+  detection warnings are raised as R warnings at fit time (previously they
+  were only recorded on the returned object's `note`). Detection *choices*
+  are unchanged -- same data, same seed, same result.
+* A factor `y` is now rejected with an informative error in every front end;
+  it was previously coerced silently to its internal level codes (`d` and
+  `x` were already protected).
+* **Degenerate `d` is now deterministic:** when `d` has no variation after
+  partialling out the nuisance covariates (constant, or collinear with a
+  column of `x`), the test warns that beta is unidentified and returns
+  p = 1 exactly -- the exact-arithmetic answer, since the residualized
+  statistic is identically zero and the minorized p-value is 1. Previous
+  versions let ~1e-16 rounding noise decide the permutation comparisons,
+  giving an arbitrary, BLAS-dependent p-value with no warning. Only
+  degenerate fits are affected; all seeded reference values are unchanged.
+* **Validation hardening:** `K` is validated as a single integer >= 1 with
+  an error naming the argument (previously `K = NA`/vector `K` surfaced raw
+  R errors, a fractional `K` truncated silently, and `K = 0` blamed the
+  data); `seed` must be `NULL` or a single finite number, and a seed too
+  large for the rep/sub-seed scheme (|seed| above ~2.1 million) now errors
+  by name instead of via `set.seed(NA)`'s cryptic message -- in-range seeded
+  results are bit-identical; an `NA` in the layout `rep` identifier is
+  rejected (it was silently ranked last within its cell);
+  `mwperm_missing()` validates the full supplied data before the biclique
+  step discards cells; `confint(parm = )` now subsets by coefficient name
+  or position (it was accepted and ignored).
+* `mwperm_missing()` now says so in its `note` when the smallest selected
+  block caps `K` below the level's resolution (no rejection attainable at
+  `alpha`), naming the block as the cause and `min_block` as the remedy;
+  `?mwperm_missing` documents that the smallest block is the binding
+  constraint. The block-diagonal permutation builder was extracted to a
+  named internal so the shipped group-closure tests exercise the exact
+  production code (no behaviour change).
+* **Documentation is now single-source:** `man/` and `NAMESPACE` are
+  generated by roxygen2 from the comments in `R/` (they were hand-written
+  and had drifted). All hand-written surplus was ported into the roxygen
+  comments first -- examples for `mwperm_layout()`/`mwperm_threeway()`/
+  `plot.mwperm()`/`mwperm_save()`, the full plot style-element list,
+  `\seealso` sections, dataset pages (now with `\source`) -- so no rendered
+  content was lost; the front-end pages gain the full inherited argument
+  documentation their hand versions abbreviated.
+* **Parallel path fixes:** on non-fork platforms (Windows) the engine now
+  creates ONE worker cluster per fit and reuses it across repetitions --
+  previously a fresh PSOCK cluster was spawned inside every repetition,
+  which made `n_cores > 1` about 3x *slower* than serial under the default
+  settings; `n_cores` beyond the detected core count is now clamped with a
+  warning (it was silently oversubscribing). Parallel results remain
+  bit-identical to serial.
+* **Performance** (bit-identical output; verified against the previous
+  implementation on seeded fits across all five designs, plus the full test
+  suite and all seeded reference values): layout fits are ~10x faster (the
+  per-cell bookkeeping in the permutation builder and the within-cell index
+  construction are now vectorized -- 5.3 s -> 0.44 s on a 5,000-cell
+  layout); every fit gains ~20% from a fused single-call residualization
+  (`.lm.fit`, same pivoted-QR family as `qr.resid`, so rank-deficient
+  stacked designs are handled identically); complete-array gather vectors
+  are built by an O(N) position-table translation instead of per-element
+  hashing.
+* **Documentation honesty sweep** (audit findings): the exact status of
+  median aggregation over `n_reps` is stated (each repetition is valid on
+  its own; no finite-sample theorem covers the median; measured uniformly
+  conservative; the 2x-median rule is the provable fallback);
+  reproducibility of seeded results is documented as conditional on
+  `RNGkind()` and, for character ids, the collation locale (validity is
+  unaffected); near-collinear nuisance columns are documented as silently
+  dropped at the QR tolerance; `?mwperm_layout` no longer presents a
+  shared-across-cells replicate effect as covered by the within-cell
+  invariance argument; `?find_bicliques` states that `"exact"` maximises
+  each block in turn (not total coverage) and that `min_block` is floored
+  at 2; the panel `N > 2p` feasibility requirement is documented as
+  conservative under `time_fe = TRUE`; `?build_perm_set` records that group
+  closure is certified by the algebraic test suite, not by simulation;
+  parallelism docs now say only the seeded repetition axis pays.
+
 # mwperm 0.1.1
 
 Publication-standard plotting and provenance-labelled return values (no

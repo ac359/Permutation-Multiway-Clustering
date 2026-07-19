@@ -37,9 +37,10 @@
   ## cluster counts this is never an issue, but error loudly rather than risk a
   ## silent cell-code collision on a pathologically large design.
   if (prod(radix) > 2^53)
-    stop(sprintf(paste0("Cluster index space (%.3g cells) exceeds 2^53; the ",
-                        "mixed-radix cell encoding would not be exact. Too many ",
-                        "clusters for this design."), prod(radix)), call. = FALSE)
+    stop(sprintf(paste0("Cluster index space (%.3g cells) exceeds 2^53; ",
+                        "the mixed-radix cell encoding would not be exact. ",
+                        "Too many clusters for this design."), prod(radix)),
+         call. = FALSE)
   code <- coords[, 1L] - 1             # least-significant digit (0-based)
   if (ncol(coords) > 1L) {
     mult <- 1                          # place value of the current digit
@@ -81,36 +82,59 @@
 #' @return a list (the "prep" object) consumed by \code{\link{.ipt_eval}}.
 #' @keywords internal
 #' @noRd
-.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L) {
+.ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L,
+                         cl = NULL) {
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
-  Kp1 <- length(obs_perms)             # group order (number of permutations incl. identity)
+  Kp1 <- length(obs_perms)             # group order (incl. identity)
   K <- Kp1 - 1L                        # number of non-identity permutations
   if (K < 1L) stop("Need at least one non-identity permutation.", call. = FALSE)
   d <- ncol(D)                         # number of coefficients of interest
+  ## Degeneracy floor: when D lies numerically inside span[X | X_k], the
+  ## residualized cross products are pure rounding noise. In exact arithmetic
+  ## that slice has a_k = 0 -- forcing p = 1 through the minorization -- so
+  ## the slice is zeroed to restore the exact answer rather than letting
+  ## ~1e-16 noise decide the a/b comparisons (audit F5.2). Relative tolerance
+  ## in the qr() league (1e-8 on the Frobenius norm).
+  degen_tol2 <- 1e-16 * sum(D * D)
 
   ## One slice of cached cross products per non-identity permutation k.
   ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
   one_k <- function(k) {
-    g   <- obs_perms[[k + 1L]]         # gather-vector of the k-th permutation
-    qMk <- qr(cbind(X, X[g, , drop = FALSE]))   # QR of the FWL projector M_k = [X | X_k]
-    Dr  <- qr.resid(qMk, D)            # residualized covariate(s),     N x d
-    yr  <- qr.resid(qMk, y)            # residualized outcome,          length N
-    ypr <- qr.resid(qMk, y[g])         # residualized permuted outcome, length N
-    list(u = crossprod(Dr, yr),        # = t(Dr) %*% yr
-         v = crossprod(Dr, ypr),
-         M = crossprod(Dr),            # = t(Dr) %*% Dr
-         W = if (need_perm_D)          # only needed for CI / non-zero null (see engine)
-           crossprod(Dr, qr.resid(qMk, D[g, , drop = FALSE])))
+    g <- obs_perms[[k + 1L]]           # gather-vector of the k-th permutation
+    ## Residualize the whole stack [D | y | y_k | (D_k)] on M_k = [X | X_k] in
+    ## one .lm.fit call: dqrls pivots with the same tolerance family as qr(),
+    ## so the always-rank-deficient M_k (duplicated intercept, panel time
+    ## dummies) is handled identically to qr.resid -- bit-identical residuals,
+    ## ~25% less per-k overhead (one factorization+apply, no qr.default
+    ## coercion copies). Verified in the Phase-6 audit.
+    S <- if (need_perm_D) cbind(D, y, y[g], D[g, , drop = FALSE])
+         else             cbind(D, y, y[g])
+    R <- stats::.lm.fit(cbind(X, X[g, , drop = FALSE]), S)$residuals
+    Dr <- R[, seq_len(d),
+            drop = FALSE]            # residualized covariate(s), N x d
+    if (sum(Dr * Dr) <= degen_tol2)    # degenerate slice: exact-arithmetic zero
+      return(list(u = matrix(0, d, 1L), v = matrix(0, d, 1L),
+                  M = matrix(0, d, d),
+                  W = if (need_perm_D) matrix(0, d, d)))
+    list(u = crossprod(Dr, R[, d + 1L]),           # = Dr' yr
+         v = crossprod(Dr, R[, d + 2L]),           # = Dr' ypr
+         M = crossprod(Dr),                        # = Dr' Dr
+         W = if (need_perm_D)          # only for CI / non-zero null
+           crossprod(Dr, R[, d + 2L + seq_len(d), drop = FALSE]))
   }
-  slices <- .plapply(seq_len(K), one_k, n_cores = n_cores)
+  slices <- .plapply(seq_len(K), one_k, n_cores = n_cores, cl = cl)
 
   ## Assemble in k order (order-independent: each slice is self-contained).
-  u <- matrix(0, d, K)                 # u[, k]   = Dr' yr    (a-statistic intercept)
-  v <- matrix(0, d, K)                 # v[, k]   = Dr' ypr   (b-statistic intercept)
-  M <- array(0, dim = c(d, d, K))      # M[ , ,k] = Dr' Dr    (a-statistic slope in b)
-  W <- array(0, dim = c(d, d, K))      # W[ , ,k] = Dr' Dpr   (b-statistic slope in b)
+  u <- matrix(0, d,
+              K)                 # u[, k]   = Dr' yr    (a-statistic intercept)
+  v <- matrix(0, d,
+              K)                 # v[, k]   = Dr' ypr   (b-statistic intercept)
+  M <- array(0, dim = c(d, d,
+                        K))      # M[ , ,k] = Dr' Dr    (a-statistic slope in b)
+  W <- array(0, dim = c(d, d,
+                        K))      # W[ , ,k] = Dr' Dpr   (b-statistic slope in b)
   for (k in seq_len(K)) {
     u[, k]   <- slices[[k]]$u
     v[, k]   <- slices[[k]]$v
@@ -134,7 +158,8 @@
 #' @noRd
 .ipt_eval <- function(prep, beta) {
   d <- prep$d
-  beta <- rep(as.numeric(beta), length.out = d)   # recycle scalar null to length d
+  beta <- rep(as.numeric(beta),
+              length.out = d)   # recycle scalar null to length d
   ## a[k], b[k]: the identity- and k-th-permutation residual norms at this beta,
   ## reconstructed from the cached cross products (affine in beta, no QR).
   if (d == 1L) {                       # scalar fast path: norms reduce to abs()
@@ -142,7 +167,8 @@
     b <- abs(prep$v[1L, ] - prep$W[1L, 1L, ] * beta)
   } else {
     K <- prep$K
-    a <- numeric(K); b <- numeric(K)
+    a <- numeric(K)
+    b <- numeric(K)
     for (k in seq_len(K)) {
       a[k] <- sqrt(sum((prep$u[, k] - prep$M[, , k] %*% beta)^2))
       b[k] <- sqrt(sum((prep$v[, k] - prep$W[, , k] %*% beta)^2))
@@ -186,27 +212,47 @@
 .build_obs_perms <- function(coords, groups) {
   coords <- as.matrix(coords)
   C <- ncol(coords)                    # number of clustering dimensions
-  orig_code <- .cell_code(coords)      # cell code of each observation as it stands
+  orig_code <- .cell_code(coords)      # cell code of each observation
   ## Determine the group order K+1 from the first dimension that is permuted
   ## (all non-NULL groups share the same order).
   Kp1 <- NULL
-  for (g in groups) if (!is.null(g)) { Kp1 <- length(g); break }
-  if (is.null(Kp1)) stop("At least one dimension must be permuted.", call. = FALSE)
+  for (g in groups) {
+    if (!is.null(g)) {
+      Kp1 <- length(g)
+      break
+    }
+  }
+  if (is.null(Kp1)) stop("At least one dimension must be permuted.",
+                         call. = FALSE)
+
+  ## Position table over the mixed-radix index space: translating permuted cell
+  ## codes through it replaces match()'s per-k double hashing with one O(N)
+  ## integer gather (identical output; ~2x builder, Phase-6 audit). Only when
+  ## the index space is cheap to allocate; huge sparse spaces keep match().
+  pos <- NULL
+  if (prod(apply(coords, 2L, max)) <= 2^26) {
+    pos <- integer(prod(apply(coords, 2L, max)))   # 0 = unobserved cell
+    pos[orig_code + 1] <- seq_len(nrow(coords))
+  }
 
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
-    mapped <- coords                   # coordinates after applying the k-th element
+    mapped <- coords                   # coordinates under the k-th element
     for (c in seq_len(C)) {
       gk <- groups[[c]]
-      if (!is.null(gk)) {              # NULL group => this dimension is held fixed
+      if (!is.null(gk)) {              # NULL group => dimension held fixed
         img <- gk[[k]]                 # image vector for this dim at element k
         mapped[, c] <- img[coords[, c]]
       }
     }
-    ## Translate permuted coordinates back to observation indices by matching
-    ## cell codes; an NA means the permutation reached an unobserved cell.
+    ## Translate permuted coordinates back to observation indices; an NA (or a
+    ## zero table entry) means the permutation reached an unobserved cell.
     mapped_code <- .cell_code(mapped)
-    g <- match(mapped_code, orig_code)
+    g <- if (is.null(pos)) match(mapped_code, orig_code) else {
+      gi <- pos[mapped_code + 1]
+      gi[gi == 0L] <- NA_integer_
+      gi
+    }
     if (anyNA(g)) {
       stop("Permutation maps to an unobserved cell; the design is not a ",
            "complete array. Use mwperm_missing() or mwperm_layout().",

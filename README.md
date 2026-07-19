@@ -2,9 +2,8 @@
 
 **Invariant permutation tests for multi-way clustered, panel, and missing-data regression.**
 
-`mwperm` implements the finite-sample-valid *invariant permutation test* (IPT) of
-Guo, Toulis & Wang (2026), which extends the residual permutation test of Wen,
-Wang & Wang (2025, *Annals of Statistics*) to multi-way clustered designs.
+`mwperm` implements the finite-sample-valid *invariant permutation test* (IPT)
+of Guo, Toulis & Wang (2026) for multi-way clustered designs.
 
 For the **dyadic regression model** (Guo et al., 2026, Eq. 1)
 
@@ -330,6 +329,3 @@ trade statistics.
 
 - Guo, W., Toulis, P. & Wang, Y. (2026). *Permutation Inference under Multi-way
   Clustering and Missing Data.* arXiv:2601.08610 [stat.ME].
-- Wen, K., Wang, T. & Wang, Y. (2025). Residual permutation test for regression
-  coefficient testing. *The Annals of Statistics* **53**(2), 724–748.
-  doi:10.1214/24-AOS2360.

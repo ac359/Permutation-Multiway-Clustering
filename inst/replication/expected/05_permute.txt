@@ -1,0 +1,21 @@
+==== 05 One-sided permutation (permute = 'rows') ====
+mwperm 0.2.0 | size 2000 sims, power 500 sims | 2026-07-18 15:45:35
+
+---- size (30x1 single-column, rows-only, null) ----
+  K = 29  |  size@.05 = 3.6% (CP upper 4.4%)  |  super-unif: clean
+
+---- power (30x1 single-column, rows-only) ----
+  beta = 0.25   reject@.05 = 19.6%
+  beta = 0.50   reject@.05 = 58.8%
+  beta = 1.00   reject@.05 = 99.0%
+
+---- summary ----
+  size controlled (CP upper <= 5.5%)        : yes
+  power monotone, ~1 at beta = 1            : yes
+
+power table:
+ beta reject05
+ 0.00    0.036
+ 0.25    0.196
+ 0.50    0.588
+ 1.00    0.990
