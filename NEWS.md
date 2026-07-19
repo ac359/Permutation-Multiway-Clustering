@@ -1,3 +1,15 @@
+# mwperm (development version)
+
+* **Bug fix (changes reported intervals).** With an explicit `grid` and
+  `n_reps > 1`, the single-coefficient confidence interval retained any value
+  accepted in *any* repetition (a union, i.e. inversion of the maximum
+  p-value across reps). It now inverts the **median** p-value across reps,
+  matching the reported p-value, the joint-region path, and Remark 1 of Guo,
+  Toulis & Wang (2026). Grid-mode intervals are now narrower and no longer
+  grow with `n_reps`. Intervals whose acceptance region reaches the edge of
+  the supplied `grid` are now reported as unbounded on that side rather than
+  silently truncated.
+
 # mwperm 0.2.0
 
 Audit-driven release: the changes below implement the fix plan from the

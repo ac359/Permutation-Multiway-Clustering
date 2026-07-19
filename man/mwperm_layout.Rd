@@ -71,10 +71,11 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \code{seed + r - 1} for reproducibility.}
 
 \item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
-a single covariate, a numeric vector (the interval becomes the range of
-grid
-points not rejected). For several, a list of one numeric vector per
-covariate defining the region search grid.}
+a single covariate, a numeric vector: the interval becomes the hull of the
+grid points not rejected by the median-aggregated test (the same
+de-randomisation as the reported p-value; an acceptance region reaching a
+grid edge is reported as unbounded on that side). For several, a list of
+one numeric vector per covariate defining the region search grid.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
