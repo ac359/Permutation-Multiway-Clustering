@@ -5,7 +5,7 @@ bibentry(
   title   = "Permutation Inference under Multi-way Clustering and Missing Data",
   author  = c(person("Wenxuan", "Guo"),
               person("Panos", "Toulis"),
-              person("Y.", "Wang")),
+              person("Yuhao", "Wang")),
   year    = "2026",
   eprint  = "2601.08610",
   archiveprefix = "arXiv",
