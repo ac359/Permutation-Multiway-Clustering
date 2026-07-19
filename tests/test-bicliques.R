@@ -1,5 +1,5 @@
-## find_bicliques() contract tests (audit Phase 5, brief section 5 item 7 /
-## CLAUDE.md section 5.6). Base-R stopifnot style; fast.
+## find_bicliques() contract tests (audit Phase 5, brief section 5 item 7).
+## Base-R stopifnot style; fast.
 ## The contract mwperm_missing() relies on: every returned block is FULLY
 ## OBSERVED; blocks are DISJOINT in both rows and columns; min_block honoured
 ## (floored at 2); deterministic (no RNG, caller's stream untouched); the

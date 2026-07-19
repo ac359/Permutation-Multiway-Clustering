@@ -1,8 +1,8 @@
 ## Edge-case / adversarial-input regression tests (audit Phase 5, brief
 ## section 5).
 ## Base-R stopifnot style; fast. Pins the VALIDATION CONTRACT: every bad input
-## fails early with an error naming the offending user-facing argument
-## (CLAUDE.md section 5.7), degenerate-but-legal designs stay valid, and the S3
+## fails early with an error naming the offending user-facing argument,
+## degenerate-but-legal designs stay valid, and the S3
 ## methods honour their documented guarantees. The behaviours the audit found
 ## deficient (silent factor-y coercion F5.1, noise-driven degenerate-d p-value
 ## F5.2, K/seed validation style F5.3/F2.3, retained-cells-only validation

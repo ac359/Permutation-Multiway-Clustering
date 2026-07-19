@@ -73,7 +73,6 @@ docs/
 # (kept on the private branch; not shipped in the public package repo)
 demo/
 sim-cache/
-CLAUDE.md
 audit/
 Extra info/
 AUDIT_BRIEF.md
