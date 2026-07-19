@@ -1,0 +1,27 @@
+==== 01 Type-I error under the null ====
+mwperm 0.2.0 | 2000 sims/cell | rejection rule p <= alpha | 2026-07-18 15:32:22
+
+---- dyadic (n = 40), IPT vs classical OLS t-test ----
+  normal/phi.15   IPT size@.05 = 0.9% (CP upper 1.3%)  |  OLS = 33.1%  |  super-unif: clean
+  normal/phi.90   IPT size@.05 = 0.9% (CP upper 1.3%)  |  OLS = 63.3%  |  super-unif: clean
+  lognorm/phi.90  IPT size@.05 = 1.0% (CP upper 1.4%)  |  OLS = 55.9%  |  super-unif: clean
+
+---- panel (InvB) and three-way (InvA), IPT ----
+  panel n20xT6    IPT size@.05 = 0.7% (CP upper 1.1%)
+  3-way 20^3      IPT size@.05 = 1.6% (CP upper 2.1%)  |  super-unif: clean
+
+---- summary ----
+  IPT cells with size@.05 > 5.5% (CP upper)   : 0 / 5
+  IPT cells with a super-uniformity violation : 0 / 4
+  naive-OLS size range@.05                    : 33.1% - 63.3%
+
+full table:
+   design           cell    method size05 cp_upper1 su_violation
+   dyadic  normal/phi.15       IPT 0.0085    0.0127        FALSE
+   dyadic  normal/phi.15 naive OLS 0.3305    0.3482           NA
+   dyadic  normal/phi.90       IPT 0.0085    0.0127        FALSE
+   dyadic  normal/phi.90 naive OLS 0.6330    0.6508           NA
+   dyadic lognorm/phi.90       IPT 0.0100    0.0145        FALSE
+   dyadic lognorm/phi.90 naive OLS 0.5590    0.5774           NA
+    panel   n20xT6 trend       IPT 0.0070    0.0109           NA
+ threeway       20x20x20       IPT 0.0160    0.0214        FALSE

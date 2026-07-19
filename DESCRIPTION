@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.1.1
+Version: 0.2.0
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = "aut"),
@@ -10,9 +10,8 @@ Authors@R: c(
 Description: Finite-sample valid hypothesis tests and confidence intervals for
     regression coefficients under multi-way (e.g. dyadic) clustering, including
     panel and missing-data designs. The methods implement the invariant
-    permutation test of Guo, Toulis and Wang (2026), which builds on the
-    residual permutation test of Wen, Wang and Wang (2025)
-    <doi:10.1214/24-AOS2360>. Validity requires only that the errors be
+    permutation test of Guo, Toulis and Wang (2026)
+    <doi:10.48550/arXiv.2601.08610>. Validity requires only that the errors be
     separately exchangeable across clustering dimensions, conditional on the
     covariates; in particular the covariate distribution is unrestricted, so
     the tests remain exact in finite samples even with few clusters or
@@ -24,12 +23,16 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     cover two-way (dyadic) designs, three-way clustering, panels with arbitrary
     time effects, replicated two-way layouts, and incomplete arrays via fully
     observed bicliques.
-License: Proprietary
+License: MIT + file LICENSE
+URL: https://github.com/ac359/Permutation-Multiway-Clustering
+BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
+Language: en-US
+Date: 2026-07-17
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
 Suggests: knitr, rmarkdown, RhpcBLASctl
 VignetteBuilder: knitr
 LazyData: true
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 NeedsCompilation: no

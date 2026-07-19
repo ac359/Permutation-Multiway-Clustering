@@ -22,6 +22,10 @@ src/*.so
 src/*.dll
 inst/doc/
 
+# generated replication artifacts (the scripts + expected/ are tracked)
+inst/replication/out/
+inst/replication/cache/
+
 # ----- R / RStudio machine-local state -----
 .Rhistory
 .Rapp.history
@@ -67,6 +71,9 @@ docs/
 
 # Development-only test suite, demo script, and validation simulations
 # (kept on the private branch; not shipped in the public package repo)
-tests/
 demo/
 sim-cache/
+CLAUDE.md
+audit/
+Extra info/
+AUDIT_BRIEF.md

@@ -20,3 +20,12 @@
 ^mwperm_.*\.tar\.gz$
 ^mwperm\.Rcheck$
 ^demo$
+^CLAUDE\.md$
+^AUDIT_BRIEF\.md$
+^audit$
+^Extra info$
+^Extra.info$
+^LICENSE\.md$
+^inst/replication/out$
+^inst/replication/cache$
+^\.github$
