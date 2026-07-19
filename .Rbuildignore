@@ -20,7 +20,6 @@
 ^mwperm_.*\.tar\.gz$
 ^mwperm\.Rcheck$
 ^demo$
-^CLAUDE\.md$
 ^AUDIT_BRIEF\.md$
 ^audit$
 ^Extra info$
