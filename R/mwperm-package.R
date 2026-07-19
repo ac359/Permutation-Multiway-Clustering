@@ -33,7 +33,7 @@
 #'   \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
 #'   \code{\link{build_perm_set}}.
 #'
-#' @importFrom stats median lm.fit model.matrix sd setNames
+#' @importFrom stats median lm.fit model.matrix sd setNames coef nobs
 #' @importFrom graphics arrows axis hist legend mtext par plot.new
 #'   plot.window points polygon rect segments strwidth text title
 #' @importFrom grDevices adjustcolor chull dev.off jpeg pdf png tiff

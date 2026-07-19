@@ -158,8 +158,12 @@ stopifnot(identical(r1, lapply(X10, function(i) i^2 + 1)),
           identical(r2, lapply(X10, function(i) i * 2)))  # still usable
 parallel::stopCluster(cl_pre)
 
-## n_cores is clamped to the detected core count (F6.5 fix): silently inside
-## .plapply, with a warning naming `n_cores` at the engine entry
+## n_cores is clamped to the available core count (F6.5 fix): silently inside
+## .plapply, with a warning naming `n_cores` at the engine entry. mc.cores is
+## pinned to 2 so the clamp target is 2 and the assertions never spawn more
+## than R CMD check's 2-worker limit (the clamp also honours mc.cores).
+old_mc <- getOption("mc.cores")
+options(mc.cores = 2L)
 stopifnot(identical(
   mwperm:::.plapply(X10, function(i) i + 1L, n_cores = 9999L),
   lapply(X10, function(i) i + 1L)))
@@ -171,6 +175,7 @@ f_over <- withCallingHandlers(
     w_clamp <<- c(w_clamp, conditionMessage(cnd))
     invokeRestart("muffleWarning")
   })
+options(mc.cores = old_mc)
 stopifnot(any(grepl("`n_cores`", w_clamp, fixed = TRUE)),
           isTRUE(same_fit(f_ser,
                           f_over)))                 # clamped run == serial

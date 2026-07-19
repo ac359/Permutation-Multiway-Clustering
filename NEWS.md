@@ -40,6 +40,15 @@ p-value, or any seeded result unless explicitly noted).
   default `permute = "both"` path is unchanged. Size control and power of
   the one-sided test were verified by simulation (2,000-run null cells,
   including the constrained-retry path; no super-uniformity violation).
+* `R CMD check --as-cran` passes with no errors and no package-level
+  warnings. Two fixes were needed: the `coef()`/`nobs()` S3 methods (new in
+  this release) registered without importing their generics from `stats`, so
+  loading the namespace in isolation failed with `object 'nobs' not found`
+  (ordinary `library(mwperm)` masked it because `stats` is always attached) --
+  both generics are now imported; and `n_cores` is now additionally capped by
+  `getOption("mc.cores")` when set, so the standard core-throttling option
+  (and R CMD check's core limit) is honoured. The `.github/` CI directory is
+  excluded from the build tarball.
 * **Replication material** ships in `inst/replication/`: numbered,
   self-contained Monte-Carlo scripts (base R + `mwperm` only) that reproduce
   the package's headline claims -- finite-sample size control versus the

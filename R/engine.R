@@ -54,13 +54,18 @@
   out
 }
 
-#' Detected core count with a safe fallback (Inf when detection fails, so the
-#' clamp becomes a no-op rather than blocking a legitimate request).
+#' Upper bound on worker count: the detected core count, further capped by
+#' \code{getOption("mc.cores")} when the user (or R CMD check) has set it, so
+#' the package honours the standard throttle. Inf when detection fails and no
+#' option is set, so the clamp becomes a no-op rather than blocking a
+#' legitimate request.
 #' @keywords internal
 #' @noRd
 .n_cores_max <- function() {
   nc <- tryCatch(parallel::detectCores(logical = TRUE), error = function(e) NA)
-  if (is.na(nc) || nc < 1L) Inf else nc
+  nc <- if (is.na(nc) || nc < 1L) Inf else nc
+  opt <- suppressWarnings(as.integer(getOption("mc.cores")))
+  if (length(opt) == 1L && !is.na(opt) && opt >= 1L) min(nc, opt) else nc
 }
 
 #' OLS reference estimate of the coefficient(s) of interest and a naive SE
@@ -150,9 +155,9 @@
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
   nc_max <- .n_cores_max()
   if (n_cores > nc_max) {
-    warning(sprintf(paste0("`n_cores` = %d exceeds the %d cores detected; ",
-                           "using %d (more workers than cores only adds ",
-                           "scheduling overhead)."),
+    warning(sprintf(paste0("`n_cores` = %d exceeds the %d available cores ",
+                           "(detectCores(), or getOption(\"mc.cores\") if ",
+                           "set); using %d."),
                     n_cores, nc_max, nc_max), call. = FALSE)
     n_cores <- as.integer(nc_max)
   }

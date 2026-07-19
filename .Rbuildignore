@@ -28,3 +28,4 @@
 ^LICENSE\.md$
 ^inst/replication/out$
 ^inst/replication/cache$
+^\.github$
