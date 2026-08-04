@@ -281,29 +281,83 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   }
   code <- .cell_code(cbind(ri, ci))   # global cell code on retained cells
   Kp1 <- K + 1L
+  ## Row positions of each block's cells, once rather than once per element:
+  ## `blk` does not depend on k, so the K+1 rounds of `blk == q` below were
+  ## rebuilding the same index vectors.
+  sel_q <- lapply(seq_along(blocks), function(q) which(blk == q))
+  ## Block-local labels of those cells: also independent of k, and the loop
+  ## below re-subset them once per group element.
+  lrow_q <- lapply(sel_q, function(s) lrow[s])
+  lcol_q <- lapply(sel_q, function(s) lcol[s])
+  ## Position table over the (row, col) index space, mirroring the one in
+  ## .build_obs_perms: translating target cell codes through it replaces
+  ## match()'s per-element hashing of N doubles with a single integer gather.
+  ## Identical output. Only built when the index space is cheap to allocate;
+  ## a huge sparse space keeps match().
+  n_row_max <- max(ri)
+  n_col_max <- max(ci)
+  pos <- NULL
+  if (as.double(n_row_max) * n_col_max <= 2^26) {
+    pos <- integer(n_row_max * n_col_max)        # 0 = cell not retained
+    pos[code + 1L] <- seq_along(code)
+  }
   ops <- vector("list",
                 Kp1)          # one observation gather-vector per element
   for (k in seq_len(Kp1)) {
-    ## Compute the target global (row, col) of every retained cell under the
-    ## k-th element, block by block (unchanged where the block has no cells).
-    tg_row <- ri
-    tg_col <- ci
-    for (q in seq_along(blocks)) {
-      sel <- blk == q                # retained cells in block q
-      if (!any(sel)) next
-      if (do_rows) {
-        rimg <- rowG[[q]][[k]]                             # local image vector
-        ## local -> permuted -> global
-        tg_row[sel] <- blocks[[q]]$rows[rimg[lrow[sel]]]
+    g <- if (is.null(pos)) {
+      ## Sparse index space: fall back to matching cell codes, which needs the
+      ## target global (row, col) of every retained cell materialized, block by
+      ## block (unchanged where the block has no cells).
+      tg_row <- ri
+      tg_col <- ci
+      for (q in seq_along(blocks)) {
+        sel <- sel_q[[q]]            # retained cells in block q
+        if (!length(sel)) next
+        ## local -> permuted -> global. Both maps are indexed by block-local
+        ## label, of which there are only |block|, so they are composed at
+        ## that length and gathered to cell length once instead of twice.
+        if (do_rows)
+          tg_row[sel] <- blocks[[q]]$rows[rowG[[q]][[k]]][lrow_q[[q]]]
+        if (do_cols)
+          tg_col[sel] <- blocks[[q]]$cols[colG[[q]][[k]]][lcol_q[[q]]]
       }
-      if (do_cols) {
-        cimg <- colG[[q]][[k]]
-        tg_col[sel] <- blocks[[q]]$cols[cimg[lcol[sel]]]
+      match(.cell_code(cbind(tg_row, tg_col)), code)
+    } else {
+      ## Position-table branch. The index `pos` is keyed by is
+      ## (row - 1) + n_row_max * (col - 1) + 1, which is additively separable
+      ## in the two coordinates -- so each block's row map can carry its own
+      ## half of the code and each block's column map the other, both at
+      ## block-label length. The target coordinates are then never formed:
+      ## one gather per margin, one add, one table lookup. (This is the same
+      ## mixed-radix code as .cell_code(cbind(tg_row, tg_col)) -- the permuted
+      ## coordinate sets are the originals rearranged, so they share the radix
+      ## (max(ri), max(ci)) used to build `pos`.)
+      ##
+      ## `gi` starts at 0 and is written only at the `sel_q` positions. That
+      ## covers every retained cell: `keep` and `blk` are assigned from the
+      ## SAME logical mask in the same iteration of the block loop in
+      ## mwperm_missing(), so a cell survives to this vector only if some
+      ## block claimed it, and `blk` is then in seq_along(blocks) by
+      ## construction -- never 0, and never NA, since `%in%` yields no NA.
+      ## Should that invariant ever be broken, the leftover 0 becomes NA and
+      ## trips the anyNA() guard below; that is deliberate, and preferable to
+      ## the alternative of silently mapping an unclaimed cell to itself.
+      gi <- integer(length(ri))
+      for (q in seq_along(blocks)) {
+        sel <- sel_q[[q]]
+        if (!length(sel)) next
+        gr <- blocks[[q]]$rows
+        gc <- blocks[[q]]$cols
+        ## when a margin is held fixed its own labels stand in for the image,
+        ## and gr[lrow_q] reproduces ri[sel] exactly -- lrow was built as
+        ## match(ri[sel], gr), so the round trip is exact by construction
+        rcode <- (if (do_rows) gr[rowG[[q]][[k]]] else gr) - 1L
+        ccode <- n_row_max * ((if (do_cols) gc[colG[[q]][[k]]] else gc) - 1L) + 1L
+        gi[sel] <- pos[rcode[lrow_q[[q]]] + ccode[lcol_q[[q]]]]
       }
+      gi[gi == 0L] <- NA_integer_
+      gi
     }
-    ## Map each target cell back to its observation index among retained cells.
-    tgt_code <- .cell_code(cbind(tg_row, tg_col))
-    g <- match(tgt_code, code)
     if (anyNA(g))
       stop("Internal error: block permutation left the observed set.",
            call. = FALSE)   # nocov

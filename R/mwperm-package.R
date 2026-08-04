@@ -25,6 +25,17 @@
 #' Two synthetic data sets, \code{\link{trade_dyadic}} and
 #' \code{\link{trade_panel}}, illustrate the dyadic and panel work flows.
 #'
+#' @section Reproducibility:
+#' A \code{seed} determines the result completely: it draws the permutation
+#' group, and every step after that is deterministic. For a fixed seed,
+#' platform and BLAS, repeated runs return the same p-values, estimates and
+#' interval endpoints bit for bit. Under a \emph{different} BLAS the
+#' underlying matrix products are blocked and reassociated differently, so
+#' endpoints may differ in their final decimals. The p-value is unaffected in
+#' any practical sense: it lives on the grid
+#' \eqn{\{1, \dots, K+1\}/(K+1)}, whose resolution \eqn{1/(K+1)} is coarser
+#' than such perturbations by many orders of magnitude.
+#'
 #' @references
 #' Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
 #' multi-way clustering and missing data. arXiv:2601.08610.

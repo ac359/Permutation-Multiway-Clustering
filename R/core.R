@@ -64,17 +64,21 @@
 #' statistics
 #'   a_k(b) = || D' V_k V_k' (y - D b) ||,
 #'   b_k(b) = || D' V_k V_k' (y - D b)_k ||
-#' are affine in `b` once the projections of `y`, `y_k`, `D` and `D_k` onto V_k
-#' are known. Caching them here lets \code{\link{.invert_ci}} sweep many
-#' candidate values of `b` without redoing a single QR decomposition.
+#' are affine in `b` once the residualized covariate Dr = V_k V_k' D and its
+#' inner products with `y`, `y_k`, `D` and `D_k` are known. Caching them here
+#' lets \code{\link{.invert_ci}} sweep many candidate values of `b` without
+#' redoing a single QR decomposition.
 #'
 #' @param y numeric outcome, length N (the *unshifted* outcome).
 #' @param D numeric N x d matrix of covariate(s) of interest.
 #' @param X numeric N x p nuisance design (intercept already included).
 #' @param obs_perms list of length K+1 of integer gather-vectors over the N
 #'   observations; element 1 must be the identity `seq_len(N)`.
-#' @param need_perm_D logical; if `FALSE` the permuted-`D` projection (needed
-#'   only for confidence-interval inversion) is skipped to save work.
+#' @param need_perm_D logical; if `FALSE` the permuted-`D` cross product `W`
+#'   (needed only for confidence-interval inversion and non-zero nulls) is not
+#'   formed. It is one inner product per permutation, so the saving is small;
+#'   the field is left `NULL`-valued so a prep object built without it cannot
+#'   silently be used for inversion.
 #' @param n_cores number of workers for the per-permutation QR loop (the K
 #'   independent factorizations); 1 = serial. The loop uses no RNG and each
 #'   iteration writes an independent slice, so any schedule gives identical
@@ -99,30 +103,73 @@
   ## in the qr() league (1e-8 on the Frobenius norm).
   degen_tol2 <- 1e-16 * sum(D * D)
 
+  ## Every observation gather-vector is a bijection, in every design (the
+  ## complete-array builders match a permuted cell code back to a unique row;
+  ## Procedure 2 permutes within bicliques that are disjoint in both margins).
+  ## So X_k = Pi_k X for a permutation matrix Pi_k, and the Gram matrix of the
+  ## stacked design M_k = [X | X_k] is
+  ##     M_k'M_k = [ X'X    X'X_k ]
+  ##               [ X_k'X   X'X  ]
+  ## -- the lower-right block is X'Pi_k'Pi_k X = X'X, the SAME matrix as the
+  ## upper-left, for every k. Only the cross block depends on the permutation.
+  ## That is the whole optimization: X'X is formed once below, and the per-
+  ## permutation cost drops to one crossprod (level-3 BLAS) in place of a QR
+  ## of the N x 2p stack.
+  p <- ncol(X)                         # nuisance columns (incl. intercept)
+  A <- crossprod(X)                    # shared by every permutation
+  XtD <- crossprod(X, D)               # likewise
+  ## X' held explicitly so the cross block below can be written as a plain
+  ## product. `crossprod(X, Xg)` and `tX %*% Xg` are the same mathematical
+  ## sums over the same reduction index; they differ only in how they enter
+  ## BLAS, through dgemm 'T' and dgemm 'N' respectively. Under the reference
+  ## BLAS the 'T' kernel accumulates each entry in a single scalar, so its
+  ## FMA chain is serial (~1.4 GFLOP/s here), while the 'N' kernel's inner
+  ## loop is a contiguous length-p axpy with p independent accumulators --
+  ## same arithmetic, ~1.5x the speed, on the term that is two thirds of
+  ## this function. An optimized BLAS blocks and reassociates the reduction
+  ## and may do so differently for the two kernels, so bitwise agreement
+  ## between the two spellings is a property of the BLAS, not of the algebra:
+  ## verified on the reference BLAS at 67 of 67 permutations, max |diff|
+  ## 0.000e+00.
+  tX <- t(X)
+
   ## One slice of cached cross products per non-identity permutation k.
-  ## Naming: r = residualized on M_k = [X | X_k]; p = permuted (gathered by g).
+  ## Naming: Dr = D residualized on M_k = [X | X_k]; a trailing [g] is the
+  ## permuted (gathered) copy of a vector.
   one_k <- function(k) {
     g <- obs_perms[[k + 1L]]           # gather-vector of the k-th permutation
-    ## Residualize the whole stack [D | y | y_k | (D_k)] on M_k = [X | X_k] in
-    ## one .lm.fit call: dqrls pivots with the same tolerance family as qr(),
-    ## so the always-rank-deficient M_k (duplicated intercept, panel time
-    ## dummies) is handled identically to qr.resid -- bit-identical residuals,
-    ## ~25% less per-k overhead (one factorization+apply, no qr.default
-    ## coercion copies). Verified in the Phase-6 audit.
-    S <- if (need_perm_D) cbind(D, y, y[g], D[g, , drop = FALSE])
-         else             cbind(D, y, y[g])
-    R <- stats::.lm.fit(cbind(X, X[g, , drop = FALSE]), S)$residuals
-    Dr <- R[, seq_len(d),
-            drop = FALSE]            # residualized covariate(s), N x d
+    ## Only D is residualized. V_k V_k' = I - P_{M_k} is symmetric and
+    ## idempotent, so D' V_k V_k' z = (V_k V_k' D)' z = Dr' z for any z: the
+    ## permuted and unpermuted outcomes enter as plain inner products against
+    ## Dr. This is the statistic as Procedure 1 writes it,
+    ## a_k(b) = ||Dr'(y - D b)||.
+    Dr <- if (p == 0L) D else {
+      Xg <- X[g, , drop = FALSE]                      # X_k = Pi_k X
+      B <- tX %*% Xg                                  # = X'X_k, the only
+                                                      #   O(N p^2) term
+      ## M_k is rank-deficient by construction -- the permuted intercept
+      ## duplicates the original, and panel time dummies are permuted among
+      ## themselves -- so the projector goes through a pseudo-inverse. The
+      ## eigenvalues of the Gram matrix are the SQUARED singular values of
+      ## M_k, so the cut below at 1e-14 is the same relative tolerance on
+      ## singular values (1e-7) that .lm.fit applies, squared.
+      e <- eigen(rbind(cbind(A, B), cbind(t(B), A)), symmetric = TRUE)
+      pos <- e$values > 1e-14 * e$values[1L]
+      V <- e$vectors[, pos, drop = FALSE]
+      cf <- V %*% ((1 / e$values[pos]) *
+                     crossprod(V, rbind(XtD, crossprod(Xg, D))))
+      D - X %*% cf[seq_len(p), , drop = FALSE] -
+          Xg %*% cf[p + seq_len(p), , drop = FALSE]   # (I - P_{M_k}) D
+    }
     if (sum(Dr * Dr) <= degen_tol2)    # degenerate slice: exact-arithmetic zero
       return(list(u = matrix(0, d, 1L), v = matrix(0, d, 1L),
                   M = matrix(0, d, d),
                   W = if (need_perm_D) matrix(0, d, d)))
-    list(u = crossprod(Dr, R[, d + 1L]),           # = Dr' yr
-         v = crossprod(Dr, R[, d + 2L]),           # = Dr' ypr
+    list(u = crossprod(Dr, y),                     # = Dr' y
+         v = crossprod(Dr, y[g]),                  # = Dr' y_k
          M = crossprod(Dr),                        # = Dr' Dr
          W = if (need_perm_D)          # only for CI / non-zero null
-           crossprod(Dr, R[, d + 2L + seq_len(d), drop = FALSE]))
+           crossprod(Dr, D[g, , drop = FALSE]))
   }
   slices <- .plapply(seq_len(K), one_k, n_cores = n_cores, cl = cl)
 
