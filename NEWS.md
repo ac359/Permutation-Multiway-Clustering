@@ -1,5 +1,30 @@
 # mwperm (development version)
 
+* **Performance (no change to any result).** The per-permutation kernel was
+  rebuilt three times. It now residualizes only `d` on the stacked design
+  `[X | X_pi]` -- `V_k V_k'` is symmetric and idempotent, so the outcome and
+  the permuted columns enter the statistic as plain inner products against
+  the residualized `d`, and the three extra columns the previous code pushed
+  through the same back-substitution produced no new information. It then
+  drops the per-permutation QR entirely: because `X_pi` is a row permutation
+  of `X`, the two diagonal blocks of the stacked design's Gram matrix are
+  both `X'X`, so `X'X` is formed once per fit and only the cross block
+  `X'X_pi` -- one `crossprod` -- depends on the permutation. The
+  block-permutation builder behind `mwperm_missing()` also gained the
+  position-table cell lookup already used elsewhere. Finally, that cross
+  block is now spelled `t(X) %*% X_pi` rather than `crossprod(X, X_pi)`:
+  identical sums over the same reduction index, but reaching a BLAS kernel
+  that accumulates each entry with independent accumulators instead of one
+  serial dependency chain. The block-permutation builder additionally
+  composes each block's maps at block-label rather than cell length. A
+  representative gravity fit (`mwperm_missing`, N = 9,248, K = 67,
+  `n_reps = 15`) drops from 11.7 s to 2.8 s serial. P-values, per-rep
+  p-values, estimates and intervals are unchanged -- verified `identical()`
+  across all five designs, on all 28 interval endpoints of the gravity
+  application, and against the authors' own implementation on a fixed
+  permutation group (`demo/perf_oracle.R`, `report/performance.md`). The
+  relative gain of the last step depends on the BLAS in use.
+
 * **Bug fix (changes reported intervals).** With an explicit `grid` and
   `n_reps > 1`, the single-coefficient confidence interval retained any value
   accepted in *any* repetition (a union, i.e. inversion of the maximum
