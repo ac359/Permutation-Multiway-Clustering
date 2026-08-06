@@ -329,3 +329,8 @@ trade statistics.
 
 - Guo, W., Toulis, P. & Wang, Y. (2026). *Permutation Inference under Multi-way
   Clustering and Missing Data.* arXiv:2601.08610 [stat.ME].
+
+## License
+
+`mwperm` is released under the MIT license. See `LICENSE` for the copyright
+year and holders, and `LICENSE.md` for the full text.
