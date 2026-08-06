@@ -136,7 +136,13 @@ X10 <- as.list(1:10)
 stopifnot(identical(
   mwperm:::.plapply(X10, function(i) i^2 + 1, n_cores = 2L, method = "psock"),
   lapply(X10, function(i) i^2 + 1)))
-for (m in c("fork", "psock")) {
+## `method = "fork"` is a Unix-only code path: on Windows parallel::mclapply()
+## rejects mc.cores > 1 outright ("'mc.cores' > 1 is not supported on Windows")
+## before the task ever runs, so the forked branch cannot be exercised there.
+## Test it only where forking exists; "psock" -- the branch .plapply's "auto"
+## selects on Windows -- is exercised on every platform.
+err_methods <- if (.Platform$OS.type == "unix") c("fork", "psock") else "psock"
+for (m in err_methods) {
   ## suppressWarnings: mclapply emits an expected "core encountered error"
   ## warning before .plapply re-throws the worker error we are testing for
   msg <- tryCatch({
