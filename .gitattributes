@@ -1,1 +1,17 @@
+# Normalise to LF in the repository and on checkout, so sources are
+# byte-identical on the Linux, macOS and Windows CI runners.
 * text=auto eol=lf
+
+# Binary payloads: never line-ending converted or diffed as text.
+# `text=auto` would normally detect these, but marking them is explicit and
+# removes any dependence on git's content heuristic.
+*.rda binary
+*.RData binary
+*.rds binary
+*.png binary
+*.jpg binary
+*.pdf binary
+*.gz binary
+*.zip binary
+*.xls binary
+*.xlsx binary
