@@ -1,16 +1,14 @@
 # =========================================================================
 # .gitignore for the mwperm R package
-# Goal: the public repository contains ONLY the installable R package
-# (R/, man/, data/, data-raw/, vignettes/, DESCRIPTION, NAMESPACE,
-# README.md, NEWS.md). Everything listed below stays on the local machine
-# and is never pushed.
 #
-# Note: ignore rules do not untrack files that are already committed, so the
-# private development branch (review-and-unify) keeps its tracked copies of
-# tests/, demo/, sim-cache/ etc.; on the public branch the same paths are
-# simply invisible to git. Adding NEW files under these paths on the private
-# branch requires `git add -f`.
+# The repository contains only the installable package: R/, man/, data/,
+# data-raw/, inst/, tests/, vignettes/, DESCRIPTION, NAMESPACE, NEWS.md,
+# README.md, LICENSE and .github/. Everything below is build output,
+# machine-local state, or local working material.
 # =========================================================================
+
+# ----- local working material, not part of the package -----
+private/
 
 # ----- R build artifacts -----
 *.tar.gz
@@ -46,33 +44,3 @@ Thumbs.db
 *~
 .idea/
 .vscode/
-
-# =========================================================================
-# PRIVATE / LOCAL-ONLY MATERIAL -- never for the public repository
-# =========================================================================
-
-# Third-party material that is NOT ours to redistribute:
-# the paper authors' replication code and the reference-paper PDFs
-# (plus the local convenience symlink to the authors' code).
-shared code/
-shared code
-more_info/
-reference/
-report/
-Reference papers/
-
-# Local project memory / internal design docs
-IMPLEMENTATION_PLAN.md
-
-# Internal review/task artifacts (development record, private branch only)
-PROGRESS.md
-REVIEW.md
-docs/
-
-# Development-only test suite, demo script, and validation simulations
-# (kept on the private branch; not shipped in the public package repo)
-demo/
-sim-cache/
-audit/
-Extra info/
-AUDIT_BRIEF.md
