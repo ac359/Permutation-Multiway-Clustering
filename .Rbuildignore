@@ -1,30 +1,17 @@
+^private$
+^CLAUDE\.md$
 ^data-raw$
-^report$
-^reference$
-^shared code$
-^shared.code$
-^.*\.DS_Store$
-^\.Rbuildignore$
-^IMPLEMENTATION_PLAN\.md$
-^\.gitignore$
-^.*\.Rproj$
-^\.Rproj\.user$
-^\.git$
-^more_info$
-^Reference papers$
-^Reference.papers$
-^docs$
-^sim-cache$
-^PROGRESS\.md$
-^REVIEW\.md$
-^mwperm_.*\.tar\.gz$
-^mwperm\.Rcheck$
-^demo$
-^AUDIT_BRIEF\.md$
-^audit$
-^Extra info$
-^Extra.info$
 ^LICENSE\.md$
 ^inst/replication/out$
 ^inst/replication/cache$
 ^\.github$
+^\.Rbuildignore$
+^\.gitignore$
+^\.gitattributes$
+^\.git$
+^\.Rhistory$
+^\.Rproj\.user$
+^.*\.Rproj$
+^.*\.DS_Store$
+^mwperm_.*\.tar\.gz$
+^mwperm\.Rcheck$
