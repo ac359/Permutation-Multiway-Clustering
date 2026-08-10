@@ -7,7 +7,7 @@
 #' forced via \code{method}, used by the tests). A pre-made cluster can be
 #' supplied via \code{cl} and is then reused, NOT stopped -- the engine
 #' creates one PSOCK cluster per fit and shares it across the per-rep calls
-#' (audit F6.1: spawning a fresh cluster per rep made parallel runs slower
+#' (spawning a fresh cluster per rep made parallel runs slower
 #' than serial on the Windows path). With \code{n_cores = 1} it is
 #' exactly \code{lapply}, so the default path stays base-R single-threaded.
 #' Because every task in this package is either explicitly seeded or free of
@@ -16,7 +16,7 @@
 #' multithreaded BLAS is in use, R-level parallelism can oversubscribe cores;
 #' where RhpcBLASctl is installed, workers pin BLAS to one thread.
 #' \code{n_cores} beyond the detected core count is clamped silently here
-#' (the engine warns once per fit, naming the argument -- audit F6.5).
+#' (the engine warns once per fit, naming the argument).
 #' @keywords internal
 #' @noRd
 .plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock"),
@@ -179,7 +179,7 @@
   ## statistic is exactly zero in exact arithmetic, so p = 1 by the
   ## minorization (.ipt_prepare zeroes the noise-level slices to enforce
   ## that). Warn once, up front, so the p = 1 is not mistaken for evidence
-  ## (audit F5.2). span(X) is contained in every span[X | X_k], so this check
+  ## span(X) is contained in every span[X | X_k], so this check
   ## catches the global case; per-permutation degeneracy is handled silently
   ## by the slice floor.
   D_resid0 <- qr.resid(qr(X), D)
@@ -218,7 +218,7 @@
   ## and silently duplicate the permutation draws across reps.
   rep_axis <- n_cores > 1L && n_reps > 1L && !is.null(seed)
   ## On non-fork platforms the K-axis path used to spawn a fresh PSOCK
-  ## cluster inside every rep's .ipt_prepare (audit F6.1: with the default
+  ## cluster inside every rep's .ipt_prepare (with the default
   ## n_reps that made parallel runs 3x SLOWER than serial on Windows).
   ## Create one cluster per fit and share it across the per-rep calls.
   psock_cl <- NULL
@@ -248,12 +248,18 @@
   warned_res <- FALSE                   # coarse-resolution note added once
   if (isTRUE(conf_int)) {
     if (res_min > alpha) {
+      ## "Increase K" was the old advice and is not actionable on its own: K is
+      ## capped by the design, so name the concrete requirement instead.
       note <- c(note, sprintf(
         paste0("No %.0f%% confidence %s: the smallest attainable p-value is ",
-               "1/(K+1) = %.3g > alpha = %.3g, so every value is retained. ",
-               "Increase K (more clusters/larger blocks)."),
+               "1/(K+1) = %.3g, which is above alpha = %.3g, so no value ",
+               "could be excluded and the set would be the whole line. A ",
+               "%.0f%% set needs K + 1 >= %d -- that is, at least %d levels ",
+               "in the smallest permuted dimension. The p-value reported ",
+               "above is unaffected and remains exact."),
         100 * conf_level, if (d == 1L) "interval" else "region",
-        res_min, alpha))
+        res_min, alpha, 100 * conf_level,
+        ceiling(1 / alpha), ceiling(1 / alpha)))
       warned_res <- TRUE
     } else if (d == 1L) {
       ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
@@ -273,10 +279,12 @@
       trunc <- attr(ci, "truncated")
       if (!is.null(trunc) && any(trunc))
         note <- c(note, sprintf(paste0(
-          "The acceptance region reaches the %s of the supplied `grid`; that ",
-          "side is reported as infinite because the grid does not certify a ",
-          "finite limit. Widen `grid` to bound it."),
-          paste(c("lower end", "upper end")[trunc], collapse = " and ")))
+          "The acceptance region reaches the %s of the supplied `grid`, so ",
+          "%s reported as infinite: the grid cannot certify a finite limit ",
+          "beyond its own extent. Widen `grid` to bound %s."),
+          paste(c("lower end", "upper end")[trunc], collapse = " and the "),
+          if (sum(trunc) > 1L) "both are" else "that end is",
+          if (sum(trunc) > 1L) "them" else "it"))
       gs <- attr(ci, "grid_step")
       if (!is.null(gs))
         note <- c(note, sprintf(paste0(
@@ -296,9 +304,12 @@
 
   if (res_min > alpha && !warned_res) {
     note <- c(note, sprintf(
-      paste0("Smallest attainable p-value is 1/(K+1) = %.3g > alpha = %.3g; ",
-             "the test cannot reject at this level. Increase K (needs more ",
-             "clusters per dimension)."), res_min, alpha))
+      paste0("The smallest attainable p-value is 1/(K+1) = %.3g, which is ",
+             "above alpha = %.3g, so this test cannot reject at that level ",
+             "however strong the effect. Rejecting at alpha = %.3g needs ",
+             "K + 1 >= %d -- at least %d levels in the smallest permuted ",
+             "dimension. The p-value itself is still exact and valid."),
+      res_min, alpha, alpha, ceiling(1 / alpha), ceiling(1 / alpha)))
   }
 
   ## Assemble the returned "mwperm" object. Field meanings (read by the S3
@@ -472,9 +483,13 @@
   }
 
   ## default mode: bracket each side in every rep, report the median endpoints.
-  ## Island guard: the acceptance set {b : pval(b) > alpha} is usually one
-  ## interval, but it is not guaranteed to be (see REVIEW.md 3) -- and every
-  ## finite u_j / M_j has p = 1, so any of them outside the bracketed interval
+  ## Island guard. The acceptance set {b : pval(b) > alpha} is usually one
+  ## interval, but nothing guarantees it: p(b) counts how many permuted
+  ## statistics b_k(b) dominate min_j a_j(b), and both sides are piecewise
+  ## linear in b, so that count can dip below the threshold and come back.
+  ## Bracketing alone would then return the component containing the centre
+  ## and silently drop the rest. Every finite u_j / M_j has p = 1, so any of
+  ## them outside the bracketed interval
   ## certifies a disconnected region. In that case extend the interval to the
   ## boundary of the outlying component(s) (a conservative hull; never narrower
   ## than before) and flag it so the engine can attach a note.
@@ -632,7 +647,7 @@
 #' Coerce the outcome to numeric, refusing factors.
 #'
 #' \code{as.numeric(factor)} yields the internal level codes -- silent data
-#' corruption for an outcome (audit F5.1). \code{d}/\code{x} are protected by
+#' corruption for an outcome. \code{d}/\code{x} are protected by
 #' matrix coercion (their mode stays character and \code{.check_finite}
 #' rejects it); \code{y} needs this explicit guard because factors are
 #' numeric-coercible.
@@ -727,8 +742,12 @@
            call. = FALSE)
     K <- as.integer(K)
     if (K + 1L > smallest)
-      stop(sprintf("K + 1 = %d exceeds the smallest permuted dimension (%d).",
-                   K + 1L, smallest), call. = FALSE)
+      stop(sprintf(paste0("The permutation group has order K + 1 = %d, but ",
+                          "the smallest permuted dimension has only %d ",
+                          "levels; the group cannot be larger than that. Use ",
+                          "K <= %d, or leave K = NULL for the largest group ",
+                          "this design supports."),
+                   K + 1L, smallest, smallest - 1L), call. = FALSE)
   }
   if (K < 1L)
     stop("Not enough clusters to permute (need >= 2 in each dimension).",
@@ -743,11 +762,13 @@
 #' occupied cells or missing designs with >= 250 blocks. Even then each rep's
 #' test remains valid (the seed only picks the random relabelling); only the
 #' cross-rep independence of the median aggregation degrades. Deliberately
-#' NOT changed: any new mixing scheme would shift every seeded result and
-#' invalidate the published reference numbers. See REVIEW.md 1.
+#' NOT changed: this scheme is FROZEN. Any new mixing would shift every
+#' seeded result, invalidating the reference numbers the paper's tables and
+#' the package's regression anchors are keyed to. Changing it requires a NEWS
+#' entry, re-derived anchors and explicit sign-off.
 #'
-#' Computed in double so a large seed can never overflow to a silent NA
-#' (audit F2.3); values in R's integer seed range are identical to the old
+#' Computed in double so a large seed can never overflow to a silent NA;
+#' values in R's integer seed range are identical to the old
 #' integer arithmetic, so no seeded result changes. Beyond that range the
 #' error names `seed` instead of surfacing as set.seed(NA)'s cryptic message.
 #' @keywords internal
@@ -767,11 +788,22 @@
 #' Uses the column names of \code{D} when present, else the deparsed user
 #' expression \code{fallback} (suffixed by column index when \code{D} has
 #' several columns).
+#'
+#' \code{deparse()} yields ONE element for an ordinary symbol or short call,
+#' but SEVERAL when the argument arrived as a value rather than an expression
+#' -- which is exactly what \code{do.call(mwperm_dyadic, list(y, d, ...))}
+#' does, a normal way to drive the package programmatically. A multi-element
+#' deparse is never a usable label, and passing it to \code{setNames()} in the
+#' engine errored with an opaque \code{'names' attribute [N] must be the same
+#' length as the vector [1]}. Fall back to a generic \code{"d"} in that case.
+#' Single-line deparses (every call that worked before) are untouched, so no
+#' existing label or seeded result changes.
 #' @keywords internal
 #' @noRd
 .coef_names <- function(D, fallback) {
   nm <- colnames(D)
   if (!is.null(nm)) return(nm)
+  if (length(fallback) != 1L || is.na(fallback)) fallback <- "d"
   if (ncol(D) == 1L) fallback else paste0(fallback, seq_len(ncol(D)))
 }
 

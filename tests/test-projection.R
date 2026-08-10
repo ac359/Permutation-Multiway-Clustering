@@ -1,10 +1,13 @@
-## Phase 2.3 -- the FWL / partialling-out step (GTW 2026 Eq. 3, Procedure 1
+## The FWL / partialling-out step (GTW 2026 Eq. 3, Procedure 1
 ## step 1)
 ## and the affine-in-beta caching that licenses the CI search. Every check
 ## compares package internals against an INDEPENDENT from-scratch implementation
 ## (explicit null-space V_k via qr.Q(complete) + explicit projector) that shares
-## no statistic/p-value code with R/. See audit/02_correctness.md for the H9
-## near-collinear characterisation (finding F2.1) not asserted here.
+## no statistic/p-value code with R/. Not asserted here: behaviour when `d` is
+## near-collinear with `x` but not exactly so. The statistic stays correct, but
+## the residualized quantities lose relative precision as the angle closes, so
+## any tolerance-based assertion would be a test of the fixture rather than of
+## the code. The exactly-degenerate case IS covered, in test-edgecases.R.
 library(mwperm)
 
 ## --- independent references (no shared code with R/'s statistic path) --------
@@ -95,9 +98,9 @@ for (d in 1:2) {
 }
 
 ## ---- 4. oracle equivalence over many random designs (fast subset) -----------
-## Full 200-design study with saved output:
-## audit/scripts/02_oracle_equivalence.R.
-## Here a fast subset that ships and runs under R CMD check.
+## A fast subset sized to run under R CMD check. The same comparison has been
+## run over 200 random designs off-line; nothing here depends on that, and
+## widening `ncheck` below reproduces it at proportionate cost.
 set.seed(2026)
 ncheck <- 0L
 for (t in 1:20) {

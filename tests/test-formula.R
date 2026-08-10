@@ -1,7 +1,8 @@
-## Formula-interface identity tests (adopted from the audit's Phase-7
-## prototype harness): mwperm_formula() must reproduce the data interface
-## EXACTLY -- identical objects modulo `call` -- because it only assembles
-## inputs; the statistical core is untouched. Base-R stopifnot style; fast.
+## Formula-interface identity tests. mwperm_formula() must reproduce the data
+## interface EXACTLY -- identical objects modulo `call` -- because it only
+## assembles y/d/x from formula algebra and forwards them; it touches no part
+## of the statistical core. Any difference here is an assembly bug.
+## Base-R stopifnot style; fast.
 library(mwperm)
 
 same_but_call <- function(a, b) {

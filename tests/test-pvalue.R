@@ -1,4 +1,4 @@
-## Phase 2.4 -- the minorized randomization p-value (GTW 2026 Eq. 10):
+## The minorized randomization p-value (GTW 2026 Eq. 10):
 ##   p(b) = (1 + #{k : min_j a_j(b) <= b_k(b)}) / (K + 1).
 ## It must live on the grid {1,...,K+1}/(K+1), be conservative on ties, and
 ## equal

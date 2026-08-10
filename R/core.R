@@ -1,12 +1,21 @@
 ## Internal computational core for the invariant permutation test.
 ## Not exported.
 
-#' Residual maker via QR (rank robust)
+#' Residual maker via QR (rank robust) -- REFERENCE IMPLEMENTATION
 #'
 #' Returns the residuals of `V` after projecting onto the column space of `M`,
 #' i.e. (I - P_M) V where P_M is the orthogonal projector onto col(M). Uses a
 #' pivoted QR so that rank-deficient `M` (e.g. a duplicated intercept after
 #' stacking X with a permuted copy of X) is handled correctly.
+#'
+#' **Not on the fit path.** Nothing in R/ calls this. `.ipt_prepare()` computes
+#' the same residuals through an eigendecomposition pseudo-inverse of the
+#' 2p x 2p Gram matrix: that never materializes the N x 2p stack, and it
+#' replaces a QR of that stack (O(N (2p)^2)) with one O(N p^2) cross product
+#' plus an O(p^3) eigendecomposition that does not grow with N. This function
+#' survives as the obvious, obviously correct formulation that
+#' `tests/test-projection.R` pins against an independent SVD projector; keep
+#' the two in agreement, and do not delete this without relocating that test.
 #'
 #' @param M numeric matrix, N x q.
 #' @param V numeric vector or N x d matrix.
@@ -28,10 +37,33 @@
 #' @return numeric vector of codes, one per row.
 #' @keywords internal
 #' @noRd
-.cell_code <- function(coords) {
+#' Column maxima of a numeric matrix
+#'
+#' `apply(m, 2L, max)` routes the whole matrix through `aperm()` and a list
+#' split, which showed up as ~a quarter of the permutation builder's time in
+#' profiling. This loop returns the same numbers (max is a
+#' comparison reduction: no arithmetic, so no reassociation to worry about)
+#' without copying the matrix. Names are dropped -- every caller indexes by
+#' position.
+#'
+#' @param m numeric matrix.
+#' @return numeric vector of length `ncol(m)`.
+#' @keywords internal
+#' @noRd
+.col_max <- function(m) {
+  out <- numeric(ncol(m))
+  for (c in seq_len(ncol(m))) out[c] <- max(m[, c])
+  out
+}
+
+.cell_code <- function(coords, radix = NULL) {
   coords <- as.matrix(coords)
   storage.mode(coords) <- "double"
-  radix <- apply(coords, 2L, max)      # per-dimension base = number of clusters
+  ## Per-dimension base = number of clusters. `radix` may be supplied by a
+  ## caller that already knows it (see .build_obs_perms, which reuses one
+  ## radix for all K+1 permuted copies); the column maxima are the same
+  ## numbers either way, so the codes are unchanged.
+  if (is.null(radix)) radix <- .col_max(coords)
   ## Guard exactness: the code ranges over 0..prod(radix)-1, which must fit in a
   ## double without rounding (integers are exact only up to 2^53). For realistic
   ## cluster counts this is never an issue, but error loudly rather than risk a
@@ -99,7 +131,7 @@
   ## residualized cross products are pure rounding noise. In exact arithmetic
   ## that slice has a_k = 0 -- forcing p = 1 through the minorization -- so
   ## the slice is zeroed to restore the exact answer rather than letting
-  ## ~1e-16 noise decide the a/b comparisons (audit F5.2). Relative tolerance
+  ## ~1e-16 noise decide the a/b comparisons. Relative tolerance
   ## in the qr() league (1e-8 on the Frobenius norm).
   degen_tol2 <- 1e-16 * sum(D * D)
 
@@ -259,7 +291,13 @@
 .build_obs_perms <- function(coords, groups) {
   coords <- as.matrix(coords)
   C <- ncol(coords)                    # number of clustering dimensions
-  orig_code <- .cell_code(coords)      # cell code of each observation
+  ## Mixed-radix bases, computed ONCE for all K+1 elements. Each image vector
+  ## is a bijection of its dimension's ids, so a permutation cannot change a
+  ## column maximum: the permuted coordinates have the same radix as `coords`.
+  ## The old code recomputed it inside .cell_code on every element (and twice
+  ## more for the `pos` table below) -- see .col_max for why that was costly.
+  radix <- .col_max(coords)
+  orig_code <- .cell_code(coords, radix = radix)   # cell code of each obs
   ## Determine the group order K+1 from the first dimension that is permuted
   ## (all non-NULL groups share the same order).
   Kp1 <- NULL
@@ -274,27 +312,43 @@
 
   ## Position table over the mixed-radix index space: translating permuted cell
   ## codes through it replaces match()'s per-k double hashing with one O(N)
-  ## integer gather (identical output; ~2x builder, Phase-6 audit). Only when
+  ## integer gather (identical output; ~2x builder). Only when
   ## the index space is cheap to allocate; huge sparse spaces keep match().
+  n_cells <- prod(radix)
   pos <- NULL
-  if (prod(apply(coords, 2L, max)) <= 2^26) {
-    pos <- integer(prod(apply(coords, 2L, max)))   # 0 = unobserved cell
+  if (n_cells <= 2^26) {
+    pos <- integer(n_cells)            # 0 = unobserved cell
     pos[orig_code + 1] <- seq_len(nrow(coords))
   }
 
+  ## Digits of the ORIGINAL coordinates, as doubles, extracted once. The
+  ## per-element loop below reads these instead of copying `coords` and
+  ## re-coercing it on every k.
+  digit <- vector("list", C)
+  for (c in seq_len(C)) digit[[c]] <- as.double(coords[, c])
+
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
-    mapped <- coords                   # coordinates under the k-th element
+    ## Cell code of the coordinates under the k-th element, accumulated digit
+    ## by digit. This is .cell_code() inlined over the permuted coordinates:
+    ## same bases, same place values, same left-to-right accumulation order,
+    ## so the codes are bit-for-bit what .cell_code(mapped) would return --
+    ## it just never materializes `mapped`.
+    mult <- 1                          # place value of the current digit
+    mapped_code <- NULL
     for (c in seq_len(C)) {
       gk <- groups[[c]]
-      if (!is.null(gk)) {              # NULL group => dimension held fixed
-        img <- gk[[k]]                 # image vector for this dim at element k
-        mapped[, c] <- img[coords[, c]]
+      ## NULL group => dimension held fixed (this is how panel freezes time)
+      dc <- if (is.null(gk)) digit[[c]] else as.double(gk[[k]])[coords[, c]]
+      if (c == 1L) {
+        mapped_code <- dc - 1          # least-significant digit (0-based)
+      } else {
+        mult <- mult * radix[c - 1L]   # advance to the next, higher base
+        mapped_code <- mapped_code + mult * (dc - 1)
       }
     }
     ## Translate permuted coordinates back to observation indices; an NA (or a
     ## zero table entry) means the permutation reached an unobserved cell.
-    mapped_code <- .cell_code(mapped)
     g <- if (is.null(pos)) match(mapped_code, orig_code) else {
       gi <- pos[mapped_code + 1]
       gi[gi == 0L] <- NA_integer_

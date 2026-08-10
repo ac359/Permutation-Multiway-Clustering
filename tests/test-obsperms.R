@@ -1,5 +1,4 @@
-## Phase 2.2 -- the OBSERVATION-level permutation set must itself be a cyclic
-## group
+## The OBSERVATION-level permutation set must itself be a cyclic group
 ## of order K+1 for every design. Closure of this joint group is what Theorem 1
 ## rests on (GTW 2026, Proposition 2 lifted to observations); if it fails for a
 ## design the finite-sample guarantee is void there. Also: a permutation to an
@@ -66,7 +65,7 @@ stopifnot(all(vapply(Ol, function(o) identical(cell[o], cell), logical(1))))
 ## ---- 5. missing block-diagonal: two disjoint blocks -------------------------
 ## Closure of the SAME code the fit runs: the builder was extracted from
 ## mwperm_missing()'s inline closure to the named internal
-## .build_obs_perms_blocks() (audit F2.6 fix), so this test can no longer
+## .build_obs_perms_blocks(), so this test can no longer
 ## drift from the production code path.
 blocks <- list(list(rows = 1:4, cols = 1:4), list(rows = 5:8, cols = 5:8))
 gg <- rbind(expand.grid(r = 1:4, c = 1:4), expand.grid(r = 5:8, c = 5:8))

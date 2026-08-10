@@ -4,8 +4,8 @@ Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
 Version: 0.2.0
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre", "cph")),
-    person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = c("aut", "cre", "cph")),
-    person("Panos", "Toulis", email = "ptoulis@chicagobooth.edu", role = c("aut", "cre", "cph"))
+    person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = c("aut", "cph")),
+    person("Panos", "Toulis", email = "ptoulis@chicagobooth.edu", role = c("aut", "cph"))
   )
 Description: Finite-sample valid hypothesis tests and confidence intervals for
     regression coefficients under multi-way (e.g. dyadic) clustering, including

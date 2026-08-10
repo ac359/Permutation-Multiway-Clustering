@@ -1,9 +1,9 @@
-## Code-path regression tests ported from the audit's Phase-5/6 probes: the
+## Code-path regression tests for branches the design-focused files miss: the
 ## design-diagnosis printer, forced-design validation, name resolution, the
 ## L0 balancing path, explicit-grid confidence sets, the constructed
 ## disconnected-acceptance island guard, and the figure-export devices.
 ## Complements the behaviour suites; added to bring shipped-test coverage of
-## R/ above 90% (audit F7.5). Base-R stopifnot style; fast.
+## R/ above 90%. Base-R stopifnot style; fast.
 library(mwperm)
 
 msg_of <- function(expr)
@@ -150,7 +150,7 @@ stopifnot(any(grepl("`d`", w_dg, fixed = TRUE)),
           f_dg$pvalue == 1, all(is.infinite(f_dg$conf_int)))
 
 ## ---- 5. island guard: constructed disconnected acceptance set ---------------
-## (ported from the audit's 05_island_guard.R): a_k(b) = |t_k - b|,
+## a_k(b) = |t_k - b|,
 ## b_k(b) = |b|/2 with t = (-5 x10, +5 x9) gives the exact acceptance set
 ## [-10, -10/3] U [10/3, 10] at alpha = .05; the reported interval must be
 ## the HULL spanning both islands, flagged as disconnected.

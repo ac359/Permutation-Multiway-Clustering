@@ -38,12 +38,25 @@ intercept is always added internally. May be \code{NULL}.}
 the order of appearance within a cell is used.}
 
 \item{L0}{Optional integer capacity threshold for balancing an unbalanced
-layout (Section 6.3 of Guo, Toulis and Wang, 2026). When supplied, cells
-with fewer than \code{L0} replicates are dropped and each remaining cell is
-uniformly downsampled to exactly \code{L0} replicates, giving a balanced
-array before testing. The downsampling is reproducible through \code{seed}.
-When \code{NULL} (the default) all replicates are used with their (possibly
-unequal) cell sizes.}
+  layout. When supplied, cells with fewer than \code{L0} replicates are
+  dropped and each remaining cell is uniformly downsampled to exactly
+  \code{L0} replicates, giving a balanced array before testing. The
+  downsampling is reproducible through \code{seed}. When \code{NULL} (the
+  default) all replicates are used with their (possibly unequal) cell sizes.
+
+  The \code{L0} threshold comes from Section 6.4 (\emph{irregular designs})
+  of Guo, Toulis and Wang (2026), not Section 6.3. Note what is and is not
+  implemented: Section 6.4 defines the mask \eqn{M_{ij} = 1\{\ell_{ij} \ge
+  L_0\}}, runs the biclique search on \eqn{M}, deletes down to exactly
+  \code{L0} per retained cell, and then applies \strong{Procedure 2}. This
+  function implements the balancing step only, and then applies the
+  \emph{within-cell} test of Section 6.3 to the balanced array. That is
+  valid -- a uniform random subset of exchangeable replicates is itself
+  exchangeable -- but it does not deliver what Section 6.4 exists for: a
+  covariate that is constant within cells still yields a powerless test
+  (see the warning in Details), and replicates that are really time periods
+  are still not permutable. For those cases the Section 6.4 route is not
+  currently available in this package.}
 
 \item{K}{Number of non-identity permutations; defaults to
 \code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).

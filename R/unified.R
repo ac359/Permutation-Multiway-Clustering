@@ -2,16 +2,19 @@
 ## dispatch (mwperm). A thin, additive layer over the five mwperm_* front
 ## ends -- it changes nothing about how any test is computed.
 ##
-## Detection policy (see REVIEW.md 8 and the decision table in
-## docs/REVIEW_TASK.md): forks that are visible in the data's *structure*
+## Detection policy. Forks that are visible in the data's *structure*
 ## (index count, repeated cells, completeness) are resolved silently; forks
 ## that hinge on an EXCHANGEABILITY ASSUMPTION the data cannot reveal are
 ## announced, default to the choice that stays valid under the widest set of
-## data-generating processes, and carry override instructions:
+## data-generating processes, and carry override instructions. The asymmetry
+## is deliberate: structure is checkable from the data, exchangeability is
+## not, so guessing wrong about structure fails loudly while guessing wrong
+## about exchangeability fails silently and invalidates the test.
 ##   * 3 complete crossed indices: panel vs threeway is such a fork. Running
 ##     threeway on a panel (time-autocorrelated errors) is INVALID (size
-##     distortion; empirically 0.88 rejection at alpha = .2 on a trending
-##     panel null -- REVIEW.md 6); running panel on genuinely three-way
+##     distortion; in this package's own Monte Carlo, 0.88 rejection at
+##     alpha = .2 on a trending panel null against the panel test's 0.197);
+##     running panel on genuinely three-way
 ##     exchangeable data is merely less powerful (InvA implies InvB). Hence
 ##     panel is the default; threeway only on explicit design = "threeway".
 ##   * 2 indices with repeated cells: layout vs a panel whose time index was
@@ -79,7 +82,7 @@
 #' strictly fewer levels than every other dimension (the typical few-periods
 #' panel shape). Consecutive integer cluster ids satisfy the weak rule above,
 #' so this stricter form is what decides whether a NAME-based time assignment
-#' is corroborated by the values (audit F5.5). Used only to gate warnings --
+#' is corroborated by the values. Used only to gate warnings --
 #' never to assign the time role itself (assignment behaviour is frozen).
 #' @keywords internal
 #' @noRd
@@ -248,8 +251,14 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                      "(within-cell order)")
     reason <<- why
     K_default <<- min(sizes) - 1L
-    balance <<- sprintf("replicated (%d cells, %d-%d replicates)",
-                        length(sizes), min(sizes), max(sizes))
+    ## "4-4 replicates" read as a range when there is none; and the smallest
+    ## cell is what sets K, which is the number the reader actually needs.
+    balance <<- if (min(sizes) == max(sizes))
+      sprintf("replicated (%d cells, %d replicates each)",
+              length(sizes), min(sizes))
+    else
+      sprintf(paste0("replicated (%d cells, %d-%d replicates; the smallest ",
+                     "cell sets K)"), length(sizes), min(sizes), max(sizes))
     cells_obs <<- length(sizes)
     cells_exp <<- prod(dims[1:2])
     if (!is.null(warn_txt)) warns <<- c(warns, warn_txt)
@@ -358,7 +367,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                     id3 = names(idx)[3L])
       K_default <- min(dims) - 1L
       balance <- "complete"
-      ## Forcing threeway permutes EVERY index (audit F3.4): if one looks
+      ## Forcing threeway permutes EVERY index: if one looks
       ## like time -- by name, or strongly by value (temporal class, or
       ## regularly spaced with strictly fewest levels) -- say so, because a
       ## permuted time series over-rejects badly under serial dependence.
@@ -461,7 +470,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     if (length(name_hit) == 1L) {
       t_k <- name_hit
       t_why <- sprintf("'%s' identified as time by name", names(idx)[t_k])
-      ## A name match alone is weak evidence (audit F5.5): warn unless the
+      ## A name match alone is weak evidence: warn unless the
       ## values single this index out. Assigning the time role to a mere
       ## cluster sends the TRUE time dimension into the permuted pair, and a
       ## permuted time series over-rejects badly.
@@ -553,26 +562,37 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
 print.mwperm_design <- function(x, ...) {
   cat("\nmwperm design diagnosis\n")
   cat(strrep("-", 30), "\n", sep = "")
-  cat("Detected design :", x$design, sprintf("(%s)\n", x$reason))
+  cat("Detected design : ", x$design, " (", x$reason, ")\n", sep = "")
   role_txt <- paste(sprintf("%s = %s", names(x$roles), unlist(x$roles)),
                     collapse = ", ")
-  cat("Roles           :", role_txt, "\n")
-  cat("Dimensions      :",
+  cat("Roles           : ", role_txt, "\n", sep = "")
+  cat("Dimensions      : ",
       paste(sprintf("%s (%d)", names(x$dims), x$dims), collapse = " x "),
-      sprintf("| %d observations\n", x$n_obs))
-  cat("Balance         :", x$balance, "\n")
+      sprintf(" | %d observations\n", x$n_obs), sep = "")
+  cat("Balance         : ", x$balance, "\n", sep = "")
   if (is.na(x$K_default)) {
-    cat("Resolution      : depends on the biclique blocks",
-        "(see find_bicliques)\n")
+    cat("Resolution      : set by the biclique blocks, so not known until\n",
+        "                  they are found (see find_bicliques)\n", sep = "")
   } else {
-    cat(sprintf(paste0("Resolution      : default K = %d, smallest ",
-                       "attainable p = 1/%d %s\n"),
+    ## Report the resolution as both the fraction and its decimal: the
+    ## fraction shows where it comes from, the decimal is what gets compared
+    ## against alpha. "Too coarse" means no 95% set can exclude anything --
+    ## the p-value stays exact either way, so say what is and is not lost.
+    cat(sprintf(paste0("Resolution      : default K = %d, so p-values are ",
+                       "multiples of 1/%d = %s\n"),
                 x$K_default, x$K_default + 1L,
-                if (isTRUE(x$resolution_ok)) "(95% confidence set attainable)"
-                else paste0("(TOO COARSE for a 95% confidence set; ",
-                            "needs >= 20 clusters)")))
+                .fmt_p(1 / (x$K_default + 1L))))
+    cat("                  ",
+        if (isTRUE(x$resolution_ok))
+          "-> fine enough for a 95% confidence set\n"
+        else paste0("-> TOO COARSE for a 95% confidence set (p cannot reach ",
+                    "0.05).\n                     The p-value is still exact; ",
+                    "a 95% set needs >= 20 levels\n",
+                    "                     in the smallest permuted ",
+                    "dimension.\n"),
+        sep = "")
   }
-  cat("Would run       :", x$call_str, "\n")
+  cat("Would run       : ", x$call_str, "\n", sep = "")
   for (w in x$warnings)
     cat(strwrap(w, initial = "  ! ", prefix = "    ",
                 width = 0.9 * getOption("width", 80)), sep = "\n")
@@ -665,7 +685,12 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   ## capture the caller's expression for d BEFORE evaluation: the front ends
   ## label coefficients by deparse(substitute(d)), which through do.call would
   ## deparse the VALUES; we forward d as a named-column matrix instead.
-  d_expr <- paste(deparse(substitute(d)), collapse = "")
+  ## A multi-element deparse means exactly that -- the argument arrived as a
+  ## value, not an expression -- so collapsing it would make the whole data
+  ## vector the coefficient label. Use a generic name instead (see
+  ## .coef_names, which applies the same rule to the direct front ends).
+  d_expr <- deparse(substitute(d))
+  d_expr <- if (length(d_expr) == 1L) d_expr else "d"
 
   ## resolve y / d / x against `data`: accept bare vectors, column-name
   ## strings, or character vectors of column names (for x)
@@ -729,13 +754,16 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
 
   ## Assumption-fork and weak-evidence detection notices are REAL warnings at
   ## fit time -- they flag branches that can be anti-conservative if the
-  ## guessed role is wrong, and must be impossible to miss (audit F5.5/F3.4).
+  ## guessed role is wrong, and must be impossible to miss.
   ## They also stay on the returned object's `note`, as before.
   for (w in chk$warnings) warning(w, call. = FALSE)
 
   if (isTRUE(verbose)) {
-    message(sprintf("Detected design: %s (%s) -> running %s",
-                    chk$design, chk$reason, chk$call_str))
+    ## Two lines. The single-line form ran to ~140 characters and wrapped
+    ## wherever the terminal happened to end, splitting the dispatched call
+    ## mid-argument; this is also the shape README.md documents.
+    message(sprintf("Detected design: %s (%s)", chk$design, chk$reason),
+            "\n  -> running ", chk$call_str)
   }
 
   common <- list(y = y, d = d, x = x, K = K, alpha = alpha,

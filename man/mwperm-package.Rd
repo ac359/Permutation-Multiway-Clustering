@@ -53,12 +53,13 @@ multi-way clustering and missing data. arXiv:2601.08610.
   \code{\link{build_perm_set}}.
 }
 \author{
-\strong{Maintainer}: Andrew Chen \email{andrewc24@uchicago.edu}
+\strong{Maintainer}: Andrew Chen \email{andrewc24@uchicago.edu} [copyright holder]
 
 Authors:
 \itemize{
-  \item Wenxuan Guo \email{wxguo@chicagobooth.edu}
-  \item Panos Toulis \email{ptoulis@chicagobooth.edu}
+  \item Andrew Chen \email{andrewc24@uchicago.edu} [copyright holder]
+  \item Wenxuan Guo \email{wxguo@chicagobooth.edu} [copyright holder]
+  \item Panos Toulis \email{ptoulis@chicagobooth.edu} [copyright holder]
 }
 
 }
