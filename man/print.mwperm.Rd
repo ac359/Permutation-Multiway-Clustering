@@ -17,9 +17,9 @@
 \code{x}, invisibly.
 }
 \description{
-Compact display of the design, the permutation-group order, the point
-estimate and inverted confidence interval (when available), and the
-permutation p-value with the reject/retain decision.
+Compact display of the design, the permutation-group order and its
+resolution, the point estimate and inverted confidence interval (when
+available), and the permutation p-value with the reject/retain decision.
 }
 \details{
 The per-coefficient lines label their two quantities by provenance: the
@@ -27,6 +27,20 @@ point estimate is the \emph{OLS} estimate (printed as \code{"OLS
 estimate"}), while the confidence set comes from inverting the invariant
 permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
 joint confidence region).
+
+The \code{Resolution} line states that the p-value is exact but
+\emph{discrete}: it can only take multiples of \eqn{1/(K+1)}, so the
+smallest value it can ever attain is \eqn{1/(K+1)} itself. Reading a
+p-value without that context is the most common way to over- or
+under-state what the test has shown -- a p equal to \eqn{1/(K+1)} is the
+strongest available evidence rather than a precise number, and a design
+with \eqn{1/(K+1) > \alpha} cannot reject at \eqn{\alpha} however large
+the effect.
+
+With several coefficients the \code{H0} line marks the null as a
+\emph{joint} test over all of them, and the printed brackets are the
+marginal extent of one joint confidence region -- not separate
+per-coefficient intervals.
 }
 \examples{
 data(trade_dyadic)

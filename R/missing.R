@@ -117,7 +117,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   X <- .make_X(x, N)
   .check_lengths(N, list(row = row, col = col))
   ## Validate the FULL supplied data before the biclique step discards cells
-  ## (audit F5.4): the observed cells are the user's data contract, and an NA
+  ## the observed cells are the user's data contract, and an NA
   ## in a soon-to-be-discarded cell should not pass silently.
   .check_finite(list(y = y, d = D, x = X))
 
@@ -158,7 +158,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   K <- .default_K(K, min_side)
 
   ## The SMALLEST selected block is the binding constraint on resolution
-  ## (audit F3.2): under the default K = min_side - 1, a small block caps the
+  ## under the default K = min_side - 1, a small block caps the
   ## attainable p-value at 1/min_side even though it adds information. Say so
   ## explicitly when the cap makes rejection at this alpha impossible; the
   ## generic engine note states the arithmetic, this one names the cause and
@@ -208,10 +208,18 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
   sizes <- vapply(blocks, function(b) c(length(b$rows), length(b$cols)),
                   integer(2))
+  ## Discarding cells is the mechanism of Procedure 2, not a shortfall, and the
+  ## percentage can be startling (routinely well under half). Report it as the
+  ## deliberate trade it is, so nobody reads a low figure as a failed fit.
   note <- c(
-    sprintf(paste0("Used %d of %d observed cells (%.1f%%) across %d fully ",
-                   "observed block(s)."),
-            Nk, N, 100 * Nk / N, length(blocks)),
+    sprintf(paste0("Kept %d of %d observed cells (%.1f%%): the %d fully ",
+                   "observed rectangular block%s Procedure 2 could extract. ",
+                   "The other %d cell%s discarded -- under missingness that ",
+                   "loss is what buys exact validity, and a larger block ",
+                   "would only add power."),
+            Nk, N, 100 * Nk / N, length(blocks),
+            if (length(blocks) == 1L) "" else "s", N - Nk,
+            if (N - Nk == 1L) " is" else "s are"),
     sprintf("Block sizes (rows x cols): %s.",
             paste(sprintf("%dx%d", sizes[1, ], sizes[2, ]), collapse = ", ")),
     res_note
@@ -245,8 +253,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' (the blocks are disjoint in both dimensions, so the joint map is a genuine
 #' relabelling), then expresses the result as observation gather-vectors over
 #' the retained cells. Extracted from \code{mwperm_missing()}'s inline closure
-#' so the group-closure tests exercise the SAME code the fit runs (audit
-#' F2.6); behaviour-identical, same seed offsets.
+#' so the group-closure tests exercise the SAME code the fit runs;
+#' behaviour-identical to the old inline version, same seed offsets.
 #'
 #' @param rep_seed rep-level seed (or NULL); block q draws its row/col groups
 #'   at \code{.sub_seed(rep_seed, 4q - 1)} / \code{.sub_seed(rep_seed, 4q)}
@@ -516,9 +524,11 @@ find_bicliques <- function(row, col, min_block = 2L,
     avail_col[gc] <- FALSE
   }
   if (budget_hit)
-    warning("Exact biclique search hit its node budget on at least one block; ",
-            "used the greedy block there. Raise `node_budget` or use ",
-            "method = \"greedy\".", call. = FALSE)
+    warning("Exact biclique search hit its node budget on at least one block, ",
+            "so the greedy block was used there. The test remains exactly ",
+            "valid: a sub-maximal block costs power, never validity. Raise ",
+            "`node_budget` to search harder, or pass method = \"greedy\" to ",
+            "skip the exact search altogether.", call. = FALSE)
   blocks
 }
 

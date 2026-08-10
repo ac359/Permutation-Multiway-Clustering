@@ -1,5 +1,101 @@
 # mwperm (development version)
 
+* **Documentation rewritten against verified behaviour.** `README.md` was
+  reorganised so that a reader reaches a correct first call before meeting any
+  mathematics, and every code block and shown result in it is now real pasted
+  output rather than an abbreviation. Several claims were corrected: the
+  package was described as "valid with as few as ~20 clusters per dimension",
+  which conflated validity with resolution and understated the guarantee (the
+  test is exact at *any* number of clusters; 20 is what is needed to be able
+  to reject at the 5% level); `mwperm_formula()`, `coef()` and `nobs()` were
+  missing from the function list; `grDevices` was missing from the stated
+  imports. New sections cover choosing a design, reading the output,
+  reproducibility, performance, and limitations.
+
+* **`print()` now states the p-value resolution.** The p-value is exact but
+  discrete -- it can only take multiples of `1/(K+1)` -- and nothing in the
+  output said so. A fit reporting `p-value = 0.025` at `K = 39` was reporting
+  the *smallest value that fit could ever produce*, which is easy to read as
+  a precise number; conversely a design with `1/(K+1) > alpha` cannot reject
+  at `alpha` however large the effect. Every fit now prints, for example,
+  `Resolution   : p-values are multiples of 1/40 = 0.025`.
+
+* **Clearer output for joint (multi-coefficient) tests.** The `H0` line marks
+  the null as joint over all coefficients (a scalar `beta_null` recycled to
+  several printed as a bare `0`, reading as a single-coefficient test), and
+  the footer now says the printed brackets are one confidence region's
+  marginal extent rather than separate per-coefficient intervals.
+
+* **Better guidance in notes, warnings and errors.** The coarse-resolution
+  notes advised "increase K", which is not actionable because K is capped by
+  the design; they now give the concrete requirement (at least `1/alpha`
+  levels in the smallest permuted dimension) and state that the p-value
+  itself remains exact. `confint()` no longer suggests refitting with
+  `conf_int = TRUE` when `conf_int` was already `TRUE` and the resolution was
+  the binding constraint. The exact-biclique budget warning now says validity
+  is unaffected (a sub-maximal block costs power only). `mwperm_missing()`
+  reports discarded cells as the mechanism of Procedure 2 rather than as a
+  bare percentage. Layout fits label their two counts as cells and replicates
+  instead of "clusters", and `K = NULL` errors name the admissible range.
+
+  These are wording, formatting and documentation changes only: no p-value,
+  estimate, confidence limit, `K`, or note-firing condition changes. Verified
+  against a 29-fit regression battery in which 19 objects are `identical()`
+  outright and the other 10 differ only in the free-text `note` field.
+
+* **Speed: the permutation builder is 2.2-2.6x faster, with bit-identical
+  results.** `.build_obs_perms()` recomputed the mixed-radix bases on every
+  one of the K+1 permutations (through `apply(coords, 2L, max)`, which copies
+  the whole matrix), and materialized a permuted coordinate matrix each time.
+  The bases cannot change under a permutation -- each image vector is a
+  bijection of that dimension's ids -- so they are now computed once and
+  reused, and the cell coding is inlined over the permuted coordinates
+  instead of building the matrix. End-to-end this is 1.17-1.24x on the
+  dyadic, panel and three-way designs (panel with 200 clusters and 10
+  repetitions: 110 s to 93 s); the layout and missing-data designs use
+  different builders and are unchanged.
+
+  **No result changes.** `max` is a comparison reduction, so no arithmetic
+  was reassociated, and the inlined coding uses the same bases, place values
+  and accumulation order as before. Verified against the previous
+  implementation pasted in verbatim: cell codes identical on 6 of 6 coordinate
+  layouts, gather vectors identical on 8 of 8 designs (including the sparse
+  `match()` branch), and a 29-fit regression battery spanning all five
+  designs identical under `identical()`.
+
+* **Packaging fix.** `DESCRIPTION` gave the maintainer (`cre`) role to all
+  three authors; R permits exactly one, so the package failed to install --
+  `R CMD INSTALL`, `build`, `check` and every CI matrix leg stopped at the
+  DESCRIPTION parse step before any R code ran. The `cre` role is now held by
+  the maintainer of record alone; all three authors keep `aut` and `cph`,
+  matching `LICENSE`. No behaviour or result changes.
+
+* **Bug fix: `d` supplied as a value rather than an expression.** Passing the
+  covariate of interest through `do.call()` -- a normal way to drive the
+  package programmatically -- made every design-specific front end fail with
+  an opaque `'names' attribute [N] must be the same length as the vector [1]`,
+  because `deparse(substitute(d))` returns one element for a symbol but many
+  for a value. `mwperm()` did not error but labelled the coefficient with the
+  entire deparsed data vector, which then appeared in `print()`,
+  `summary()$term`, `confint()` row names and plot axes. Both paths now fall
+  back to the generic label `"d"` when the deparse is not a single element.
+  Calls that already worked are unaffected: their labels, p-values and
+  confidence limits are unchanged.
+
+* **Documentation corrections.**
+  - `?mwperm_layout` attributed the `L0` balancing threshold to Section 6.3 of
+    Guo, Toulis and Wang (2026); `L0` is defined in Section **6.4**. The page
+    now cites 6.4 and states plainly which part of that procedure is
+    implemented: `L0` performs 6.4's balancing step and then applies 6.3's
+    within-cell test, so a covariate that is constant within cells still
+    yields a powerless test and replicates that are really time periods are
+    still not permutable.
+  - `?mwperm`'s `grid` argument still described the pre-0.2.0 behaviour (the
+    interval as the range of grid points not rejected). It now matches the
+    shipped median-aggregated semantics already documented on the
+    design-specific pages.
+  - The package page's author block now records the copyright holders.
+
 * **Performance (no change to any result).** The per-permutation kernel was
   rebuilt three times. It now residualizes only `d` on the stacked design
   `[X | X_pi]` -- `V_k V_k'` is symmetric and idempotent, so the outcome and
@@ -22,8 +118,8 @@
   p-values, estimates and intervals are unchanged -- verified `identical()`
   across all five designs, on all 28 interval endpoints of the gravity
   application, and against the authors' own implementation on a fixed
-  permutation group (`demo/perf_oracle.R`, `report/performance.md`). The
-  relative gain of the last step depends on the BLAS in use.
+  permutation group. The relative gain of the last step depends on the BLAS
+  in use.
 
 * **Bug fix (changes reported intervals).** With an explicit `grid` and
   `n_reps > 1`, the single-coefficient confidence interval retained any value

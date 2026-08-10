@@ -1,6 +1,6 @@
 ## Detection-safety tests: assumption forks and the time-role assignment must
-## never pick a potentially anti-conservative branch silently (audit findings
-## F5.5 and F3.4). Base-R stopifnot style; fast.
+## never pick a potentially anti-conservative branch silently.
+## Base-R stopifnot style; fast.
 library(mwperm)
 
 warns_of <- function(expr) {

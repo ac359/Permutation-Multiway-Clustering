@@ -1,9 +1,13 @@
-## Phase 2.5 -- equivariance / invariance / identity contracts. All exact, all
+## Equivariance / invariance / identity contracts. All exact, all
 ## cheap, all high-yield: each catches a whole class of indexing, stacking,
-## partialling or scheduling bug that Monte Carlo would miss. Calibrated by
-## audit/results/02_probes.txt D: on these fixtures the p-value is bit-identical
-## under every transformation; estimates/CIs agree to machine epsilon (QR
-## summation order), asserted at 1e-10.
+## partialling or scheduling bug that Monte Carlo would miss.
+##
+## Tolerances are not arbitrary. On these fixtures the p-value comes out
+## BIT-IDENTICAL under every transformation below, so it is asserted with
+## identical(). Estimates and interval endpoints agree only to machine
+## epsilon, because rescaling or reordering changes the summation order
+## inside the QR; those are asserted at 1e-10. A failure at 1e-10 is a real
+## bug, not drift.
 library(mwperm)
 
 same_fit <- function(a, b, skip = "call") {
@@ -130,8 +134,9 @@ stopifnot(isTRUE(same_fit(m_dir, m_par)))
 ## and worker errors propagate on both branches. NOTE: FUN must be passed as an
 ## inline anonymous function here -- .plapply serialises FUN as an unforced
 ## promise, so a bare *name* bound in the test's global env is unresolvable on a
-## PSOCK worker (documented as a finding in audit/02_correctness.md; the
-## engine's internal calls pass package-frame functions and are unaffected).
+## PSOCK worker. This is a property of the test harness, not a package defect:
+## the engine's own calls pass functions from the package frame, which every
+## worker can resolve.
 X10 <- as.list(1:10)
 stopifnot(identical(
   mwperm:::.plapply(X10, function(i) i^2 + 1, n_cores = 2L, method = "psock"),

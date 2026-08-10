@@ -1,7 +1,7 @@
 ## Formula interface: a thin assembly layer over mwperm(). The statistical
 ## core is untouched -- the wrapper only builds y/d/x from formula algebra
 ## and forwards; identity with the data interface is pinned by
-## tests/test-formula.R (adopted from the audit's Phase-7 prototype).
+## tests/test-formula.R.
 
 #' Formula interface to the invariant permutation test
 #'

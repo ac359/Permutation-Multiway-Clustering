@@ -1,9 +1,8 @@
-## Edge-case / adversarial-input regression tests (audit Phase 5, brief
-## section 5).
+## Edge-case / adversarial-input regression tests.
 ## Base-R stopifnot style; fast. Pins the VALIDATION CONTRACT: every bad input
 ## fails early with an error naming the offending user-facing argument,
 ## degenerate-but-legal designs stay valid, and the S3
-## methods honour their documented guarantees. The behaviours the audit found
+## methods honour their documented guarantees. The behaviours found
 ## deficient (silent factor-y coercion F5.1, noise-driven degenerate-d p-value
 ## F5.2, K/seed validation style F5.3/F2.3, retained-cells-only validation
 ## F5.4, NA in layout `rep` F5.7, ignored confint(parm=) F5.8) are FIXED and
@@ -91,7 +90,7 @@ yl <- rnorm(nrow(gl))
 dl <- rnorm(16)[(gl$i - 1L) * 4L + gl$j] + rnorm(nrow(gl))
 expect_err(mwperm_layout(mkNA(yl), dl, row = gl$i, col = gl$j), "`y`")
 ## factor y is rejected in every front end, never coerced to its level codes
-## (audit F5.1: as.numeric(factor) is silent data corruption)
+## (as.numeric(factor) would be silent data corruption)
 yf6 <- factor(round(y6))
 yfp <- factor(round(yp))
 yf8 <- factor(round(y8))

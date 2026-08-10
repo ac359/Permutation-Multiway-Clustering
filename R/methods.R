@@ -9,15 +9,29 @@
 
 #' Print a multi-way permutation test
 #'
-#' Compact display of the design, the permutation-group order, the point
-#' estimate and inverted confidence interval (when available), and the
-#' permutation p-value with the reject/retain decision.
+#' Compact display of the design, the permutation-group order and its
+#' resolution, the point estimate and inverted confidence interval (when
+#' available), and the permutation p-value with the reject/retain decision.
 #'
 #' The per-coefficient lines label their two quantities by provenance: the
 #' point estimate is the \emph{OLS} estimate (printed as \code{"OLS
 #' estimate"}), while the confidence set comes from inverting the invariant
 #' permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
 #' joint confidence region).
+#'
+#' The \code{Resolution} line states that the p-value is exact but
+#' \emph{discrete}: it can only take multiples of \eqn{1/(K+1)}, so the
+#' smallest value it can ever attain is \eqn{1/(K+1)} itself. Reading a
+#' p-value without that context is the most common way to over- or
+#' under-state what the test has shown -- a p equal to \eqn{1/(K+1)} is the
+#' strongest available evidence rather than a precise number, and a design
+#' with \eqn{1/(K+1) > \alpha} cannot reject at \eqn{\alpha} however large
+#' the effect.
+#'
+#' With several coefficients the \code{H0} line marks the null as a
+#' \emph{joint} test over all of them, and the printed brackets are the
+#' marginal extent of one joint confidence region -- not separate
+#' per-coefficient intervals.
 #'
 #' @param x An object of class \code{"mwperm"}.
 #' @param digits Number of significant digits for the estimate and interval.
@@ -36,18 +50,47 @@
 #' print(fit)
 #' @export
 print.mwperm <- function(x, digits = 4L, ...) {
+  ## formatC(format = "g") right-pads the non-finite and exactly-zero cases to
+  ## a common width, so an unbounded limit printed as "[ -Inf,   Inf]". Trim
+  ## it. Finite values are never padded, so no displayed number changes.
+  fmt <- function(v) trimws(formatC(v, digits = digits, format = "g"))
+  wrap <- function(txt, initial, prefix)   # notes / long explanatory lines
+    cat(strwrap(txt, initial = initial, prefix = prefix,
+                width = 0.9 * getOption("width", 80)), sep = "\n")
+
   cat("\nInvariant permutation test (mwperm)\n")
   cat(strrep("-", 36), "\n", sep = "")
-  cat("Design       :", x$type, "\n")
+  cat("Design       : ", x$type, "\n", sep = "")
   if (!is.null(x$auto))                 # dispatched via mwperm(): say why
-    cat("Auto-detected:", x$auto$design, sprintf("(%s)\n", x$auto$reason))
+    cat("Auto-detected: ", x$auto$design, " (", x$auto$reason, ")\n", sep = "")
   nc <- x$n_clusters
-  cat("Clusters     :",
-      paste(sprintf("%s=%d", names(nc), nc), collapse = ", "),
-      sprintf("(%d observations)\n", x$n_obs))
-  cat("Permutations :", sprintf("K = %d  (group order %d, %d rep%s)\n",
-                                x$K, x$n_perm, x$n_reps,
-                                if (x$n_reps == 1L) "" else "s"))
+  ## The layout design permutes replicates WITHIN cells, so its two counts are
+  ## a cell count and the smallest cell's replicate count -- calling them
+  ## "clusters" invites reading `min_cell` as a number of clusters, when it is
+  ## in fact what sets K (= min_cell - 1). Every other design does permute
+  ## cluster dimensions, and keeps the generic label.
+  if (all(c("ncell", "min_cell") %in% names(nc))) {
+    cat("Cells        : ",
+        sprintf("%d cells, smallest holds %d replicates (%d observations)\n",
+                nc[["ncell"]], nc[["min_cell"]], x$n_obs), sep = "")
+  } else {
+    cat("Clusters     : ",
+        paste(sprintf("%s=%d", names(nc), nc), collapse = ", "),
+        sprintf(" (%d observations)\n", x$n_obs), sep = "")
+  }
+  cat("Permutations : ", sprintf("K = %d  (group order %d, %d rep%s)\n",
+                                 x$K, x$n_perm, x$n_reps,
+                                 if (x$n_reps == 1L) "" else "s"), sep = "")
+  ## The p-value is exact but DISCRETE -- it can only land on multiples of
+  ## 1/(K+1). Saying so here is what stops the smallest attainable value from
+  ## being read as a coincidence, or a borderline one as refinable by asking
+  ## for more permutations (it is not: K is capped by the design).
+  ## Formatted with .fmt_p, the same way the p-value below is: showing the
+  ## grid step to different precision than the value sitting on it (0.0455 vs
+  ## 0.045) reads as a discrepancy.
+  cat("Resolution   : ",
+      sprintf("p-values are multiples of 1/%d = %s\n", x$n_perm,
+              .fmt_p(x$resolution)), sep = "")
   cat("\n")
 
   est <- x$estimate
@@ -56,44 +99,49 @@ print.mwperm <- function(x, digits = 4L, ...) {
   ## marginal region bracket (joint case).
   for (k in seq_along(est)) {
     nm <- x$d_names[k]
-    line <- sprintf("  %-12s OLS estimate = %s", nm,
-                    formatC(est[k], digits = digits, format = "g"))
+    line <- sprintf("  %-12s OLS estimate = %s", nm, fmt(est[k]))
     if (k == 1L && !is.null(x$conf_int) && length(x$conf_int) == 2L) {
       line <- paste0(line, sprintf("   %.0f%% IPT CI [%s, %s]",
                                    100 * x$conf_level,
-                                   formatC(x$conf_int[1], digits = digits,
-                                           format = "g"),
-                                   formatC(x$conf_int[2], digits = digits,
-                                           format = "g")))
+                                   fmt(x$conf_int[1]), fmt(x$conf_int[2])))
     } else if (has_box) {
       line <- paste0(line, sprintf("   %.0f%% IPT region [%s, %s]",
                                    100 * x$conf_level,
-                                   formatC(x$conf_box[1, k], digits = digits,
-                                           format = "g"),
-                                   formatC(x$conf_box[2, k], digits = digits,
-                                           format = "g")))
+                                   fmt(x$conf_box[1, k]),
+                                   fmt(x$conf_box[2, k])))
     }
-    cat(line, "\n")
+    cat(line, "\n", sep = "")
   }
+  ## Spell out that the joint brackets are a shadow of one d-dimensional set,
+  ## not d separate intervals -- reading them as per-coefficient CIs is the
+  ## natural mistake, and it understates how much the coefficients trade off.
   if (has_box)
-    cat(sprintf("  (joint %.0f%% confidence region: %d grid points retained; ",
-                100 * x$conf_level, nrow(x$conf_region)),
-        "brackets show its marginal extent)\n", sep = "")
+    wrap(sprintf(paste0("Joint %.0f%% confidence region over %d coefficients ",
+                        "(%d grid points retained). The brackets above are ",
+                        "that single region's marginal extent, not separate ",
+                        "per-coefficient intervals; `conf_region` holds the ",
+                        "retained vectors."),
+                 100 * x$conf_level, length(est), nrow(x$conf_region)),
+         initial = "  ", prefix = "  ")
 
   cat("\n")
-  cat(sprintf("H0: beta = %s    p-value = %s\n",
-              paste(formatC(x$beta_null, format = "g"), collapse = ", "),
-              .fmt_p(x$pvalue)))
+  ## With several coefficients this is ONE joint null on the whole vector, and
+  ## a scalar `beta_null` has been recycled to all of them -- say so, or
+  ## "H0: beta = 0" reads as a single-coefficient test.
+  h0 <- sprintf("H0: beta = %s",
+                paste(trimws(formatC(x$beta_null, format = "g")),
+                      collapse = ", "))
+  if (length(est) > 1L)
+    h0 <- paste0(h0, sprintf("  (joint test of %d coefficients)", length(est)))
+  cat(h0, sprintf("    p-value = %s\n", .fmt_p(x$pvalue)), sep = "")
   decision <- if (is.na(x$pvalue)) "undetermined" else
     if (x$pvalue <= x$alpha) sprintf("reject at alpha = %.2g", x$alpha) else
       sprintf("do not reject at alpha = %.2g", x$alpha)
-  cat("Decision     :", decision, "\n")
+  cat("Decision     : ", decision, "\n", sep = "")
 
   if (length(x$note)) {
     cat("\nNotes:\n")
-    for (n in x$note)
-      cat(strwrap(n, initial = "  - ", prefix = "    ",
-                  width = 0.9 * getOption("width", 80)), sep = "\n")
+    for (n in x$note) wrap(n, initial = "  - ", prefix = "    ")
     cat("\n")
   } else cat("\n")
   invisible(x)
@@ -204,10 +252,23 @@ summary.mwperm <- function(object, ...) {
 confint.mwperm <- function(object, parm, level = NULL, ...) {
   has_int <- !is.null(object$conf_int)
   has_box <- !is.null(object$conf_box)
-  if (!has_int && !has_box)
-    stop("No confidence set is stored in this object (it was not requested ",
-         "or the resolution was too coarse). Refit with conf_int = TRUE.",
+  if (!has_int && !has_box) {
+    ## One condition, two very different remedies. When the resolution was the
+    ## binding constraint, `conf_int` was already TRUE and re-passing it
+    ## changes nothing -- what is needed is a design with more levels in the
+    ## smallest permuted dimension. Saying "refit with conf_int = TRUE" there
+    ## sends the reader down a road that cannot work.
+    why <- if (isTRUE(object$resolution > object$alpha))
+      sprintf(paste0("the smallest attainable p-value is 1/(K+1) = %.3g, ",
+                     "above alpha = %.3g, so no value could have been ",
+                     "excluded. That needs at least %d levels in the ",
+                     "smallest permuted dimension -- a refit alone will not ",
+                     "produce one"),
+              object$resolution, object$alpha, ceiling(1 / object$alpha))
+    else "it was not requested; refit with conf_int = TRUE"
+    stop(sprintf("No confidence set is stored in this object: %s.", why),
          call. = FALSE)
+  }
   if (!is.null(level) && !isTRUE(all.equal(level, object$conf_level)))
     stop(sprintf(paste0("This object stores a %.0f%% set; `level = %g` ",
                         "would need refitting with alpha = %g (the ",
@@ -223,7 +284,7 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
     dimnames(box) <- list(object$d_names, lab)
     box
   }
-  ## Honour the generic's subsetting contract (audit F5.8): names or integer
+  ## Honour the generic's subsetting contract: names or integer
   ## positions, keeping the row labels.
   if (!missing(parm) && !is.null(parm)) {
     idx <- if (is.numeric(parm)) {

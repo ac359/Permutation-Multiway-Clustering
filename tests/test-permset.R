@@ -1,9 +1,7 @@
-## Phase 2.1 -- build_perm_set() is Algorithm 1 (GTW 2026): a random
-## block-cyclic
+## build_perm_set() is Algorithm 1 (GTW 2026): a random block-cyclic
 ## permutation group. These are EXACT invariants (machine precision /
-## identical),
-## the class of bug Monte Carlo will not reliably surface. Base-R stopifnot so
-## it
+## identical) -- the class of bug Monte Carlo will not reliably surface.
+## Base-R stopifnot so it
 ## ships and runs under R CMD check without a testthat dependency.
 library(mwperm)
 
