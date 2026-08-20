@@ -58,7 +58,8 @@ rows[[2L]] <- data.frame(design = "panel 22xT6", coverage = cov_p,
 tab <- do.call(rbind, rows)
 saveRDS(tab, "out/03_ci_coverage_summary.rds")
 cat("\n---- summary ----\n")
-cat(sprintf("  cells under-covering (CP lower > 95%%) : %d / %d\n",
+cat(sprintf(paste0("  cells with coverage significantly above nominal",
+                   " (CP lower > 95%%) : %d / %d\n"),
             sum(tab$cp_lo > 0.95), nrow(tab)))
 cat("  (coverage at or above nominal is the valid direction)\n\nfull table:\n")
 print(tab, digits = 3, row.names = FALSE)

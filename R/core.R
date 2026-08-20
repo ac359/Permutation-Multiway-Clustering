@@ -26,17 +26,6 @@
   qr.resid(qr(M), V)
 }
 
-#' Encode integer cluster coordinates as a unique numeric code
-#'
-#' Maps a matrix of integer coordinates (each column taking values in
-#' 1..max) to a single numeric mixed-radix code, so cells can be matched with
-#' `match()`. Uses doubles to avoid 32-bit integer overflow.
-#'
-#' @param coords integer matrix, one row per observation, one column per
-#'   clustering coordinate. Values must be positive integers.
-#' @return numeric vector of codes, one per row.
-#' @keywords internal
-#' @noRd
 #' Column maxima of a numeric matrix
 #'
 #' `apply(m, 2L, max)` routes the whole matrix through `aperm()` and a list
@@ -56,6 +45,17 @@
   out
 }
 
+#' Encode integer cluster coordinates as a unique numeric code
+#'
+#' Maps a matrix of integer coordinates (each column taking values in
+#' 1..max) to a single numeric mixed-radix code, so cells can be matched with
+#' `match()`. Uses doubles to avoid 32-bit integer overflow.
+#'
+#' @param coords integer matrix, one row per observation, one column per
+#'   clustering coordinate. Values must be positive integers.
+#' @return numeric vector of codes, one per row.
+#' @keywords internal
+#' @noRd
 .cell_code <- function(coords, radix = NULL) {
   coords <- as.matrix(coords)
   storage.mode(coords) <- "double"

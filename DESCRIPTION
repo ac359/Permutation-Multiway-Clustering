@@ -27,7 +27,7 @@ License: MIT + file LICENSE
 URL: https://github.com/ac359/Permutation-Multiway-Clustering
 BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
 Language: en-US
-Date: 2026-07-17
+Date: 2026-08-20
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
