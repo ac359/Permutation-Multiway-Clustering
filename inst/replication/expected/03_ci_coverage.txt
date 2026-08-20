@@ -1,11 +1,11 @@
 ==== 03 Confidence-interval coverage (nominal 95%) ====
-mwperm 0.2.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-07-18 15:42:43
+mwperm 0.2.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-08-20 15:56:09
 
   dyadic n=40   coverage = 99.2% (CP [98.1, 99.7])   mean width = 1.02
   panel 22xT6   coverage = 99.0% (CP [97.8, 99.6])   mean width = 0.63
 
 ---- summary ----
-  cells under-covering (CP lower > 95%) : 2 / 2
+  cells with coverage significantly above nominal (CP lower > 95%) : 2 / 2
   (coverage at or above nominal is the valid direction)
 
 full table:

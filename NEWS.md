@@ -1,4 +1,4 @@
-# mwperm (development version)
+# mwperm 0.2.0
 
 * **Documentation rewritten against verified behaviour.** `README.md` was
   reorganised so that a reader reaches a correct first call before meeting any
@@ -130,8 +130,6 @@
   grow with `n_reps`. Intervals whose acceptance region reaches the edge of
   the supplied `grid` are now reported as unbounded on that side rather than
   silently truncated.
-
-# mwperm 0.2.0
 
 Audit-driven release: the changes below implement the fix plan from the
 2026-07 verification audit (finite-sample validity re-verified throughout;
