@@ -160,7 +160,7 @@ for (m in err_methods) {
   stopifnot(!is.na(msg), grepl("boom", msg))
 }
 
-## a pre-made cluster is reused, not stopped (F6.1 fix: the engine creates ONE
+## a pre-made cluster is reused, not stopped (the engine creates ONE
 ## PSOCK cluster per fit instead of one per rep on non-fork platforms)
 cl_pre <- parallel::makePSOCKcluster(2L)
 r1 <- mwperm:::.plapply(X10, function(i) i^2 + 1, n_cores = 2L, cl = cl_pre)
@@ -169,7 +169,7 @@ stopifnot(identical(r1, lapply(X10, function(i) i^2 + 1)),
           identical(r2, lapply(X10, function(i) i * 2)))  # still usable
 parallel::stopCluster(cl_pre)
 
-## n_cores is clamped to the available core count (F6.5 fix): silently inside
+## n_cores is clamped to the available core count: silently inside
 ## .plapply, with a warning naming `n_cores` at the engine entry. mc.cores is
 ## pinned to 2 so the clamp target is 2 and the assertions never spawn more
 ## than R CMD check's 2-worker limit (the clamp also honours mc.cores).

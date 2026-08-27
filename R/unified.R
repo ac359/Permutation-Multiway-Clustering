@@ -172,7 +172,7 @@
 mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                          time = NULL, rep = NULL,
                          design = c("auto", "dyadic", "threeway", "panel",
-                                    "layout", "missing")) {
+                                    "layout", "missing", "irregular")) {
   design <- match.arg(design)
   idx <- .resolve_index(index, data)
   N <- length(idx[[1L]])
@@ -270,11 +270,36 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       if (!any(unlist(wv)))
         warns <<- c(warns, paste0(
           "`d` is constant within every (row, col) cell: the within-cell ",
-          "layout ",
-          "test would have NO power. If the repeats are time periods, pass ",
-          "`time =`; if `d` is a dyad-level covariate, this design cannot ",
-          "test it."))
+          "layout test (Section 6.3) would have NO power, because permuting ",
+          "inside a cell cannot move a covariate that is constant there. Use ",
+          "design = \"irregular\" with an `L0 =` threshold instead: that is ",
+          "the Section 6.4 procedure, which permutes the CELLS across rows ",
+          "and columns and is designed for exactly this case (it also ",
+          "handles repeats that are time periods, for which the layout test ",
+          "is not merely powerless but invalid -- see ?mwperm_irregular)."))
     }
+  }
+
+  finish_irregular <- function(why) {
+    cell <- .dense_id(interaction(dense[[1L]], dense[[2L]], drop = TRUE))
+    sizes <- tabulate(cell)
+    chosen <<- "irregular"
+    roles <<- list(row = names(idx)[1L], col = names(idx)[2L],
+                   rep = if (!is.null(rep_v)) names(rep_v) else
+                     "(within-cell order)")
+    reason <<- why
+    ## K is set by the biclique blocks found under the mask 1{ell_ij >= L0},
+    ## which depends on L0 -- not knowable here.
+    K_default <<- NA_integer_
+    balance <<- sprintf(paste0("irregular (%d cells, %d-%d observations ",
+                               "each; L0 sets which cells are usable)"),
+                        length(sizes), min(sizes), max(sizes))
+    cells_obs <<- length(sizes)
+    cells_exp <<- prod(dims[1:2])
+    notes <<- c(notes, paste0(
+      "The permutation-group order for the Section 6.4 design is set by the ",
+      "biclique blocks found under the mask M_ij = 1{cell size >= L0}, so it ",
+      "depends on `L0`; see find_bicliques() and ?mwperm_irregular."))
   }
 
   ## Completeness gate shared by every panel path (auto, tagged, forced):
@@ -390,6 +415,20 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         stop("design = \"layout\" needs exactly 2 index dimensions (cells).",
              call. = FALSE)
       finish_layout("forced via design =")
+      reason <- "forced via design ="
+    } else if (design == "irregular") {
+      if (C != 2L)
+        stop(paste0("design = \"irregular\" needs exactly 2 index ",
+                    "dimensions (the cells); the within-cell index is the ",
+                    "`rep =` role."), call. = FALSE)
+      if (!dup2)
+        stop(paste0("design = \"irregular\" needs repeated (row, col) ",
+                    "cells: Section 6.4 reduces each cell to L0 ",
+                    "observations, which needs more than one per cell. With ",
+                    "one observation per cell use design = \"dyadic\" (or ",
+                    "\"missing\" if the array is incomplete)."),
+             call. = FALSE)
+      finish_irregular("forced via design =")
       reason <- "forced via design ="
     }
   } else if (!is.null(rep_v)) {
@@ -529,7 +568,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   ## the exact downstream call
   fn <- c(dyadic = "mwperm_dyadic", panel = "mwperm_panel",
           threeway = "mwperm_threeway", layout = "mwperm_layout",
-          missing = "mwperm_missing")[[chosen]]
+          missing = "mwperm_missing",
+          irregular = "mwperm_irregular")[[chosen]]
   args <- switch(chosen,
     dyadic = sprintf("row = %s, col = %s", roles$row, roles$col),
     missing = sprintf("row = %s, col = %s, min_block = ...", roles$row,
@@ -540,7 +580,10 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                        roles$id1, roles$id2, roles$id3),
     layout = sprintf("row = %s, col = %s%s", roles$row, roles$col,
                      if (identical(roles$rep, "(within-cell order)")) ""
-                     else sprintf(", rep = %s", roles$rep)))
+                     else sprintf(", rep = %s", roles$rep)),
+    irregular = sprintf("row = %s, col = %s%s, L0 = ...", roles$row, roles$col,
+                        if (identical(roles$rep, "(within-cell order)")) ""
+                        else sprintf(", rep = %s", roles$rep)))
   call_str <- sprintf("%s(y, d, x, %s)", fn, args)
 
   structure(list(
@@ -646,6 +689,14 @@ print.mwperm_design <- function(x, ...) {
 #'   detected design and the dispatched call.
 #' @inheritParams mwperm_dyadic
 #'
+#' @param aggregate How the \code{n_reps} per-repetition p-values are combined
+#'   into the reported p-value and the confidence set: \code{"median"}
+#'   (default, Remark 1 of Guo, Toulis and Wang 2026) or \code{"median2"}
+#'   (\code{min(1, 2 * median)}, which preserves the validity guarantee at
+#'   level alpha when \code{n_reps > 1}, at the cost of a smallest attainable
+#'   p-value of \code{2/(K+1)} -- so rejecting at alpha = 0.05 needs 40 levels
+#'   in the smallest permuted dimension rather than 20).
+#'   See \code{\link{mwperm_dyadic}}.
 #' @return The \code{"mwperm"} object of the dispatched test, with an extra
 #'   \code{auto} field recording the detection (design, roles, reason); the
 #'   detection notices are prepended to the object's \code{note} field and
@@ -663,7 +714,8 @@ print.mwperm_design <- function(x, ...) {
 #' @seealso \code{\link{mwperm_check}} for the diagnosis without any
 #'   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
 #'   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
-#'   \code{\link{mwperm_missing}} for the underlying tests.
+#'   \code{\link{mwperm_irregular}}, \code{\link{mwperm_missing}} for the
+#'   underlying tests.
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm(y = "log_trade", d = "log_dist",
@@ -674,13 +726,15 @@ print.mwperm_design <- function(x, ...) {
 #' @export
 mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                    design = c("auto", "dyadic", "threeway", "panel", "layout",
-                              "missing"),
+                              "missing", "irregular"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
                    n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
                    time_fe = TRUE, L0 = NULL, min_block = 3L,
                    block_method = c("greedy", "exact"),
-                   permute = c("both", "rows", "cols"), verbose = TRUE) {
+                   permute = c("both", "rows", "cols"),
+                   aggregate = c("median", "median2"), verbose = TRUE) {
   design <- match.arg(design)
+  aggregate <- match.arg(aggregate)
   cl <- match.call()
   ## capture the caller's expression for d BEFORE evaluation: the front ends
   ## label coefficients by deparse(substitute(d)), which through do.call would
@@ -741,16 +795,23 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   ## design (warn and ignore, mirroring the printed diagnosis)
   supplied <- names(cl)
   check_arg <- function(arg, ok_design) {
-    if (arg %in% supplied && chk$design != ok_design)
-      warning(sprintf(paste0("`%s` applies to the %s design only; it was ",
+    if (arg %in% supplied && !chk$design %in% ok_design)
+      warning(sprintf(paste0("`%s` applies to the %s design%s only; it was ",
                              "ignored for '%s'."),
-                      arg, ok_design, chk$design), call. = FALSE)
+                      arg, paste(ok_design, collapse = " and "),
+                      if (length(ok_design) > 1L) "s" else "",
+                      chk$design), call. = FALSE)
   }
   check_arg("time_fe", "panel")
-  check_arg("L0", "layout")
-  check_arg("min_block", "missing")
-  check_arg("block_method", "missing")
+  check_arg("L0", c("layout", "irregular"))
+  check_arg("min_block", c("missing", "irregular"))
+  check_arg("block_method", c("missing", "irregular"))
   check_arg("permute", "missing")
+  if (chk$design == "irregular" && is.null(L0))
+    stop(paste0("The Section 6.4 (irregular) design requires `L0 =`, the ",
+                "cell-size threshold defining the mask ",
+                "M_ij = 1{cell size >= L0}. See ?mwperm_irregular."),
+         call. = FALSE)
 
   ## Assumption-fork and weak-evidence detection notices are REAL warnings at
   ## fit time -- they flag branches that can be anti-conservative if the
@@ -768,7 +829,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
 
   common <- list(y = y, d = d, x = x, K = K, alpha = alpha,
                  beta_null = beta_null, conf_int = conf_int, n_reps = n_reps,
-                 seed = seed, grid = grid, n_cores = n_cores)
+                 seed = seed, grid = grid, aggregate = aggregate,
+                 n_cores = n_cores)
   ix <- chk$index
   res <- switch(chk$design,
     dyadic = do.call(mwperm_dyadic,
@@ -786,7 +848,12 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                                       id3 = ix[[3L]]))),
     layout = do.call(mwperm_layout,
                      c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                    rep = chk$rep, L0 = L0))))
+                                    rep = chk$rep, L0 = L0))),
+    irregular = do.call(mwperm_irregular,
+                        c(common, list(row = ix[[1L]], col = ix[[2L]],
+                                       rep = chk$rep, L0 = L0,
+                                       min_block = min_block,
+                                       block_method = block_method))))
 
   ## make the automatic choice transparent on the returned object
   res$auto <- list(design = chk$design, reason = chk$reason, roles = chk$roles)

@@ -84,6 +84,39 @@
   code
 }
 
+#' Within-cell slot index: the position of each observation inside its cell
+#'
+#' The cell-code machinery keys an observation by its cluster coordinates, and
+#' those coordinates identify an observation uniquely only when each cell holds
+#' one observation. Designs with replication inside a cell (two-way layouts,
+#' and the irregular designs of Section 6.4) therefore need a third coordinate:
+#' the slot l = 1..ell_ij that an observation occupies inside its cell. Held
+#' fixed by the permutation, it plays exactly the role the time index plays in
+#' mwperm_panel(): cell (i, j) slot l maps to cell (pi(i), sigma(j)) slot l.
+#'
+#' The ordering is the one \code{mwperm_layout()} has always used, extracted
+#' here so every design that needs a slot index derives it identically: by
+#' \code{rep} where supplied (as a factor, so labels of any type order
+#' consistently), by order of appearance otherwise, with ties broken by
+#' position. Equivalent to \code{rank(ties.method = "first")} within each cell,
+#' computed as one stable sort.
+#'
+#' @param cell integer vector of dense 1-based cell ids, one per observation.
+#' @param rep optional within-cell replication identifier; `NULL` means use the
+#'   order of appearance.
+#' @param ncell number of cells (the maximum cell id).
+#' @return integer vector of slot indices, running 1..ell inside each cell.
+#' @keywords internal
+#' @noRd
+.within_cell_slot <- function(cell, rep = NULL, ncell = max(cell)) {
+  N <- length(cell)
+  slot <- integer(N)
+  ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))
+  o <- order(cell, ord_key)
+  slot[o] <- sequence(tabulate(cell, nbins = ncell))
+  slot
+}
+
 #' Precompute the beta-independent pieces of Procedure 1
 #'
 #' Implements the expensive, beta-independent part of Procedure 1 of Guo, Toulis
@@ -92,7 +125,7 @@
 #' Frisch-Waugh-Lovell step, equivalent to projecting with the orthonormal V_k
 #' that satisfies V_k' X = V_k' X_k = 0) and stores the small d-dimensional
 #' cross products needed to evaluate the test statistic at *any* null value
-#' \eqn{\beta = b}. Because residualization is linear in the outcome, the
+#' beta = b. Because residualization is linear in the outcome, the
 #' statistics
 #'   a_k(b) = || D' V_k V_k' (y - D b) ||,
 #'   b_k(b) = || D' V_k V_k' (y - D b)_k ||
@@ -115,11 +148,25 @@
 #'   independent factorizations); 1 = serial. The loop uses no RNG and each
 #'   iteration writes an independent slice, so any schedule gives identical
 #'   output.
+#' @param degenerate what to do when the residualized `D` is numerically zero
+#'   for some permutation k, i.e. no identifying variation in `d` survives the
+#'   projection onto the orthogonal complement of `[X | X_k]`. `"stop"` (the
+#'   default) raises an error naming the design: that slice's statistic is pure
+#'   rounding noise, so the comparison a_k vs b_k is decided by float error
+#'   rather than by the data, and silently returning a number would be worse
+#'   than failing. `"zero"` restores the exact-arithmetic answer instead
+#'   (a_k = b_k = 0, hence p = 1 through the minorization) and is used by the
+#'   engine when it has ALREADY established that beta is unidentified -- `d`
+#'   constant or collinear with `x` -- and warned about it. In that case p = 1
+#'   is the correct answer, not a failure.
+#' @param design short label for the calling design, used in that error.
 #' @return a list (the "prep" object) consumed by \code{\link{.ipt_eval}}.
 #' @keywords internal
 #' @noRd
 .ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L,
-                         cl = NULL) {
+                         cl = NULL, degenerate = c("stop", "zero"),
+                         design = "this design") {
+  degenerate <- match.arg(degenerate)
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
@@ -128,11 +175,16 @@
   if (K < 1L) stop("Need at least one non-identity permutation.", call. = FALSE)
   d <- ncol(D)                         # number of coefficients of interest
   ## Degeneracy floor: when D lies numerically inside span[X | X_k], the
-  ## residualized cross products are pure rounding noise. In exact arithmetic
-  ## that slice has a_k = 0 -- forcing p = 1 through the minorization -- so
-  ## the slice is zeroed to restore the exact answer rather than letting
-  ## ~1e-16 noise decide the a/b comparisons. Relative tolerance
-  ## in the qr() league (1e-8 on the Frobenius norm).
+  ## residualized cross products are pure rounding noise, and in exact
+  ## arithmetic that slice has a_k = b_k = 0. Relative tolerance in the qr()
+  ## league (1e-8 on the Frobenius norm). Two situations reach it and they
+  ## deserve different answers, which is what `degenerate` selects. If beta is
+  ## unidentified from the start (d constant, or collinear with x) then EVERY
+  ## slice is degenerate, p = 1 is the exact answer, and zeroing the slice is
+  ## right -- the engine detects that case up front, warns, and asks for
+  ## "zero". Otherwise beta IS identified in the data and a degenerate slice
+  ## means this particular permutation annihilated d: the statistic for that
+  ## permutation would be decided by float noise, so the fit stops instead.
   degen_tol2 <- 1e-16 * sum(D * D)
 
   ## Every observation gather-vector is a bijection, in every design (the
@@ -193,10 +245,23 @@
       D - X %*% cf[seq_len(p), , drop = FALSE] -
           Xg %*% cf[p + seq_len(p), , drop = FALSE]   # (I - P_{M_k}) D
     }
-    if (sum(Dr * Dr) <= degen_tol2)    # degenerate slice: exact-arithmetic zero
+    if (sum(Dr * Dr) <= degen_tol2) {  # degenerate slice
+      if (degenerate == "stop")
+        stop(sprintf(paste0("No identifying variation in `d` survives ",
+                            "permutation %d of the %s design: the ",
+                            "residualized `d` is numerically zero after ",
+                            "projecting out the nuisance design and its ",
+                            "permuted copy, so that permutation's test ",
+                            "statistic would be rounding noise rather than ",
+                            "data. This usually means `d` is (nearly) a ",
+                            "linear combination of `x` and its permuted ",
+                            "copy. Drop the redundant nuisance covariates, ",
+                            "or test a `d` with independent variation."),
+                     k, design), call. = FALSE)
       return(list(u = matrix(0, d, 1L), v = matrix(0, d, 1L),
                   M = matrix(0, d, d),
                   W = if (need_perm_D) matrix(0, d, d)))
+    }
     list(u = crossprod(Dr, y),                     # = Dr' y
          v = crossprod(Dr, y[g]),                  # = Dr' y_k
          M = crossprod(Dr),                        # = Dr' Dr
@@ -262,7 +327,7 @@
 #' Core invariant permutation p-value (Procedure 1), convenience wrapper
 #'
 #' Thin wrapper combining \code{\link{.ipt_prepare}} and \code{\link{.ipt_eval}}
-#' to evaluate the test at \eqn{\beta = 0} for an already-shifted outcome `y`.
+#' to evaluate the test at beta = 0 for an already-shifted outcome `y`.
 #' Kept for direct use and testing; the engine uses prepare/eval separately so
 #' the QR work is shared across the confidence-interval search.
 #'
@@ -282,13 +347,25 @@
 #' K+1 image vectors), produce the K+1 observation-level gather vectors. A
 #' coordinate dimension can be held fixed by passing `NULL` for its group.
 #'
+#' Every returned gather vector is checked to be a genuine permutation of
+#' `seq_len(N)` before it is handed back (see \code{\link{.assert_bijection}}):
+#' the cells are keyed by a mixed-radix code and translated back to observation
+#' indices, and a code shared by two observations would make that translation
+#' many-to-one, silently computing the statistic on duplicated rows. Duplicate
+#' cell codes are therefore rejected up front as well.
+#'
 #' @param coords integer matrix N x C of cluster ids (1-based, dense).
 #' @param groups list of length C; each element is either `NULL` (dimension
 #'   held fixed) or a list of K+1 image vectors permuting that dimension's ids.
+#' @param design short label for the calling design, used in error messages.
+#' @param front_end the front end a user should reach for instead, named in
+#'   the duplicate-cell error.
 #' @return list of length K+1 of integer gather-vectors over observations.
 #' @keywords internal
 #' @noRd
-.build_obs_perms <- function(coords, groups) {
+.build_obs_perms <- function(coords, groups, design = "this design",
+                             front_end = paste("mwperm_layout() or",
+                                               "mwperm_missing()")) {
   coords <- as.matrix(coords)
   C <- ncol(coords)                    # number of clustering dimensions
   ## Mixed-radix bases, computed ONCE for all K+1 elements. Each image vector
@@ -298,6 +375,22 @@
   ## more for the `pos` table below) -- see .col_max for why that was costly.
   radix <- .col_max(coords)
   orig_code <- .cell_code(coords, radix = radix)   # cell code of each obs
+  ## Cells must be unique. Below, a permuted cell code is translated back to an
+  ## observation index by match() / a position table, both of which return the
+  ## FIRST observation carrying that code. If two observations shared a cell,
+  ## the translation would be many-to-one: the "gather vector" would repeat one
+  ## row and drop another, and the statistic would be computed on duplicated
+  ## data with no error raised anywhere. Reject that here rather than
+  ## discovering it as a bijection failure per element below.
+  dup <- anyDuplicated(orig_code)
+  if (dup > 0L)
+    stop(sprintf(paste0("%s requires exactly one observation per cell, but ",
+                        "cell (%s) appears more than once (observation %d). ",
+                        "Repeated cells are within-cell replication or ",
+                        "repeated time periods -- use %s."),
+                 design,
+                 paste(coords[dup, ], collapse = ", "), dup, front_end),
+         call. = FALSE)
   ## Determine the group order K+1 from the first dimension that is permuted
   ## (all non-NULL groups share the same order).
   Kp1 <- NULL
@@ -361,5 +454,38 @@
     }
     obs_perms[[k]] <- g                # observation gather-vector for element k
   }
+  .assert_bijection(obs_perms, nrow(coords), design)
   obs_perms
+}
+
+#' Assert that every gather vector is a permutation of seq_len(N)
+#'
+#' The whole method rests on the permuted data being a relabelling of the
+#' observed data: Procedure 1 needs X_k = Pi_k X for a permutation matrix
+#' Pi_k, and .ipt_prepare() exploits that identity directly (it reuses X'X as
+#' the lower-right Gram block, which is only correct for a bijection). A gather vector that repeated an index would give
+#' a wrong statistic silently -- no NA, no warning, just numbers computed on
+#' duplicated rows. This is cheap next to a single permutation's linear
+#' algebra (O(N) per element against O(N p^2)), so it runs unconditionally.
+#'
+#' @param obs_perms list of integer gather-vectors.
+#' @param N expected length (the number of observations).
+#' @param design short label for the calling design, used in the message.
+#' @keywords internal
+#' @noRd
+.assert_bijection <- function(obs_perms, N, design = "this design") {
+  for (k in seq_along(obs_perms)) {
+    g <- obs_perms[[k]]
+    if (length(g) != N || anyNA(g) || anyDuplicated(g))
+      stop(sprintf(paste0("Internal error: permutation %d of the %s ",
+                          "permutation group is not a bijection of the %d ",
+                          "observations (length %d, %d distinct). The ",
+                          "permuted data would then repeat some rows and ",
+                          "drop others, so the test statistic would be ",
+                          "wrong. Please report this with a reproducible ",
+                          "example."),
+                   k, design, N, length(g), length(unique(g))),
+           call. = FALSE)
+  }
+  invisible(NULL)
 }

@@ -12,7 +12,8 @@ mwperm_check(
   data = NULL,
   time = NULL,
   rep = NULL,
-  design = c("auto", "dyadic", "threeway", "panel", "layout", "missing")
+  design = c("auto", "dyadic", "threeway", "panel", "layout", "missing",
+    "irregular")
 )
 
 \method{print}{mwperm_design}(x, ...)

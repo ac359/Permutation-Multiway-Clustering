@@ -9,7 +9,8 @@ find_bicliques(
   col,
   min_block = 2L,
   method = c("greedy", "exact"),
-  node_budget = 200000L
+  node_budget = 200000L,
+  retry_peels = 4L
 )
 }
 \arguments{
@@ -26,6 +27,18 @@ and at least one side must be 2 or more.}
 
 \item{method}{Either \code{"greedy"} (default) or \code{"exact"}; see
 Details.}
+
+\item{retry_peels}{Number of extra attempts, under \code{method =
+"greedy"} only, to find a conforming block after one peel returned a block
+below \code{min_block}. Each attempt slides the heuristic's seed window
+eight rows further down the degree order. The greedy search seeds from the
+highest-degree available rows, so a small block there is not proof that no
+larger conforming block remains elsewhere in the mask, and stopping
+immediately forfeits every later block too. Retrying can only add blocks,
+never change or remove one already found, and the added blocks are
+ordinary disjoint bicliques -- so this affects power only, never validity.
+Set to \code{0L} for the pre-0.3.0 behaviour. Ignored for
+\code{method = "exact"}, where a sub-floor block \emph{is} proof.}
 
 \item{node_budget}{Integer node cap for the \code{"exact"} branch-and-bound
 per block (default 200000). Ignored when \code{method = "greedy"}.}

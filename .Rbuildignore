@@ -1,5 +1,6 @@
 ^private$
 ^CLAUDE\.md$
+^PAPER_MAP\.md$
 ^data-raw$
 ^LICENSE\.md$
 ^inst/replication/out$

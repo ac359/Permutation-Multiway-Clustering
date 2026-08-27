@@ -40,6 +40,49 @@ interval around the OLS estimate. Note that \code{level} is fixed at fitting
 time (\code{1 - alpha}); a different level requires refitting with the
 corresponding \code{alpha}.
 }
+\section{How the set is defined}{
+
+Procedure 1, step 3 of Guo, Toulis and Wang (2026) defines the confidence
+region as the set of null values the test does not reject, that is
+\code{\{b : pval(b) > alpha\}}. With \code{n_reps > 1} there is one p-value
+per repetition, and the package uses a single aggregation rule everywhere.
+The confidence set is
+
+\preformatted{  \{ b : median over repetitions of pval(b)  >  alpha \}}
+
+using the same median across repetitions that produces the reported p-value
+(Remark 1 of the same paper). Under \code{aggregate = "median2"} the rule
+becomes \code{min(1, 2 * median)} in both places. Every path computes that
+one set: the exact inversion for a single coefficient, the
+explicit-\code{grid} path, the bracketing fallback, and the joint region for
+several coefficients. The test and the interval therefore cannot disagree in
+the direction that matters: no value the test accepts falls outside the
+reported set.
+
+For a single coefficient the set is computed exactly. The p-value is a step
+function of the null value whose jumps are at known roots, so the package
+evaluates it at every root and every interval between roots rather than
+assuming the set is one interval and bisecting to a tolerance. The set need not be
+connected; its components are in \code{object$conf_set} (a two-column matrix
+of end points, one row per component), and \code{confint()} and
+\code{object$conf_int} report their \emph{hull}, which is conservative when
+there is more than one component. \code{object$ci_method} records which path
+produced the set: \code{"exact"}, \code{"grid"}, or \code{"bisection"} (the
+fallback used when the exact candidate count would exceed its budget).
+
+\strong{The reported components are the \emph{closure} of
+\eqn{\{b : \mathrm{pval}(b) > \alpha\}}, not the set itself.} The p-value
+is a step function, so an acceptance region often begins and ends strictly
+between two of its jumps; there is then no attained value at the boundary to
+report, and the exact path reports the bounding jump. A printed or returned
+end point may therefore be a value the test itself \emph{rejects}, while
+every point strictly inside the interval is accepted. The convention errs
+outward -- the interval is conservative and never omits an accepted value --
+and it is the reason a value exactly equal to an end point should not be read
+as "just inside". (The \code{"grid"} and \code{"bisection"} paths report
+attained accepted points instead, to their own accuracy.)
+}
+
 \examples{
 data(trade_dyadic)
 fit <- with(trade_dyadic,

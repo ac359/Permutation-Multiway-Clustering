@@ -23,6 +23,28 @@
 #' @param K Number of non-identity permutations; defaults to
 #'   \code{min(m, n, ell) - 1} capped at 199.
 #'
+#' @param aggregate How the \code{n_reps} per-repetition p-values are combined
+#'   into the reported p-value, and into the confidence set that inverts it.
+#'   \code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
+#'   Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
+#'   The distinction matters for what "exact" means. Theorem 1 gives
+#'   finite-sample validity for a \emph{single} random permutation group, so
+#'   with \code{n_reps = 1} the p-value is exact as stated. The median of
+#'   several dependent randomised p-values is a de-randomisation heuristic --
+#'   endorsed by Remark 1 and well behaved in practice, but not itself
+#'   guaranteed to be a valid p-value at level alpha. Twice the median is: it
+#'   controls the level under arbitrary dependence across repetitions
+#'   (Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
+#'   finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
+#'   conservative, never rejecting where \code{"median"} would not, and its
+#'   confidence set is never narrower. The default is unchanged, so existing
+#'   numbers stand. It costs resolution, though: since \code{"median2"} reports
+#'   \code{min(1, 2 * median)}, its smallest attainable p-value is
+#'   \code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
+#'   \code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
+#'   levels in the smallest permuted dimension, twice the 20 \code{"median"}
+#'   needs. Below that the p-value is still exact but cannot reach
+#'   \code{alpha}, and the fit reports no confidence set and says so in a note.
 #' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
 #'   are the OLS estimate and naive SE, \code{conf_int} (or
 #'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
@@ -47,8 +69,10 @@
 mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             alpha = 0.05, beta_null = 0, conf_int = TRUE,
                             n_reps = 10L, seed = NULL, grid = NULL,
+                            aggregate = c("median", "median2"),
                             n_cores = 1L) {
   cl <- match.call()
+  aggregate <- match.arg(aggregate)
   y <- .check_y(y)
   N <- length(y)
   D <- as.matrix(d)
@@ -78,12 +102,13 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
     G1 <- build_perm_set(m,   K, seed = .sub_seed(rep_seed, 1L))
     G2 <- build_perm_set(n,   K, seed = .sub_seed(rep_seed, 2L))
     G3 <- build_perm_set(ell, K, seed = .sub_seed(rep_seed, 3L))
-    .build_obs_perms(coords, list(G1, G2, G3))
+    .build_obs_perms(coords, list(G1, G2, G3), design = "threeway",
+                     front_end = "mwperm_layout() (within-cell replication)")
   }
 
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
               grid = grid, type = "threeway", d_names = d_names,
               n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl,
-              n_cores = n_cores)
+              n_cores = n_cores, ci_agg = aggregate)
 }

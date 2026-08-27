@@ -1,3 +1,272 @@
+# mwperm 0.3.0
+
+Two classes of problem are closed in this release: procedures the method paper
+defines that the package never implemented, and implementation choices that made
+the computed statistic differ from the paper's definition. Reported p-values and
+point estimates are **unchanged everywhere**; eight seeded confidence intervals
+moved, and every one of them is enumerated under *Authorized numerical changes*
+below.
+
+## New
+
+* **`mwperm_irregular()` implements Section 6.4 (irregular designs).** The
+  package previously had no implementation of it. Section 6.4 exists for two-way
+  layouts where permuting *within* a cell is either invalid — the replication
+  index is really time, so the errors are not exchangeable across it — or
+  powerless, because `d` is constant within each cell (a dyad-level covariate).
+  `mwperm_layout(L0 = )` borrowed Section 6.4's `L0` threshold but then ran the
+  Section 6.3 within-cell test, which is a valid procedure but a different one,
+  and left both of those cases uncovered: the package only warned "no power".
+
+  `mwperm_irregular()` follows Section 6.4 as written. It forms the cell sizes
+  and the mask `M_ij = 1{ell_ij >= L0}`, runs the biclique search
+  (`find_bicliques()`, Algorithm 2) on the mask, reduces each retained cell to
+  exactly `L0` observations uniformly at random (reproducibly from `seed`, with
+  the usual RNG-state hygiene), and applies Procedure 2 to what remains: a row
+  group on `I_q` and a column group on `J_q` per block, of common order `K + 1`,
+  applied identically across the `L0` within-cell slots, so cell `(i, j)` slot
+  `l` maps to cell `(pi(i), sigma(j))` slot `l`. That is the same "hold the
+  third index fixed" structure `mwperm_panel()` uses for time, and it is what
+  makes the test valid when the repeats are periods. Default
+  `K = min over blocks of min(|I_q|, |J_q|) - 1`, capped at 199.
+
+  Unlike `mwperm_layout()`, `d` may be constant within cells and no warning is
+  issued — that is the supported case. The assumption documented is the one it
+  actually needs: exchangeability across `(i, j)` within each slot, plus
+  Assumption 4 on the mask; *not* within-cell exchangeability.
+
+  Reachable as `mwperm(design = "irregular", L0 = )`, and `mwperm_check()` now
+  recommends it when cells repeat and `d` is constant within every cell.
+
+* **`aggregate = c("median", "median2")` on every front end.** Theorem 1's
+  finite-sample validity is for a *single* random permutation group, so the
+  p-value is exact as stated at `n_reps = 1`. The median of several dependent
+  randomised p-values is a de-randomisation heuristic — the paper endorses it
+  (Remark 1) and it behaves well, but it is not itself a level-alpha p-value.
+  `min(1, 2 * median)` is (Rüschendorf 1982; Vovk and Wang 2020). `"median2"`
+  selects it, for the reported p-value **and** for the confidence set that
+  inverts it. The default is `"median"`, so no existing number changes.
+
+* **`conf_set` field on fitted objects.** A two-column matrix of interval end
+  points, one row per connected component of the confidence set. `conf_int`
+  remains its hull. `ci_method` records which route produced the set:
+  `"exact"`, `"grid"`, or `"bisection"`.
+
+* **`retry_peels` argument to `find_bicliques()`** (default 4). Under the greedy
+  method, a peel that returns a block below `min_block` no longer ends the
+  search: the seed window slides down the degree order and retries a bounded
+  number of times. A small block from the highest-degree seed rows is not proof
+  that no conforming block remains elsewhere in the mask, and stopping there
+  forfeited every later block too. Power only — added blocks are ordinary
+  disjoint fully observed bicliques. Under `method = "exact"` a sub-floor block
+  *is* proof, and the behaviour is unchanged. Verified not to change the block
+  set on any shipped example; on 400 randomly generated masks with a clean block
+  planted on low-degree rows it recovered extra coverage in 399 and never lost
+  any.
+
+* **`PAPER_MAP.md`** at the repository root maps every paper object —
+  Assumptions 1 and 4, Procedure 1 and its three steps, Equation (10), Algorithm
+  1, Procedure 2, Algorithm 2, Sections 6.1–6.4, Theorems 1 and 4 — to the
+  function and file implementing it, with the reason for every deliberate
+  departure.
+
+* **`tests/golden/`** holds a seeded snapshot of every front end at default and
+  non-default settings, checked by `tests/test-golden.R`. `baseline-0.2.0.rds`
+  is the pre-release reference, so `Rscript tests/golden/make_baseline.R --check
+  --against=baseline-0.2.0.rds` reproduces the change list below on demand.
+
+## Corrections that change a number
+
+* **The confidence set is now computed exactly, not by bisection.** Procedure 1,
+  step 3 defines `CI = {b : pval(b) > alpha}`. `.invert_ci()` approximated it: it
+  assumed a single interval, bracketed outward, bisected to a tolerance, and
+  patched disconnected cases with a hull. For a single coefficient the set is
+  available in closed form from the cached cross products. The statistics
+  `a_j(b) = |u_j - M_j b|` and `b_k(b) = |v_k - W_k b|` are piecewise linear, so
+  the p-value is a step function of `b` whose only jumps solve
+  `|v_k - W_k b| = |u_j - M_j b|`, at `b = (u_j - v_k)/(M_j - W_k)` and
+  `b = (u_j + v_k)/(M_j + W_k)`. The package now pools those roots across
+  repetitions and evaluates the aggregated p-value at every root and inside every
+  interval between consecutive roots, plus one point beyond each end. No
+  bracketing assumption, no tolerance, and a disconnected set is reported as its
+  components rather than replaced by its hull. Above a candidate budget
+  (about `2 K^2 * n_reps`, default cap 200,000, settable with
+  `options(mwperm.ci_exact_budget = )`) it falls back to the old
+  bracket-and-bisect path and says so in `$note`.
+
+* **One rep-aggregation rule now drives every path.** Three code paths
+  aggregated `n_reps` differently and two of them were not inversions of the
+  same function as the reported p-value: the reported p-value took the median
+  across reps, but the default interval took the **median of the per-rep end
+  points**, and the explicit-`grid` path had (before 0.2.0) accepted a point if
+  *any* rep accepted it. The confidence set is now defined once, as
+  `{b : median_r pval_r(b) > alpha}`, and the exact path, the grid path, the
+  bracketing fallback and the joint region all compute that one set. The
+  reported p-value goes through the same function. A value inside the reported
+  interval can therefore no longer be rejected by the test, and vice versa.
+
+  This is what moves the eight intervals below. Median-of-end-points was
+  systematically **narrower** than the inversion of the median p-value, so the
+  old default intervals were slightly too narrow; every changed interval is
+  wider.
+
+* **Sub-seed derivation is overflow-safe and collision-free.** `.sub_seed()`
+  computed `rep_seed * 1000L + j`. Two problems: an integer `seed` above roughly
+  2.1e6 overflowed to `NA` and `set.seed(NA)` failed; and with 1000 or more cells
+  (layouts) or 250 or more blocks (missing and irregular designs) two `(rep, j)`
+  pairs collided and shared a relabelling. A collision never broke validity —
+  each rep's test is exact regardless, the seed only picks the random
+  relabelling — but the reps were not independent, so the median was averaging
+  fewer effective draws than it appeared to. Fixed in two value-preserving
+  steps: the arithmetic is done in double, and the stride is widened **only** by
+  callers whose `j`-range would collide. Every design that was already
+  collision-free keeps exactly the seeds, and the results, it had.
+
+## Corrections that change no number
+
+* **The rejection floor is now aggregation-aware, so `aggregate = "median2"`
+  reports its resolution limit instead of an unbounded interval.** `"median2"`
+  reports `min(1, 2 * median)`, so its smallest attainable p-value is `2/(K+1)`,
+  not `1/(K+1)`. The engine gated both the "cannot reject at this level" note
+  and the confidence set on `1/(K+1) > alpha` regardless of the rule. At
+  `K = 19` and `alpha = 0.05` that test saw `0.05 <= 0.05` and stayed silent
+  while `"median2"` could never return below `0.10`: on a 20x20 design with an
+  overwhelming effect it returned `p = 0.10` and `conf_int = [-Inf, Inf]` with
+  no note, where the default rule rejected and returned a finite interval. The
+  engine now computes the floor from the aggregation rule and gates on that, and
+  the note names it (`2/(K+1)`) and asks for `K + 1 >= 2/alpha` — 40 levels in
+  the smallest permuted dimension at `alpha = 0.05`, twice what `"median"`
+  needs. The floor is also stored as the new `p_floor` field and is what
+  `confint()` cites when no set was computed; `$resolution` is unchanged and
+  remains the p-value grid step `1/(K+1)`, as printed.
+
+  **Effect on output.** Under the default `aggregate = "median"` nothing moves:
+  the floor equals the grid step, so every gate, note and interval is what it
+  was, and the golden baseline reproduces. Under `"median2"` on a design too
+  coarse for the level, a note now fires and the unbounded interval becomes
+  `NULL` with that explanation — the convention the guard already used
+  everywhere else. No finite interval changes under either rule.
+
+* **The confidence set is documented as the *closure* of `{b : pval(b) > alpha}`,
+  which is what it has always been.** The exact route builds each component from
+  a maximal run of accepted atoms of the step function and reports the bounding
+  breakpoints, so a component that begins or ends strictly inside an open cell
+  is reported with the breakpoint just outside it — a value the test rejects.
+  On the `trade_dyadic` anchor fit, `conf_int[1] = -1.251351` has `p = 0.0500`
+  (rejected at `alpha = 0.05`) while `p(-1.251351 + 1e-12) = 0.0625`. The
+  convention is the usual one for a discrete p-value and errs outward: no value
+  the test accepts falls outside the reported set, and every point strictly
+  inside a component is accepted. `README.md` and `?confint.mwperm` previously
+  claimed an exact if-and-only-if, which does not hold at the boundary; both now
+  state the closure relation, and `tests/test-exact-ci.R` probes the breakpoints
+  themselves and pins it. Numbers are unchanged — only the claim was wrong.
+  (The `"grid"` and `"bisection"` routes report attained, accepted end points.)
+
+* **Every permutation is asserted to be a bijection.** `.build_obs_perms()` and
+  the block-diagonal builder in `mwperm_missing()` map permuted cells back to
+  observation indices with `match()` on a mixed-radix cell code. `match()`
+  returns the first hit, so two observations sharing a cell code would make the
+  gather vector many-to-one: the statistic would be computed on duplicated rows,
+  with no NA, no warning, and no way to notice. Both builders now reject
+  duplicate cells at entry, and every returned gather vector is checked to be a
+  permutation of `seq_len(N)` before it is used. The checks are O(N) against
+  O(N p^2) of linear algebra, so they run unconditionally. This converts a
+  silent wrong answer into an error; it cannot change a correct result.
+
+* **A permutation that annihilates `d` is now an error.** If the residualized
+  `d` is numerically zero for some permutation `k`, that permutation's statistic
+  is rounding noise rather than data, and the a/b comparison is decided by float
+  error. It was silently zeroed. It now stops, naming the design. The
+  pre-existing case where `d` is constant or collinear with `x` — where *every*
+  slice is degenerate and `p = 1` is the exact answer — still warns and returns
+  `p = 1` as before.
+
+* **The projection dimension claim is corrected.** The paper writes
+  `V_k` in `R^{N x (N - 2p)}`; the code projects onto the orthogonal complement
+  of the column space of `[X | X_k]`, whose dimension is
+  `N - rank([X | X_k])` and is strictly larger whenever a nuisance column is
+  permutation-invariant — always, through the intercept, and substantially in
+  `mwperm_panel(time_fe = TRUE)`, where the period dummies are permuted among
+  themselves. The code's choice is the correct one and `N - 2p` is not well
+  defined under rank deficiency, so the claim was fixed, not the code, in
+  `README.md`, `?mwperm_dyadic`, `?mwperm_panel` and the corresponding `.Rd`
+  files.
+
+* **The Section 6.3 / 6.4 attribution of `L0` is corrected.** `L0` stays in
+  `mwperm_layout()` — dropping thin cells raises the attainable `K` and so the
+  p-value resolution, which is a legitimate power lever — but the roxygen block
+  and `man/mwperm_layout.Rd` now state that the threshold comes from Section
+  6.4, that `mwperm_layout()` applies it to the Section 6.3 within-cell test,
+  and that `mwperm_irregular()` is the Section 6.4 procedure.
+
+* **`?confint.mwperm` documents the set.** A new section states the definition
+  the package inverts, the aggregation rule across repetitions, that the set is
+  computed exactly for a single coefficient, and what `conf_set` and `ci_method`
+  contain.
+
+* **`?mwperm_dyadic` notes what the default `K` does.** `K = min(n_row, n_col) - 1`
+  maximises p-value resolution and makes `K + 1` equal the cluster count, so
+  Algorithm 1 produces a single block spanning all clusters. Theorem 2's power
+  result is stated for a *fixed* `K` with the cluster count divisible by
+  `K + 1` — a different regime. Validity is unaffected either way, so the
+  default stands; the note says so rather than leaving the reader to assume the
+  power theorem describes the default.
+
+* **`README.md`** documents `mwperm_irregular()` in the design-choice table and
+  the function map, describes the exact confidence set and the single
+  aggregation rule, and records that the test suite is tracked and ships in the
+  tarball (`tests/` is *not* excluded from the public branch, contrary to an
+  older note).
+
+* **Citations verified against the paper's title page.** The method paper is by
+  Wenxuan Guo, Panos Toulis and Yuhao Wang, arXiv:2601.08610. Every `.Rd` file,
+  roxygen block, `README.md`, `NEWS.md`, the vignette and `inst/CITATION`
+  already agreed on this; `DESCRIPTION` gave no initial for Guo and now reads
+  "Guo, W., Toulis, P. and Wang, Y. (2026)". (F. R. Guo, whom the method paper
+  separately cites as Guo and Shah (2025), is a different statistician and does
+  not appear anywhere in the package.)
+
+* **`DESCRIPTION`.** Version 0.3.0. `grDevices` was already declared in
+  `Imports` and imported in `NAMESPACE`; verified against the source (`R/plot.R`
+  uses `chull`, `adjustcolor` and the device openers) and left as is.
+
+## Authorized numerical changes, in full
+
+Reported **p-values and point estimates are identical everywhere**. Biclique
+block sets on the shipped examples are identical. The complete list of moved
+numbers, reproducible with
+`Rscript tests/golden/make_baseline.R --check --against=baseline-0.2.0.rds`:
+
+| Design and argument regime | Field | 0.2.0 | 0.3.0 | Why the old number was wrong |
+|---|---|---|---|---|
+| `mwperm_dyadic()` on `trade_dyadic`, defaults (`n_reps = 10`, `seed = 1`); identically via `mwperm()` and `mwperm_formula()` | `conf_int` | `[-1.244156, -0.542957]` | `[-1.251351, -0.534468]` | Median of per-rep end points, not the inversion of the median p-value. Too narrow by 2.2% of width. |
+| `mwperm_panel()` on `trade_panel`, defaults (`n_reps = 10`, `seed = 1`); identically via `mwperm()` | `conf_int` | `[0.444144, 0.877645]` | `[0.442022, 0.880272]` | Same cause. Too narrow by 1.1% of width. |
+| `mwperm()` README quick start on `trade_dyadic` (`n_reps = 15`, `seed = 1`) | `conf_int` | `[-1.246414, -0.548561]` | `[-1.246471, -0.548496]` | Same cause plus the removed bisection tolerance; 0.017% of width. |
+| `mwperm_dyadic()` on `trade_dyadic`, `beta_null = -1`, `n_reps = 9`, `seed = 1` | `conf_int` | `[-1.236987, -0.534473]` | `[-1.237042, -0.534468]` | Bisection tolerance removed; 0.008% of width. |
+| `mwperm_panel()` on `trade_panel`, `beta_null = 0.5`, `n_reps = 9`, `seed = 1` | `conf_int` | `[0.442033, 0.880264]` | `[0.442022, 0.880272]` | Bisection tolerance removed; 0.004% of width. |
+
+Every changed interval is **wider**. Not represented in the table, because no
+shipped example triggers them, but authorized and possible:
+
+* **Any single-coefficient `conf_int` with `n_reps > 1`** can move, for the
+  reason above. The direction is not guaranteed in general, but median of end
+  points is narrower than the inverted median whenever the per-rep sets are
+  nested or nearly so, which is the usual case.
+* **Any `conf_int` produced with an explicit `grid`** now reports the components
+  in `conf_set`; the interval itself is unchanged from 0.2.0 (the grid path
+  already inverted the median).
+* **A disconnected confidence set** now reports its components in `conf_set`;
+  `conf_int` is still the hull, so the reported interval is unchanged, but the
+  accompanying note is more specific.
+* **Layouts with 1000 or more occupied cells, and missing or irregular designs
+  with 250 or more blocks**, get different seeded output, because the sub-seed
+  stride is widened for exactly those designs. Below those sizes nothing
+  changes. No shipped example or documented number is in that regime.
+* **`find_bicliques(method = "greedy")` on masks where a peel returns a
+  sub-floor block** may now return more blocks, which changes the retained cells
+  and hence every downstream number for such a fit. `retry_peels = 0L` restores
+  the old behaviour. No shipped example is affected.
+
 # mwperm 0.2.0
 
 * **Documentation rewritten against verified behaviour.** `README.md` was
