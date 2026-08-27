@@ -14,8 +14,8 @@
 ## Section 6 pins that relation exactly -- interior accepted, nothing accepted
 ## outside the hull, every end point either accepted or bounding an accepted
 ## open cell -- and it is deliberately not the stronger "in the set iff not
-## rejected", which is false at the boundary (see NEWS 0.3.0 and CLAUDE.md
-## 5.1b). Section 1's evenly spaced brute force cannot see this: its points
+## rejected", which is false at the boundary (see the 0.3.0 section of
+## NEWS.md). Section 1's evenly spaced brute force cannot see this: its points
 ## never land on a root.
 ##
 ## Reaches internals via ::: -- run against a FRESHLY INSTALLED package.
