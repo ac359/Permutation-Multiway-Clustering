@@ -624,7 +624,7 @@
 #' attained, so there is no attained value to report there, and closing the
 #' component errs OUTWARD -- the reported set never omits an accepted value.
 #' Reporting the attained side instead is a different object and would move
-#' published end points; see NEWS and CLAUDE.md 5.1b.
+#' published end points; see the 0.3.0 section of NEWS.md.
 #'
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param alpha test level.
