@@ -124,6 +124,36 @@ below.
 
 ## Corrections that change no number
 
+* **Confidence sets are 2.6-3.4x faster, with every result bit-identical.**
+  The exact set introduced in this release evaluates the aggregated p-value at
+  every breakpoint and every cell between breakpoints, so for a 40x40 dyadic
+  fit at defaults it aggregates a 60,841 x 10 matrix of per-repetition
+  p-values. Two hot spots in `R/engine.R` were rewritten:
+  `.agg_pvals()` now uses a vectorised `.row_median()` instead of
+  `apply(P, 1L, stats::median)` -- which was making one R-level `median()` call
+  per row, profiled at ~49% of a whole fit -- and `.pval_matrix()` streams its
+  inner block instead of materialising two `K x chunk` matrices, a logical
+  matrix and a recycled vector.
+
+  Nothing about the method changed: the statistic, the minorisation, the
+  aggregation rule, the breakpoint enumeration and the set definition
+  `{b : agg_r p_r(b) > alpha}` are all untouched. Bit-identity was the
+  precondition, because the aggregated value is compared to `alpha` with `>`
+  and per-repetition p-values sit exactly on the grid `j/(K+1)`, so ties at
+  `alpha` are common. Note for anyone revisiting this: `(lo + hi)/2` is *not*
+  bit-identical to `mean(c(lo, hi))` -- `mean()` applies a second-pass LDOUBLE
+  correction, and LDOUBLE is 80-bit on x86 but 64-bit on arm64 -- so
+  `.row_median()` obtains order statistics by selection and calls `mean()`
+  itself, once per distinct pair.
+
+  Verified: `tests/golden/make_baseline.R --check` reproduces, all 19 test
+  files pass, and a 22-fit battery spanning all six designs, `n_reps` 1 to 15,
+  both `aggregate` rules, explicit `grid`, `d > 1`, non-zero `beta_null` and
+  `n_cores = 4` is bit-identical fit for fit. Measured: `trade_dyadic` at
+  defaults 1.70s -> 0.52s, `trade_panel` 0.61s -> 0.32s. Fits without a
+  confidence interval are unaffected.
+
+
 * **The rejection floor is now aggregation-aware, so `aggregate = "median2"`
   reports its resolution limit instead of an unbounded interval.** `"median2"`
   reports `min(1, 2 * median)`, so its smallest attainable p-value is `2/(K+1)`,

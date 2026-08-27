@@ -442,8 +442,82 @@
 .agg_pvals <- function(P, agg = "median") {
   P <- as.matrix(P)
   if (agg == "union") return(apply(P, 1L, max))
-  m <- if (ncol(P) == 1L) P[, 1L] else apply(P, 1L, stats::median)
+  m <- if (ncol(P) == 1L) P[, 1L] else .row_median(P)
   if (agg == "median2") pmin(1, 2 * m) else m
+}
+
+#' Row medians of one block of rows. Helper for .row_median(); see there.
+#' @keywords internal
+#' @noRd
+.row_median_block <- function(P) {
+  r <- ncol(P)
+  m <- nrow(P)
+  ## One radix sort of (row, value) lays every row's order statistics out
+  ## contiguously: row i occupies (i-1)*r + 1 .. i*r. order() sorts NA last
+  ## WITHIN each row key, not globally, so a row containing NA does not shift
+  ## the blocks of later rows (verified over 4000 random NA/NaN/Inf matrices).
+  v <- as.vector(P)
+  sv <- v[order(rep.int(seq_len(m), r), v, method = "radix")]
+  half <- (r + 1L) %/% 2L              # the same `half` median.default() uses
+  if (r %% 2L == 1L)
+    return(sv[seq.int(half, by = r, length.out = m)])   # selection only: exact
+  lo <- sv[seq.int(half,      by = r, length.out = m)]
+  hi <- sv[seq.int(half + 1L, by = r, length.out = m)]
+  ## Even r: median.default() averages the two central order statistics with
+  ## mean(). Call mean() once per DISTINCT (lo, hi) pair rather than once per
+  ## row, so the arithmetic is byte-for-byte the arithmetic median.default()
+  ## would have done. Per-rep p-values take at most K+1 distinct values, so the
+  ## pair table stays small however many candidate points there are.
+  uv <- unique(c(lo, hi))
+  nu <- length(uv)
+  pid <- (match(lo, uv) - 1L) * nu + match(hi, uv)      # exact on doubles
+  up <- unique(pid)
+  val <- vapply(up, function(q)
+    mean(c(uv[(q - 1L) %/% nu + 1L], uv[(q - 1L) %% nu + 1L])), numeric(1))
+  val[match(pid, up)]
+}
+
+#' Row-wise median, bit-identical to apply(P, 1L, stats::median).
+#'
+#' The exact confidence set evaluates the aggregated p-value at every breakpoint
+#' and every cell between breakpoints, so `P` has O(K^2 * n_reps) rows --
+#' 60,841 x 10 for a 40 x 40 dyadic fit at defaults. apply() then makes one
+#' R-level median() call per row, which profiled as ~49% of the whole fit.
+#'
+#' Bit-identity is a HARD requirement, not a nicety: this value is compared to
+#' alpha with `>`, the per-rep p-values sit exactly on the grid j/(K+1), and
+#' ties at alpha are common, so a last-bit change flips an acceptance decision
+#' and moves a reported interval end point. Note that the obvious spelling
+#' FAILS that test: `(lo + hi)/2` is NOT bit-identical to `mean(c(lo, hi))`,
+#' because mean() accumulates in LDOUBLE and then applies a second-pass
+#' correction. Hand-coding the correction would be platform-dependent too
+#' (LDOUBLE is 80-bit on x86, 64-bit on arm64). Hence the two devices used
+#' here: order statistics by SELECTION (pure comparison, no arithmetic), and
+#' mean() itself for the even case, called once per distinct pair.
+#'
+#' Rows are processed in blocks purely to bound peak memory, the same reason
+#' .pval_matrix() chunks; each row is independent, so the block size cannot
+#' change a result.
+#'
+#' @param P numeric matrix with at least one column.
+#' @return numeric vector of length nrow(P).
+#' @keywords internal
+#' @noRd
+.row_median <- function(P, block = 200000L) {
+  if (ncol(P) == 1L) return(P[, 1L])
+  m <- nrow(P)
+  if (m == 0L) return(numeric(0))
+  out <- if (m <= block) .row_median_block(P) else {
+    o <- numeric(m)
+    for (i0 in seq.int(1L, m, by = block)) {
+      ii <- i0:min(i0 + block - 1L, m)
+      o[ii] <- .row_median_block(P[ii, , drop = FALSE])
+    }
+    o
+  }
+  ## median.default() returns NA for any row containing NA (na.rm = FALSE).
+  if (anyNA(P)) out[rowSums(is.na(P)) > 0L] <- NA_real_
+  out
 }
 
 #' Per-rep p-values at a vector of candidate null values (d = 1).
@@ -472,15 +546,19 @@
     for (i0 in seq(1L, nb, by = chunk)) {
       ii <- i0:min(i0 + chunk - 1L, nb)
       bb <- b[ii]
-      ## a[j, i] = |u_j - M_j b_i|,  bm[k, i] = |v_k - W_k b_i|
-      A  <- abs(u - outer(M, bb))
-      Bm <- abs(v - outer(W, bb))
-      ## column minima of A (the minorizing statistic min_j a_j) without
-      ## apply(): K pmin passes over length(ii) vectors.
-      amin <- A[1L, ]
-      if (K > 1L) for (j in 2L:K) amin <- pmin(amin, A[j, ])
+      ## a_j(b) = |u_j - M_j b|, b_k(b) = |v_k - W_k b|, streamed one index at
+      ## a time. Each element is one multiply and one subtract on scalars, so
+      ## there is no reduction whose order could change; the two reductions
+      ## that do exist -- min, and the count -- are a comparison and an integer
+      ## sum, both exactly order-independent. So this is bit-identical to
+      ## forming the two K x chunk matrices plus rep(amin, each = K), and it
+      ## never allocates them (measured 1.4-1.9x on this block).
+      amin <- abs(u[1L] - M[1L] * bb)
+      if (K > 1L) for (j in 2L:K) amin <- pmin(amin, abs(u[j] - M[j] * bb))
       ## same comparison and tie direction as .ipt_eval(): b_k >= min_j a_j
-      P[ii, r] <- (1 + colSums(Bm >= rep(amin, each = K))) / pr$Kp1
+      cnt <- integer(length(bb))
+      for (k in seq_len(K)) cnt <- cnt + (abs(v[k] - W[k] * bb) >= amin)
+      P[ii, r] <- (1 + cnt) / pr$Kp1
     }
   }
   P
