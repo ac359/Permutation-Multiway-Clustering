@@ -64,7 +64,8 @@ below.
   planted on low-degree rows it recovered extra coverage in 399 and never lost
   any.
 
-* **`PAPER_MAP.md`** at the repository root maps every paper object —
+* **A paper-to-code map** (kept with the project's development notes, not
+  shipped) records every paper object —
   Assumptions 1 and 4, Procedure 1 and its three steps, Equation (10), Algorithm
   1, Procedure 2, Algorithm 2, Sections 6.1–6.4, Theorems 1 and 4 — to the
   function and file implementing it, with the reason for every deliberate
