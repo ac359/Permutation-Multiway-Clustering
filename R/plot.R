@@ -527,8 +527,9 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
     if (tp == "auto") tp <- if (has_coef) "coef" else "stability"
     if (tp == "coef" && !has_coef) {
       message(paste0("No confidence set is stored on this object (conf_int = ",
-                     "FALSE, empty inversion, or resolution 1/(K+1) > alpha); ",
-                     "showing the p-value stability diagnostic instead."))
+                     "FALSE, empty inversion, or a smallest attainable ",
+                     "p-value above alpha); showing the p-value stability ",
+                     "diagnostic instead."))
       tp <- "stability"
     }
     if (tp == "region" && !has_reg) {

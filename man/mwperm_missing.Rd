@@ -20,6 +20,7 @@ mwperm_missing(
   min_block = 3L,
   block_method = c("greedy", "exact"),
   permute = c("both", "rows", "cols"),
+  aggregate = c("median", "median2"),
   n_cores = 1L
 )
 }
@@ -89,6 +90,29 @@ capped by the permuted side alone -- with \code{"rows"}, blocks need
 \code{min_block} row clusters but only one column (a scalar
 \code{min_block} then binds the permuted side; pass a length-2 vector to
 \code{min_block} for full control) -- at some cost in power; see Details.}
+
+\item{aggregate}{How the \code{n_reps} per-repetition p-values are combined
+into the reported p-value, and into the confidence set that inverts it.
+\code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
+Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
+The distinction matters for what "exact" means. Theorem 1 gives
+finite-sample validity for a \emph{single} random permutation group, so
+with \code{n_reps = 1} the p-value is exact as stated. The median of
+several dependent randomised p-values is a de-randomisation heuristic --
+endorsed by Remark 1 and well behaved in practice, but not itself
+guaranteed to be a valid p-value at level alpha. Twice the median is: it
+controls the level under arbitrary dependence across repetitions
+(Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
+finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
+conservative, never rejecting where \code{"median"} would not, and its
+confidence set is never narrower. The default is unchanged, so existing
+numbers stand. It costs resolution, though: since \code{"median2"} reports
+\code{min(1, 2 * median)}, its smallest attainable p-value is
+\code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
+\code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
+levels in the smallest permuted dimension, twice the 20 \code{"median"}
+needs. Below that the p-value is still exact but cannot reach
+\code{alpha}, and the fit reports no confidence set and says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions

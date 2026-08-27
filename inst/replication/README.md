@@ -47,6 +47,14 @@ different parameters.
 
 ## Reference outputs
 
+> **Note for 0.3.0.** The confidence set is now computed exactly rather than by
+> bracketing and bisection, and the cross-repetition aggregation used to invert
+> it was corrected (see `NEWS.md`). Intervals are therefore slightly **wider**
+> than at 0.2.0, so `expected/03_ci_coverage.txt` was re-derived at 0.3.0 and
+> reports marginally higher coverage and mean width. The other four scripts test
+> p-values only (`conf_int = FALSE`) and are unaffected; their reference outputs
+> are unchanged from 0.2.0.
+
 `expected/` holds the tables this suite produces at the default sim counts
 (2000 per size/permute cell, 1500 per power cell, 600 per coverage cell, 1000
 per negative-control cell), together with the `sessionInfo()` behind them.

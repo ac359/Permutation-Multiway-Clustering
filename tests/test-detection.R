@@ -19,7 +19,7 @@ N  <- nrow(g3)
 yv <- rnorm(N)
 dv <- rnorm(N)
 
-## ---- 1. F5.5: a name-alone time assignment must warn -----------------------
+## ---- 1. a name-alone time assignment must warn ----------------------------
 ## 'period' is a genuine cluster (6 levels); the true time dimension is 'g'
 ## (4 levels, strictly fewest -- strongly time-like by value). The name match
 ## must still win the role (dispatch behaviour is frozen) but now carries a
@@ -51,7 +51,7 @@ w2 <- warns_of(mwperm(y = yv, d = dv, index = idx_ok,
                       conf_int = FALSE, seed = 1, verbose = FALSE))
 stopifnot(length(w2) == 0L)
 
-## ---- 3. F3.4: forcing threeway over a time-like index must warn ------------
+## ---- 3. forcing threeway over a time-like index must warn -----------------
 chk3 <- mwperm_check(index = idx_ok, design = "threeway")
 stopifnot(identical(chk3$design, "threeway"),
           any(grepl("time-like", chk3$warnings) &

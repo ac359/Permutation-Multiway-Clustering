@@ -24,9 +24,17 @@
 #' A feasibility note for long panels: the engine requires \code{N > 2p}
 #' (with \eqn{p} the number of nuisance columns including the intercept and,
 #' with \code{time_fe = TRUE}, the time dummies). This matches the premise of
-#' the validity theorem and is slightly conservative here -- because time is
-#' held fixed, the time dummies are duplicated between the design and its
-#' permuted copy, so the stacked projection's true rank is below \eqn{2p}.
+#' the validity theorem and is conservative here. The projection is onto the
+#' orthogonal complement of the column space of \code{[X | X_k]}, where
+#' \code{X_k} is the permuted copy of \code{X}, so its dimension is
+#' \code{N - rank([X | X_k])}, not the \code{N - 2p} of the paper's
+#' full-rank statement: the intercept is
+#' permutation-invariant in every design, and here the time dummies are too
+#' (time is held fixed), so the stack is rank-deficient by construction and the
+#' projection retains \emph{more} dimensions than \code{N - 2p}. That is the
+#' correct reading -- \code{N - 2p} is not well defined when the stack is rank
+#' deficient -- and it is why \code{time_fe = TRUE} costs far less than its
+#' column count suggests.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest
@@ -46,6 +54,28 @@
 #' @param K Number of non-identity permutations; defaults to
 #'   \code{min(n_row, n_col) - 1} capped at 199.
 #'
+#' @param aggregate How the \code{n_reps} per-repetition p-values are combined
+#'   into the reported p-value, and into the confidence set that inverts it.
+#'   \code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
+#'   Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
+#'   The distinction matters for what "exact" means. Theorem 1 gives
+#'   finite-sample validity for a \emph{single} random permutation group, so
+#'   with \code{n_reps = 1} the p-value is exact as stated. The median of
+#'   several dependent randomised p-values is a de-randomisation heuristic --
+#'   endorsed by Remark 1 and well behaved in practice, but not itself
+#'   guaranteed to be a valid p-value at level alpha. Twice the median is: it
+#'   controls the level under arbitrary dependence across repetitions
+#'   (Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
+#'   finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
+#'   conservative, never rejecting where \code{"median"} would not, and its
+#'   confidence set is never narrower. The default is unchanged, so existing
+#'   numbers stand. It costs resolution, though: since \code{"median2"} reports
+#'   \code{min(1, 2 * median)}, its smallest attainable p-value is
+#'   \code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
+#'   \code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
+#'   levels in the smallest permuted dimension, twice the 20 \code{"median"}
+#'   needs. Below that the p-value is still exact but cannot reach
+#'   \code{alpha}, and the fit reports no confidence set and says so in a note.
 #' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
 #'   are the OLS estimate and naive SE, \code{conf_int} (or
 #'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
@@ -70,8 +100,10 @@
 mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
                          alpha = 0.05, beta_null = 0, conf_int = TRUE,
                          n_reps = 10L, seed = NULL, grid = NULL, time_fe = TRUE,
+                         aggregate = c("median", "median2"),
                          n_cores = 1L) {
   cl <- match.call()
+  aggregate <- match.arg(aggregate)
   y <- .check_y(y)
   N <- length(y)
   D <- as.matrix(d)
@@ -108,12 +140,14 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
   perm_builder <- function(rep_seed) {
     Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))
     Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))
-    .build_obs_perms(coords, list(Grow, Gcol, NULL))   # time held fixed
+    ## time held fixed (the NULL group) -- this is condition InvB
+    .build_obs_perms(coords, list(Grow, Gcol, NULL), design = "panel",
+                     front_end = "mwperm_layout() (within-cell replication)")
   }
 
   .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
               alpha = alpha, conf_int = conf_int, beta_null = beta_null,
               grid = grid, type = "panel", d_names = d_names,
               n_clusters = c(row = n_row, col = n_col, time = n_t), call = cl,
-              n_cores = n_cores)
+              n_cores = n_cores, ci_agg = aggregate)
 }

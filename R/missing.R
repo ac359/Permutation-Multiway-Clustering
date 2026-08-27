@@ -65,6 +65,28 @@
 #'   \code{min_q min(|I_q|, |J_q|) - 1} over the selected blocks, capped at 199.
 #'   Must not exceed that quantity.
 #'
+#' @param aggregate How the \code{n_reps} per-repetition p-values are combined
+#'   into the reported p-value, and into the confidence set that inverts it.
+#'   \code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
+#'   Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
+#'   The distinction matters for what "exact" means. Theorem 1 gives
+#'   finite-sample validity for a \emph{single} random permutation group, so
+#'   with \code{n_reps = 1} the p-value is exact as stated. The median of
+#'   several dependent randomised p-values is a de-randomisation heuristic --
+#'   endorsed by Remark 1 and well behaved in practice, but not itself
+#'   guaranteed to be a valid p-value at level alpha. Twice the median is: it
+#'   controls the level under arbitrary dependence across repetitions
+#'   (Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
+#'   finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
+#'   conservative, never rejecting where \code{"median"} would not, and its
+#'   confidence set is never narrower. The default is unchanged, so existing
+#'   numbers stand. It costs resolution, though: since \code{"median2"} reports
+#'   \code{min(1, 2 * median)}, its smallest attainable p-value is
+#'   \code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
+#'   \code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
+#'   levels in the smallest permuted dimension, twice the 20 \code{"median"}
+#'   needs. Below that the p-value is still exact but cannot reach
+#'   \code{alpha}, and the fit reports no confidence set and says so in a note.
 #' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
 #'   are the OLS estimate and naive SE, \code{conf_int} (or
 #'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
@@ -106,8 +128,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            n_reps = 10L, seed = NULL, grid = NULL,
                            min_block = 3L, block_method = c("greedy", "exact"),
                            permute = c("both", "rows", "cols"),
+                           aggregate = c("median", "median2"),
                            n_cores = 1L) {
   cl <- match.call()
+  aggregate <- match.arg(aggregate)
   block_method <- match.arg(block_method)
   permute <- match.arg(permute)
   y <- .check_y(y)
@@ -239,7 +263,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                                          permute),
                      d_names = d_names,
                      n_clusters = c(row = n_row, col = n_col), call = cl,
-                     n_cores = n_cores)
+                     n_cores = n_cores, ci_agg = aggregate)
   res$note <- c(note, res$note)
   res$n_blocks <- length(blocks)
   res$cells_used <- Nk
@@ -268,26 +292,68 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   \code{rows}/\code{cols} vectors.
 #' @param permute \code{"both"} (Procedure 2), \code{"rows"} or \code{"cols"}
 #'   (one-dimensional subgroup; the other dimension is held fixed).
+#' @param slot optional within-cell slot index (see
+#'   \code{\link{.within_cell_slot}}), one entry per retained observation.
+#'   NULL (the default) is the one-observation-per-cell case: cells are keyed
+#'   by (row, col) and the code below is exactly what it always was. When
+#'   supplied, cells are keyed by (row, col, slot) and the slot is HELD FIXED,
+#'   so cell (i, j) slot l maps to cell (pi(i), sigma(j)) slot l -- the
+#'   structure mwperm_panel() uses for time, and what Section 6.4 needs once
+#'   each retained cell has been reduced to exactly L0 observations. Used by
+#'   mwperm_irregular().
 #' @return list of K+1 integer gather-vectors over the retained cells.
 #' @keywords internal
 #' @noRd
 .build_obs_perms_blocks <- function(rep_seed, K, blocks, ri, ci, blk,
-                                    lrow, lcol, permute = "both") {
+                                    lrow, lcol, permute = "both",
+                                    slot = NULL) {
   do_rows <- permute %in% c("both", "rows")
   do_cols <- permute %in% c("both", "cols")
+  ## Cells must be unique, for the same reason as in .build_obs_perms(): the
+  ## permuted (row, col) pair is translated back to an observation index by a
+  ## position table (or match()), both of which resolve a repeated cell to its
+  ## FIRST observation. mwperm_missing() already rejects duplicates before it
+  ## gets here, but this builder is reachable directly (and from
+  ## mwperm_irregular(), which keys on (row, col, slot)), so the invariant is
+  ## enforced where it is relied upon.
+  key <- if (is.null(slot)) cbind(ri, ci) else cbind(ri, ci, slot)
+  dup <- anyDuplicated(key)
+  if (dup > 0L)
+    stop(if (is.null(slot))
+      sprintf(paste0("The missing-data design requires exactly one ",
+                     "observation per (row, col) cell, but cell (%s, %s) ",
+                     "appears more than once (observation %d). For repeated ",
+                     "cells use mwperm_layout() (exchangeable within-cell ",
+                     "replication) or mwperm_irregular() (replicates that ",
+                     "are time periods, or a covariate constant within ",
+                     "cells)."),
+              ri[dup], ci[dup], dup)
+    else
+      sprintf(paste0("Internal error: (row, col, slot) key (%s, %s, %s) ",
+                     "appears more than once (observation %d); the slot ",
+                     "index must be a dense 1..L rank within each cell."),
+              ri[dup], ci[dup], slot[dup], dup),
+      call. = FALSE)
   ## Per block, a row group and a col group of common order K+1. The 4*q
   ## offsets keep every block's two seeds distinct within a rep.
+  ## Block q uses offsets 4q-1 and 4q, so >= 250 blocks reach the historical
+  ## stride of 1000 and two reps would share a relabelling; widen the stride
+  ## only then (see .sub_seed). Designs below 250 blocks keep their old seeds
+  ## exactly.
+  seed_stride <- max(1000, 4 * length(blocks) + 1)
   rowG <- vector("list", length(blocks))
   colG <- vector("list", length(blocks))
   for (q in seq_along(blocks)) {
     if (do_rows)
       rowG[[q]] <- build_perm_set(length(blocks[[q]]$rows), K,
-                                  seed = .sub_seed(rep_seed, 4L * q - 1L))
+                                  seed = .sub_seed(rep_seed, 4L * q - 1L,
+                                                   seed_stride))
     if (do_cols)
       colG[[q]] <- build_perm_set(length(blocks[[q]]$cols), K,
-                                  seed = .sub_seed(rep_seed, 4L * q))
+                                  seed = .sub_seed(rep_seed, 4L * q,
+                                                   seed_stride))
   }
-  code <- .cell_code(cbind(ri, ci))   # global cell code on retained cells
+  code <- .cell_code(key)            # global cell code on retained cells
   Kp1 <- K + 1L
   ## Row positions of each block's cells, once rather than once per element:
   ## `blk` does not depend on k, so the K+1 rounds of `blk == q` below were
@@ -304,9 +370,15 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   ## a huge sparse space keeps match().
   n_row_max <- max(ri)
   n_col_max <- max(ci)
+  n_slot <- if (is.null(slot)) 1L else max(slot)
+  ## Slot contributes the most significant digit of the mixed-radix code and is
+  ## held fixed, so it is a per-observation constant in the additive
+  ## decomposition below.
+  scode <- if (is.null(slot)) 0
+           else as.double(n_row_max) * n_col_max * (slot - 1L)
   pos <- NULL
-  if (as.double(n_row_max) * n_col_max <= 2^26) {
-    pos <- integer(n_row_max * n_col_max)        # 0 = cell not retained
+  if (as.double(n_row_max) * n_col_max * n_slot <= 2^26) {
+    pos <- integer(n_row_max * n_col_max * n_slot)   # 0 = cell not retained
     pos[code + 1L] <- seq_along(code)
   }
   ops <- vector("list",
@@ -329,7 +401,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
         if (do_cols)
           tg_col[sel] <- blocks[[q]]$cols[colG[[q]][[k]]][lcol_q[[q]]]
       }
-      match(.cell_code(cbind(tg_row, tg_col)), code)
+      match(.cell_code(if (is.null(slot)) cbind(tg_row, tg_col)
+                       else cbind(tg_row, tg_col, slot)), code)
     } else {
       ## Position-table branch. The index `pos` is keyed by is
       ## (row - 1) + n_row_max * (col - 1) + 1, which is additively separable
@@ -337,9 +410,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
       ## half of the code and each block's column map the other, both at
       ## block-label length. The target coordinates are then never formed:
       ## one gather per margin, one add, one table lookup. (This is the same
-      ## mixed-radix code as .cell_code(cbind(tg_row, tg_col)) -- the permuted
-      ## coordinate sets are the originals rearranged, so they share the radix
-      ## (max(ri), max(ci)) used to build `pos`.)
+      ## mixed-radix code as .cell_code(key) -- the permuted coordinate sets
+      ## are the originals rearranged, so they share the radix
+      ## (max(ri), max(ci)[, max(slot)]) used to build `pos`, and the slot
+      ## digit is unchanged because the slot is held fixed.)
       ##
       ## `gi` starts at 0 and is written only at the `sel_q` positions. That
       ## covers every retained cell: `keep` and `blk` are assigned from the
@@ -360,8 +434,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
         ## and gr[lrow_q] reproduces ri[sel] exactly -- lrow was built as
         ## match(ri[sel], gr), so the round trip is exact by construction
         rcode <- (if (do_rows) gr[rowG[[q]][[k]]] else gr) - 1L
-        ccode <- n_row_max * ((if (do_cols) gc[colG[[q]][[k]]] else gc) - 1L) + 1L
-        gi[sel] <- pos[rcode[lrow_q[[q]]] + ccode[lcol_q[[q]]]]
+        ccode <- n_row_max *
+          ((if (do_cols) gc[colG[[q]][[k]]] else gc) - 1L) + 1L
+        gi[sel] <- pos[rcode[lrow_q[[q]]] + ccode[lcol_q[[q]]] +
+                         (if (is.null(slot)) 0 else scode[sel])]
       }
       gi[gi == 0L] <- NA_integer_
       gi
@@ -371,6 +447,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
            call. = FALSE)   # nocov
     ops[[k]] <- g
   }
+  ## The blocks are disjoint in both margins and each block's row/col maps are
+  ## bijections, so the composed map is a bijection of the retained cells --
+  ## check it rather than assume it (see .assert_bijection).
+  .assert_bijection(ops, length(ri), "missing-data (biclique)")
   ops
 }
 
@@ -423,6 +503,17 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   and at least one side must be 2 or more.
 #' @param method Either \code{"greedy"} (default) or \code{"exact"}; see
 #'   Details.
+#' @param retry_peels Number of extra attempts, under \code{method =
+#'   "greedy"} only, to find a conforming block after one peel returned a block
+#'   below \code{min_block}. Each attempt slides the heuristic's seed window
+#'   eight rows further down the degree order. The greedy search seeds from the
+#'   highest-degree available rows, so a small block there is not proof that no
+#'   larger conforming block remains elsewhere in the mask, and stopping
+#'   immediately forfeits every later block too. Retrying can only add blocks,
+#'   never change or remove one already found, and the added blocks are
+#'   ordinary disjoint bicliques -- so this affects power only, never validity.
+#'   Set to \code{0L} for the pre-0.3.0 behaviour. Ignored for
+#'   \code{method = "exact"}, where a sub-floor block \emph{is} proof.
 #' @param node_budget Integer node cap for the \code{"exact"} branch-and-bound
 #'   per block (default 200000). Ignored when \code{method = "greedy"}.
 #'
@@ -441,7 +532,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' @export
 find_bicliques <- function(row, col, min_block = 2L,
                            method = c("greedy", "exact"),
-                           node_budget = 2e5L) {
+                           node_budget = 2e5L, retry_peels = 4L) {
   method <- match.arg(method)
   min_block <- suppressWarnings(as.integer(min_block))
   if (!length(min_block) %in% 1:2 || anyNA(min_block))
@@ -512,6 +603,31 @@ find_bicliques <- function(row, col, min_block = 2L,
       blk2 <- .grow_biclique_min(Asub, mb_r, mb_c)
       if (length(blk2$rows) >= mb_r && length(blk2$cols) >= mb_c) blk <- blk2
     }
+    ## A sub-floor block ends the peeling -- but only the EXACT search proves
+    ## that no conforming block remains. The greedy heuristic seeds from the 8
+    ## highest-degree available rows, so a small block is evidence about those
+    ## seeds, not about the whole remaining mask: a conforming block anchored on
+    ## a lower-degree row would be missed, and every later block lost with it.
+    ## Slide the seed window down the degree order a bounded number of times
+    ## before giving up. This can only ADD blocks (it runs exactly where the old
+    ## code stopped), and each added block is a genuine fully observed biclique
+    ## disjoint from the others, so validity is untouched -- it buys power.
+    if (method != "exact" && retry_peels > 0L &&
+        (length(blk$rows) < mb_r || length(blk$cols) < mb_c)) {
+      for (a in seq_len(retry_peels)) {
+        cand <- .grow_biclique(Asub, seed_offset = 8L * a)
+        if (!length(cand$rows)) break            # seed window past the last row
+        if (mb_r != mb_c &&
+            (length(cand$rows) < mb_r || length(cand$cols) < mb_c)) {
+          c2 <- .grow_biclique_min(Asub, mb_r, mb_c)
+          if (length(c2$rows) >= mb_r && length(c2$cols) >= mb_c) cand <- c2
+        }
+        if (length(cand$rows) >= mb_r && length(cand$cols) >= mb_c) {
+          blk <- cand
+          break
+        }
+      }
+    }
     if (length(blk$rows) < mb_r || length(blk$cols) < mb_c) break
 
     ## Map the block's local indices back to global clusters, store, and retire
@@ -537,7 +653,7 @@ find_bicliques <- function(row, col, min_block = 2L,
 #' @return list(rows, cols) of local indices forming an all-ones submatrix.
 #' @keywords internal
 #' @noRd
-.grow_biclique <- function(A) {
+.grow_biclique <- function(A, seed_offset = 0L) {
   nr <- nrow(A)
   nc <- ncol(A)
   if (nr == 0L || nc == 0L) return(list(rows = integer(0), cols = integer(0)))
@@ -547,8 +663,13 @@ find_bicliques <- function(row, col, min_block = 2L,
                area = 0)  # best block so far
 
   ## Try a few high-degree seed rows; keep the largest-area block found.
-  n_seed <- min(nr, 8L)
-  for (s in seq_len(n_seed)) {
+  ## `seed_offset` slides that window further down the degree order. It is 0 on
+  ## every ordinary call -- so the block returned is bit-for-bit the historical
+  ## one -- and is raised only by find_bicliques() when a peel produced a block
+  ## below the floor and it is retrying before giving up (see there).
+  seeds <- seed_offset + seq_len(min(max(nr - seed_offset, 0L), 8L))
+  if (!length(seeds)) return(list(rows = integer(0), cols = integer(0)))
+  for (s in seeds) {
     seed_row <- ord[s]
     cols <- which(A[seed_row, ])           # columns observed for the seed row
     if (length(cols) == 0L) next
@@ -632,6 +753,17 @@ find_bicliques <- function(row, col, min_block = 2L,
 #' block found so far is returned with \code{exact = FALSE}.
 #'
 #' @param A logical matrix.
+#' @param retry_peels Number of extra attempts, under \code{method =
+#'   "greedy"} only, to find a conforming block after one peel returned a block
+#'   below \code{min_block}. Each attempt slides the heuristic's seed window
+#'   eight rows further down the degree order. The greedy search seeds from the
+#'   highest-degree available rows, so a small block there is not proof that no
+#'   larger conforming block remains elsewhere in the mask, and stopping
+#'   immediately forfeits every later block too. Retrying can only add blocks,
+#'   never change or remove one already found, and the added blocks are
+#'   ordinary disjoint bicliques -- so this affects power only, never validity.
+#'   Set to \code{0L} for the pre-0.3.0 behaviour. Ignored for
+#'   \code{method = "exact"}, where a sub-floor block \emph{is} proof.
 #' @param node_budget integer cap on the number of search nodes.
 #' @return list(rows, cols, area, exact); rows/cols are local indices.
 #' @keywords internal

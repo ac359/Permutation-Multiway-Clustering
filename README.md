@@ -68,6 +68,17 @@ Requires R >= 3.6.0. Imports only `stats`, `graphics`, `grDevices` and
 `parallel` — all base R. `knitr` and `rmarkdown` (vignette) and `RhpcBLASctl`
 (BLAS thread pinning under `n_cores`) are optional.
 
+The **test suite ships with the package**: `tests/` is tracked in this
+repository and included in the built tarball, so a clone or an
+`R CMD build`/`R CMD check` runs it. The tests are plain base-R `stopifnot`
+scripts (no `testthat` dependency) and are deliberately kept fast enough to run
+under `R CMD check`. To run them against an installed copy:
+
+```r
+R CMD INSTALL .
+for f in tests/test-*.R; do Rscript "$f"; done
+```
+
 ## Quick start
 
 Hand over the data once; `mwperm()` detects the design and runs the matching
@@ -167,6 +178,7 @@ assumption your data does not satisfy.
 | Three crossed dimensions, **all** exchangeable | `mwperm_threeway()` | permutes all three |
 | Two dimensions observed **over time** | `mwperm_panel()` | holds time fixed; valid under an *arbitrary* common time trend |
 | Repeated **independent** observations per cell | `mwperm_layout()` | permutes replicates within cells |
+| Repeated observations per cell, but they are **time periods**, or `d` is constant within a cell | `mwperm_irregular()` | permutes the *cells*, holding the within-cell slot fixed |
 | Two dimensions with **missing cells** | `mwperm_missing()` | restricts to fully observed blocks |
 | Not sure | `mwperm()` or `mwperm_check()` | detects and tells you |
 
@@ -188,6 +200,7 @@ assumption your data does not satisfy.
 | Three-way clustering | `mwperm_threeway()` |
 | Panel (two-way + arbitrary time trend) | `mwperm_panel()` |
 | Replicated two-way layout (`L0=` to balance) | `mwperm_layout()` |
+| Irregular layout: repeats are periods, or `d` is cell-level | `mwperm_irregular()` |
 | Incomplete array (missing cells) | `mwperm_missing()` |
 | Permutation-group construction (Algorithm 1) | `build_perm_set()` |
 | Fully observed biclique finder (greedy/exact) | `find_bicliques()` |
@@ -248,6 +261,11 @@ Two consequences:
 `K` defaults to `min(permuted dimensions) − 1`, capped at 199. `mwperm_check()`
 reports the attainable resolution before you run anything.
 
+`aggregate = "median2"` reports `min(1, 2 × median)`, so its smallest
+attainable p-value is `2/(K+1)`: it needs `K + 1 ≥ 2/α`, i.e. **40 levels at
+α = 0.05**, twice what the default rule needs. Below that it cannot reject, and
+the fit says so in a note and returns no confidence set.
+
 ## The model and the null
 
 For the dyadic regression model (Guo et al., 2026, Eq. 1)
@@ -290,7 +308,15 @@ complement of *both* the nuisance design and its permuted copy,
 $$V_k^{\top}\mathbf{X} = 0, \qquad V_k^{\top}\mathbf{X}_{\pi_k,\sigma_k} = 0,$$
 
 a Frisch–Waugh–Lovell projection that removes $\gamma$ without assuming
-anything about it, then compute
+anything about it. Its dimension is
+$N - \operatorname{rank}([\mathbf{X} \mid \mathbf{X}_{\pi_k,\sigma_k}])$.
+The paper states this as $V_k \in \mathbb{R}^{N \times (N-2p)}$, which is
+the full-rank case; here the stack is rank-deficient *by construction*, since
+a permutation maps the intercept to itself (and, in a panel with time effects,
+maps the period dummies among themselves), so the projection keeps strictly
+more than $N-2p$ dimensions. `mwperm` uses the rank, which is what the two
+orthogonality conditions actually ask for and is the only well-defined reading
+when the stack is rank-deficient. Then compute
 
 $$a_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top} \mathbf{y}\rVert,
 \qquad
@@ -321,13 +347,47 @@ the set of nulls the test does not reject. Coverage is inherited directly from
 the validity of the test — no separate argument is needed, and no normal
 approximation is used.
 
-Two practical points. The **level is fixed at fit time** (`alpha`), so
+For a single coefficient this set is computed **exactly**, not by search. The
+p-value is a step function of $b$ whose jumps solve
+$|v_k - W_k b| = |u_j - M_j b|$ for known constants read off the cached
+projections, so `mwperm` evaluates it at every jump and at one point inside
+every interval between jumps. There is no bracketing assumption and no
+bisection tolerance. The set need not be connected — its components are
+returned in `fit$conf_set`, a two-column matrix of end points — and `confint()`
+reports their hull, which is conservative when there is more than one
+component. `fit$ci_method` records which route produced the set (`"exact"`,
+`"grid"`, or the `"bisection"` fallback used when the exact candidate count
+would be prohibitive).
+
+**What the end points mean.** `conf_set` and `conf_int` are the *closure* of
+$\lbrace b : \mathrm{pval}(b) > \alpha \rbrace$. Because the p-value is a
+step function, an acceptance region usually begins and ends strictly between
+two of its jumps, and there is no attained value at the boundary to report; the
+exact route reports the bounding jump. **A reported end point may therefore be
+a value the test rejects, while every point strictly inside the interval is
+accepted.** The convention is conservative — it never omits an accepted value —
+and it means a `b` sitting exactly on an end point should not be read as "just
+inside". (The `"grid"` and `"bisection"` routes report attained accepted
+points instead, to the grid spacing or bisection tolerance.)
+
+With `n_reps > 1` there is one p-value per repetition, and one rule is used
+everywhere: the reported p-value is $\mathrm{median}_r \mathrm{pval}_r(b)$ and
+the confidence set is
+$\lbrace b : \mathrm{median}_r\, \mathrm{pval}_r(b) > \alpha \rbrace$. The
+test and the interval therefore cannot disagree in the direction that matters:
+no value the test accepts falls outside the reported set (the end points
+themselves are the closure, above). Setting
+`aggregate = "median2"` replaces the median with $\min(1, 2\times$ median$)$ in
+both places, which restores the level-$\alpha$ guarantee for `n_reps > 1` at
+the cost of a wider set.
+
+Two further practical points. The **level is fixed at fit time** (`alpha`), so
 `confint(fit, level = 0.90)` on a 95% fit is an error rather than a silent
 re-derivation. And with several coefficients the result is a **joint** region;
 `confint()` then reports its *marginal extent*, which is not the same as
 separate per-coefficient intervals.
 
-Measured coverage of nominal 95% intervals: 0.950 dyadic, 0.963 panel.
+Measured coverage of nominal 95% intervals, at 600 simulations per cell (`inst/replication/03_ci_coverage.R`): 0.993 dyadic, 0.992 panel. Coverage above nominal is the valid direction — the p-value lives on the discrete grid `{1, …, K+1}/(K+1)`, so the inverted set is conservative by construction.
 
 ## Extensions
 
@@ -375,7 +435,22 @@ cell $(i,j)$ over $[\ell_{ij}]$, valid under
 $\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}$ with $\eta_{ij}$ arbitrary —
 appropriate when $l$ indexes independent replications. For unbalanced layouts,
 `L0` keeps cells with $\ell_{ij}\ge L_0$ and uniformly downsamples each to
-exactly $L_0$ replicates (reproducibly, via `seed`).
+exactly $L_0$ replicates (reproducibly, via `seed`). Note that the `L0`
+threshold itself comes from Section 6.4 of the paper, not Section 6.3;
+`mwperm_layout()` uses it to balance the array and then runs the Section 6.3
+within-cell test.
+
+**Irregular layouts** (`mwperm_irregular()`) are the actual Section 6.4
+procedure, and cover the two cases where within-cell permutation fails: the
+replication index is really *time* (so within-cell permutation is **invalid**),
+or $d_{ijl}$ is constant within each cell (so it has **no power**). It forms
+the mask $M_{ij} = 1\lbrace \ell_{ij} \ge L_0 \rbrace$, runs the biclique
+search on $M$, reduces each retained cell to exactly $L_0$ observations at
+random, and then applies Procedure 2 *across* cells with the within-cell slot
+held fixed — cell $(i,j)$ slot $l$ maps to cell $(\pi(i),\sigma(j))$ slot $l$,
+the same device the panel test uses for time. It therefore needs
+exchangeability across $(i,j)$ within each slot plus Assumption 4 on the mask,
+not within-cell exchangeability.
 
 ## Missing cells
 

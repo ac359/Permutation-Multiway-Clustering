@@ -1,8 +1,8 @@
 ==== 03 Confidence-interval coverage (nominal 95%) ====
-mwperm 0.2.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-08-20 15:56:09
+mwperm 0.3.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-08-26 16:50:35
 
-  dyadic n=40   coverage = 99.2% (CP [98.1, 99.7])   mean width = 1.02
-  panel 22xT6   coverage = 99.0% (CP [97.8, 99.6])   mean width = 0.63
+  dyadic n=40   coverage = 99.3% (CP [98.3, 99.8])   mean width = 1.04
+  panel 22xT6   coverage = 99.2% (CP [98.1, 99.7])   mean width = 0.64
 
 ---- summary ----
   cells with coverage significantly above nominal (CP lower > 95%) : 2 / 2
@@ -10,5 +10,5 @@ mwperm 0.2.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-08-20 15
 
 full table:
       design coverage cp_lo mean_width
- dyadic n=40    0.992 0.981      1.023
- panel 22xT6    0.990 0.978      0.625
+ dyadic n=40    0.993 0.983      1.041
+ panel 22xT6    0.992 0.981      0.638

@@ -19,6 +19,7 @@ mwperm_layout(
   n_reps = 10L,
   seed = NULL,
   grid = NULL,
+  aggregate = c("median", "median2"),
   n_cores = 1L
 )
 }
@@ -44,19 +45,25 @@ the order of appearance within a cell is used.}
   downsampling is reproducible through \code{seed}. When \code{NULL} (the
   default) all replicates are used with their (possibly unequal) cell sizes.
 
-  The \code{L0} threshold comes from Section 6.4 (\emph{irregular designs})
-  of Guo, Toulis and Wang (2026), not Section 6.3. Note what is and is not
-  implemented: Section 6.4 defines the mask \eqn{M_{ij} = 1\{\ell_{ij} \ge
-  L_0\}}, runs the biclique search on \eqn{M}, deletes down to exactly
-  \code{L0} per retained cell, and then applies \strong{Procedure 2}. This
-  function implements the balancing step only, and then applies the
-  \emph{within-cell} test of Section 6.3 to the balanced array. That is
-  valid -- a uniform random subset of exchangeable replicates is itself
-  exchangeable -- but it does not deliver what Section 6.4 exists for: a
-  covariate that is constant within cells still yields a powerless test
-  (see the warning in Details), and replicates that are really time periods
-  are still not permutable. For those cases the Section 6.4 route is not
-  currently available in this package.}
+  The \code{L0} threshold comes from \strong{Section 6.4}
+  (\emph{irregular designs}) of Guo, Toulis and Wang (2026), not Section
+  6.3. What this function does with it is a deliberate hybrid, so be clear
+  on which procedure you are running. Section 6.4 defines a mask that keeps
+  cell \code{(i, j)} when its size is at least \code{L0}, runs the biclique
+  search on that mask, deletes down to exactly \code{L0} per retained cell,
+  and then
+  applies \strong{Procedure 2} -- permuting the cells across rows and
+  columns. \code{mwperm_layout()} borrows only the balancing step, and then
+  applies the \emph{within-cell} test of \strong{Section 6.3} to the
+  balanced array. That combination is valid (a uniform random subset of
+  exchangeable replicates is itself exchangeable) and raising \code{L0} is a
+  legitimate power lever -- dropping thin cells raises the attainable
+  \code{K} and so the p-value resolution -- but it is a different procedure
+  from Section 6.4, and it does not cover what Section 6.4 exists for: a
+  covariate constant within cells still gives a powerless test (see the
+  warning in Details), and replicates that are really time periods are still
+  not exchangeable within a cell. For those cases use
+  \code{\link{mwperm_irregular}}, which is the Section 6.4 procedure.}
 
 \item{K}{Number of non-identity permutations; defaults to
 \code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).
@@ -89,6 +96,29 @@ grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
 grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
+
+\item{aggregate}{How the \code{n_reps} per-repetition p-values are combined
+into the reported p-value, and into the confidence set that inverts it.
+\code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
+Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
+The distinction matters for what "exact" means. Theorem 1 gives
+finite-sample validity for a \emph{single} random permutation group, so
+with \code{n_reps = 1} the p-value is exact as stated. The median of
+several dependent randomised p-values is a de-randomisation heuristic --
+endorsed by Remark 1 and well behaved in practice, but not itself
+guaranteed to be a valid p-value at level alpha. Twice the median is: it
+controls the level under arbitrary dependence across repetitions
+(Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
+finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
+conservative, never rejecting where \code{"median"} would not, and its
+confidence set is never narrower. The default is unchanged, so existing
+numbers stand. It costs resolution, though: since \code{"median2"} reports
+\code{min(1, 2 * median)}, its smallest attainable p-value is
+\code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
+\code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
+levels in the smallest permuted dimension, twice the 20 \code{"median"}
+needs. Below that the p-value is still exact but cannot reach
+\code{alpha}, and the fit reports no confidence set and says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -156,9 +186,11 @@ fit
 }
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-  inference under multi-way clustering and missing data, Section 6.3.
+  inference under multi-way clustering and missing data. The within-cell
+  test is Section 6.3; the \code{L0} threshold is from Section 6.4.
   arXiv:2601.08610.
 }
 \seealso{
-\code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
+\code{\link{mwperm_irregular}} for the Section 6.4 procedure
+  itself, \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
 }
