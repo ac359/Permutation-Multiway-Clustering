@@ -9,7 +9,6 @@
 
 # ----- local working material, not part of the package -----
 private/
-CLAUDE.md
 
 # ----- R build artifacts -----
 *.tar.gz
