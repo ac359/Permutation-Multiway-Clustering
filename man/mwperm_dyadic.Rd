@@ -90,28 +90,31 @@ de-randomisation as the reported p-value; an acceptance region reaching a
 grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
 
-\item{aggregate}{How the \code{n_reps} per-repetition p-values are combined
-into the reported p-value, and into the confidence set that inverts it.
-\code{"median"} (default) is the median, as recommended in Remark 1 of Guo,
-Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)}.
-The distinction matters for what "exact" means. Theorem 1 gives
-finite-sample validity for a \emph{single} random permutation group, so
-with \code{n_reps = 1} the p-value is exact as stated. The median of
-several dependent randomised p-values is a de-randomisation heuristic --
-endorsed by Remark 1 and well behaved in practice, but not itself
-guaranteed to be a valid p-value at level alpha. Twice the median is: it
-controls the level under arbitrary dependence across repetitions
-(Ruschendorf 1982; Vovk and Wang 2020). Use \code{"median2"} when the
-finite-sample guarantee must hold as stated with \code{n_reps > 1}; it is
-conservative, never rejecting where \code{"median"} would not, and its
-confidence set is never narrower. The default is unchanged, so existing
-numbers stand. It costs resolution, though: since \code{"median2"} reports
-\code{min(1, 2 * median)}, its smallest attainable p-value is
-\code{2/(K+1)} rather than \code{1/(K+1)}, so rejecting at level
-\code{alpha} needs \code{K + 1 >= 2/alpha} -- at alpha = 0.05 that is 40
-levels in the smallest permuted dimension, twice the 20 \code{"median"}
-needs. Below that the p-value is still exact but cannot reach
-\code{alpha}, and the fit reports no confidence set and says so in a note.}
+\item{aggregate}{
+How the \code{n_reps} per-repetition p-values are combined into the reported
+p-value, and into the confidence set that inverts it. \code{"median"} (the
+default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
+(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+
+The choice decides what "exact" covers. Theorem 1 gives finite-sample
+validity for a single random permutation group, so at \code{n_reps = 1} the
+p-value is exact as stated. The median of several dependent randomised
+p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+behaved in practice, but not itself guaranteed valid at level \code{alpha}.
+Twice the median is guaranteed, under arbitrary dependence across
+repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+
+So use \code{"median2"} when the guarantee must hold as stated with
+\code{n_reps > 1}. It is conservative: it never rejects where
+\code{"median"} would not, and its confidence set is never narrower. The
+default is unchanged, so existing numbers stand.
+
+The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
+so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
+and rejecting at level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at
+\code{alpha = 0.05} that is 40 levels in the smallest permuted dimension,
+twice what \code{"median"} needs. Below that the p-value is still exact but
+cannot reach \code{alpha}, and the fit says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -157,22 +160,26 @@ bootstrap, the test makes no assumption on the covariate distribution
 number of clusters.
 
 \strong{Aggregation over repetitions, and what "exact" covers.} Theorem 1
-establishes finite-sample validity for a \emph{single} random permutation
-group, so with \code{n_reps = 1} the p-value is exact exactly as stated.
-With \code{n_reps > 1} the reported p-value is the \emph{median} of the
-per-repetition p-values, following Guo, Toulis and Wang (2026, Remark 1),
-and the confidence set is the set of null values that the same median does
-not reject -- one rule, applied in both places, so the test and the interval
-cannot disagree. Each repetition's p-value is finite-sample valid on its
-own, but no finite-sample theorem covers the median of dependent valid
-p-values, so the median is a de-randomisation heuristic rather than a
-theorem. Extensive simulation (every design, all of \code{n_reps} in
-1--100) found the median-aggregated test uniformly conservative, never
-anti-conservative. When the guarantee must hold as stated for
-\code{n_reps > 1}, use \code{aggregate = "median2"}: twice the median,
-capped at 1, is a valid p-value at level \code{alpha} under arbitrary
-dependence across repetitions, and its confidence set is correspondingly
-wider.
+establishes finite-sample validity for a single random permutation group, so
+with \code{n_reps = 1} the p-value is exact as stated.
+
+With \code{n_reps > 1} the reported p-value is the median of the
+per-repetition p-values, following Guo, Toulis and Wang (2026, Remark 1), and
+the confidence set is the set of null values that same median does not
+reject. One rule, applied in both places, so the test and the interval cannot
+disagree.
+
+Each repetition's p-value is finite-sample valid on its own, but no
+finite-sample theorem covers the median of dependent valid p-values, so the
+median is a de-randomisation heuristic rather than a theorem. In this
+package's own simulations the median-aggregated test was more conservative
+than a single repetition in every design tested, and never
+anti-conservative; that is evidence, not a guarantee.
+
+When the guarantee must hold as stated for \code{n_reps > 1}, use
+\code{aggregate = "median2"}: twice the median, capped at 1, is a valid
+p-value at level \code{alpha} under arbitrary dependence across repetitions,
+and its confidence set is correspondingly wider.
 
 \strong{Numerical notes.} The projection is onto the orthogonal complement
 of the column space of the stacked design \code{[X | X_k]}, where
@@ -185,14 +192,18 @@ dimension is strictly larger than \code{N - 2p} -- substantially so in
 dummies are permuted among themselves. Taking the rank rather than
 \code{2p} is the correct reading -- the literal \code{N - 2p} is not even
 well defined under rank deficiency -- it costs nothing, and it is what the
-two defining conditions on the projection actually ask for. Exactly
+two defining conditions on the projection actually ask for. 
+
+Exactly
 collinear nuisance columns are therefore handled exactly. A \emph{nearly}
 collinear column of \code{x} (relative tolerance about \code{1e-7} on the
 singular values) is dropped from the projection -- the fit then behaves as
 if that column had been deleted, which changes what is partialled out; prefer
 non-redundant nuisance covariates. If \code{d} is annihilated entirely by
 some permutation's projection, the fit stops rather than returning a
-statistic decided by rounding noise. Seeded results are reproducible only
+statistic decided by rounding noise. 
+
+Seeded results are reproducible only
 under the same \code{RNGkind()} (generator and sample kind) and, when
 cluster ids are character strings, the same collation locale; see
 \code{\link{build_perm_set}}.
