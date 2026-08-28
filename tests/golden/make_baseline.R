@@ -17,7 +17,18 @@
 library(mwperm)
 args <- commandArgs(trailingOnly = TRUE)
 check <- "--check" %in% args
-here <- file.path("tests", "golden")
+## Locate the snapshot directory from wherever the script is driven: the
+## package root (Rscript tests/golden/make_baseline.R), the copied tests
+## directory that R CMD check runs in, or the covr equivalent, which is
+## named <pkg>-tests rather than tests -- so match on the directory that
+## exists, never on the working directory's name.
+here <- if (dir.exists(file.path("tests", "golden"))) {
+  file.path("tests", "golden")
+} else if (dir.exists("golden")) {
+  "golden"
+} else {
+  "."
+}
 ## --against=<file> compares against a different snapshot; used to diff the
 ## current tree against the pre-0.3.0 reference (baseline-0.2.0.rds) and see
 ## exactly which numbers the 0.3.0 changes moved.
