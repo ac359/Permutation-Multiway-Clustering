@@ -25,6 +25,7 @@ inst/replication/out/
 inst/replication/cache/
 
 # ----- R / RStudio machine-local state -----
+Rplots.pdf
 .Rhistory
 .Rapp.history
 .RData

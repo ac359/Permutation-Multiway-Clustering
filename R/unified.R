@@ -689,14 +689,32 @@ print.mwperm_design <- function(x, ...) {
 #'   detected design and the dispatched call.
 #' @inheritParams mwperm_dyadic
 #'
-#' @param aggregate How the \code{n_reps} per-repetition p-values are combined
-#'   into the reported p-value and the confidence set: \code{"median"}
-#'   (default, Remark 1 of Guo, Toulis and Wang 2026) or \code{"median2"}
-#'   (\code{min(1, 2 * median)}, which preserves the validity guarantee at
-#'   level alpha when \code{n_reps > 1}, at the cost of a smallest attainable
-#'   p-value of \code{2/(K+1)} -- so rejecting at alpha = 0.05 needs 40 levels
-#'   in the smallest permuted dimension rather than 20).
-#'   See \code{\link{mwperm_dyadic}}.
+#' @param aggregate How the \code{n_reps} per-repetition p-values are
+#'   combined into the reported p-value, and into the confidence set that
+#'   inverts it. \code{"median"} (the default) is the median, as recommended in
+#'   Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
+#'   \code{min(1, 2 * median)}.
+#'
+#'   The choice decides what "exact" covers. Theorem 1 gives finite-sample
+#'   validity for a single random permutation group, so at \code{n_reps = 1}
+#'   the p-value is exact as stated. The median of several dependent randomised
+#'   p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+#'   behaved in practice, but not itself guaranteed valid at level
+#'   \code{alpha}. Twice the median is guaranteed, under arbitrary dependence
+#'   across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#'
+#'   So use \code{"median2"} when the guarantee must hold as stated with
+#'   \code{n_reps > 1}. It is conservative: it never rejects where
+#'   \code{"median"} would not, and its confidence set is never narrower. The
+#'   default is unchanged, so existing numbers stand.
+#'
+#'   The cost is resolution. \code{"median2"} reports
+#'   \code{min(1, 2 * median)}, so its smallest attainable p-value is
+#'   \code{2/(K+1)}, not \code{1/(K+1)}, and rejecting at level \code{alpha}
+#'   needs \code{K + 1 >= 2/alpha} -- at \code{alpha = 0.05} that is 40 levels
+#'   in the smallest permuted dimension, twice what \code{"median"} needs.
+#'   Below that the p-value is still exact but cannot reach \code{alpha}, and
+#'   the fit says so in a note.
 #' @return The \code{"mwperm"} object of the dispatched test, with an extra
 #'   \code{auto} field recording the detection (design, roles, reason); the
 #'   detection notices are prepended to the object's \code{note} field and
