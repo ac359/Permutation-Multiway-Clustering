@@ -29,7 +29,7 @@ A data frame, invisibly, with one row per coefficient and columns
 \description{
 Returns (invisibly, after printing) a one-row-per-coefficient data frame
 with the OLS point estimate, naive standard error, the IPT confidence
-limits, and the permutation p-value for \eqn{H_0:\beta = b}; see
+limits, and the permutation p-value for H0:beta = b; see
 \emph{Value} for the exact meaning of each column.
 }
 \examples{

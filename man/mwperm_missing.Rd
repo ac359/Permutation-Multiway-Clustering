@@ -28,11 +28,11 @@ mwperm_missing(
 \item{y}{Numeric outcome vector, one entry per observed cell.}
 
 \item{d}{Numeric vector or matrix of the covariate(s) of interest
-(\eqn{d_{ij}}). With a single covariate a confidence interval is produced;
+(d_ij). With a single covariate a confidence interval is produced;
 with several, a joint confidence region (see \code{conf_int}).}
 
 \item{x}{Optional numeric matrix or data frame of nuisance covariates
-(\eqn{x_{ij}}); an intercept is always added internally. May be
+(x_ij); an intercept is always added internally. May be
 \code{NULL}.}
 
 \item{row, col}{Cluster identities of each observed cell. Cells that are
@@ -46,7 +46,7 @@ Must not exceed that quantity.}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -64,7 +64,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -136,13 +136,13 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
   blocks were retained.
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} in the dyadic model when the
-design is \emph{not} a complete array, i.e. some \eqn{(i, j)} cells are
+Finite-sample valid test of H0: beta = b in the dyadic model when the
+design is \emph{not} a complete array, i.e. some (i, j) cells are
 unobserved (Procedure 2 of Guo, Toulis and Wang, 2026). General row/column
 permutations are infeasible once cells are missing, so the test is built on
 \emph{fully observed bicliques}: maximal-ish blocks of row clusters
-\eqn{I_q} and column clusters \eqn{J_q} for which every cell
-\eqn{I_q \times J_q} is observed. The block-cyclic permutation group
+I_q and column clusters J_q for which every cell
+I_q x J_q is observed. The block-cyclic permutation group
 (\code{\link{build_perm_set}}) is applied within each block, the blocks are
 chosen to be disjoint in both rows and columns so that the joint permutation
 is a genuine relabelling of exchangeable clusters, and the residual

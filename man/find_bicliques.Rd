@@ -49,8 +49,8 @@ A list of blocks, each a list with integer components \code{rows} and
 }
 \description{
 Partitions (part of) a sparse two-way layout into blocks of row clusters
-\eqn{I_q} and column clusters \eqn{J_q} such that every cell of
-\eqn{I_q \times J_q} is observed and the blocks share no row or column
+I_q and column clusters J_q such that every cell of
+I_q x J_q is observed and the blocks share no row or column
 cluster. Blocks are peeled off one at a time: the largest fully observed
 biclique among the still-available rows and columns is found, removed, and
 the search repeats on the remainder. Used by \code{\link{mwperm_missing}}.

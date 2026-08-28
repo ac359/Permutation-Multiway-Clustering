@@ -13,18 +13,18 @@ and 8 variables:
   \item{year}{Integer time index, 2015--2020.}
   \item{log_trade}{Numeric outcome: log bilateral trade flow.}
   \item{fta}{Integer 0/1 dyad-by-time policy covariate: an in-force free
-    trade agreement for the pair in that year (true coefficient \eqn{0.5}).
+    trade agreement for the pair in that year (true coefficient 0.5).
     Roll-out timing varies randomly across pairs.}
   \item{log_gdp_i}{Numeric time-varying node covariate: log GDP of the
-    importer (true coefficient \eqn{0.6}).}
+    importer (true coefficient 0.6).}
   \item{log_gdp_j}{Numeric time-varying node covariate: log GDP of the
-    exporter (true coefficient \eqn{0.6}).}
+    exporter (true coefficient 0.6).}
   \item{placebo}{Numeric dyad-by-time covariate independent of the outcome
-    (true coefficient \eqn{0}).}
+    (true coefficient 0).}
 }
 The attribute \code{"true_coef"} stores the data-generating coefficients
-(intercept \eqn{1.5}, \code{fta} \eqn{0.5}, \code{log_gdp_i} and
-\code{log_gdp_j} \eqn{0.6}, \code{placebo} \eqn{0}).
+(intercept 1.5, \code{fta} 0.5, \code{log_gdp_i} and
+\code{log_gdp_j} 0.6, \code{placebo} 0).
 }
 \source{
 Seeded simulation; the generator script is
@@ -37,8 +37,7 @@ trade_panel
 \description{
 A simulated panel of bilateral trade among 22 countries over six years. The
 error structure adds an \emph{arbitrary} (irregular) common time trend to the
-two-way clustered components, \eqn{\varepsilon_{ijt} = \eta_i + \xi_j +
-\zeta_t + u_{ijt}}, with heavy-tailed (scaled \eqn{t_4}) idiosyncratic
+two-way clustered components, eps_ijt = eta_i + xi_j + zeta_t + u_ijt, with heavy-tailed (scaled t_4) idiosyncratic
 shocks. This is the setting of condition InvB and
 \code{\link{mwperm_panel}}: errors are exchangeable across importer and
 exporter within each year but not over time.

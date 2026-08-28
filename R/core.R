@@ -463,7 +463,8 @@
 #' The whole method rests on the permuted data being a relabelling of the
 #' observed data: Procedure 1 needs X_k = Pi_k X for a permutation matrix
 #' Pi_k, and .ipt_prepare() exploits that identity directly (it reuses X'X as
-#' the lower-right Gram block, which is only correct for a bijection). A gather vector that repeated an index would give
+#' the lower-right Gram block, which is only correct for a bijection). A
+#' gather vector that repeated an index would give
 #' a wrong statistic silently -- no NA, no warning, just numbers computed on
 #' duplicated rows. This is cheap next to a single permutation's linear
 #' algebra (O(N) per element against O(N p^2)), so it runs unconditionally.

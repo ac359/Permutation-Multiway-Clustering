@@ -27,9 +27,9 @@ A list of length \code{K + 1} of integer vectors, each a permutation
 Builds a set of \code{K + 1} permutations of \code{seq_len(n)} that form a
 cyclic algebraic group, following Algorithm 1 of Guo, Toulis and Wang
 (2026). A random one-to-one relabelling
-\eqn{\pi} is drawn, the index set is split into consecutive blocks of size
+pi is drawn, the index set is split into consecutive blocks of size
 \code{K + 1}, and each non-identity element cyclically shifts every block by
-\eqn{k} positions. Because the elements are powers of a single generator,
+k positions. Because the elements are powers of a single generator,
 the returned set is closed under composition (a cyclic group of order
 \code{K + 1}).
 }

@@ -71,7 +71,7 @@ produced the set: \code{"exact"}, \code{"grid"}, or \code{"bisection"} (the
 fallback used when the exact candidate count would exceed its budget).
 
 \strong{The reported components are the \emph{closure} of
-\eqn{\{b : \mathrm{pval}(b) > \alpha\}}, not the set itself.} The p-value
+\{b : pval(b) > alpha\}, not the set itself.} The p-value
 is a step function, so an acceptance region often begins and ends strictly
 between two of its jumps; there is then no attained value at the boundary to
 report, and the exact path reports the bounding jump. A printed or returned

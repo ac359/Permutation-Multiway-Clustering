@@ -25,11 +25,11 @@ mwperm_dyadic(
 \item{y}{Numeric outcome vector, one entry per observed cell.}
 
 \item{d}{Numeric vector or matrix of the covariate(s) of interest
-(\eqn{d_{ij}}). With a single covariate a confidence interval is produced;
+(d_ij). With a single covariate a confidence interval is produced;
 with several, a joint confidence region (see \code{conf_int}).}
 
 \item{x}{Optional numeric matrix or data frame of nuisance covariates
-(\eqn{x_{ij}}); an intercept is always added internally. May be
+(x_ij); an intercept is always added internally. May be
 \code{NULL}.}
 
 \item{row, col}{Vectors giving the row-cluster and column-cluster identity of
@@ -59,7 +59,7 @@ and the theoretical power statement simply does not describe it. Set
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -83,7 +83,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -131,17 +131,19 @@ An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).
   standard error(s) -- the SE is used only to centre and scale the
   confidence-set search, it is not an inferential quantity;
   \code{conf_int} (single coefficient) or \code{conf_region}/\code{conf_box}
-  (several coefficients: the retained \eqn{\beta} vectors and their
+  (several coefficients: the retained beta vectors and their
   marginal extent) hold the \emph{IPT} (inverted permutation test)
   confidence set at level \code{conf_level}; \code{pvalue} is the IPT
   permutation p-value (the median of the per-rep p-values
   \code{pvalues_rep}).
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} in the dyadic regression
+Finite-sample valid test of H0: beta = b in the dyadic regression
 model
-\deqn{y_{ij} = x_{ij}^\top \gamma + d_{ij}^\top \beta + \varepsilon_{ij},}
-where \eqn{i} indexes the row cluster and \eqn{j} the column cluster, with a
+
+\preformatted{  y_ij = x_ij' gamma + d_ij' beta + eps_ij}
+
+where i indexes the row cluster and j the column cluster, with a
 single observation per cell. Validity holds under conditional separate
 (double) exchangeability of the errors given the covariates: the
 n-by-n error matrix is row- and column-exchangeable. This is the

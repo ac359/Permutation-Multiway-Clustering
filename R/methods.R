@@ -13,25 +13,23 @@
 #' resolution, the point estimate and inverted confidence interval (when
 #' available), and the permutation p-value with the reject/retain decision.
 #'
-#' The per-coefficient lines label their two quantities by provenance: the
-#' point estimate is the \emph{OLS} estimate (printed as \code{"OLS
-#' estimate"}), while the confidence set comes from inverting the invariant
-#' permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
-#' joint confidence region).
+#' The per-coefficient lines label their two quantities by provenance: the point
+#' estimate is the \emph{OLS} estimate (printed as \code{"OLS estimate"}), while
+#' the confidence set comes from inverting the invariant permutation test
+#' (printed as \code{"IPT CI"}, or \code{"IPT region"} for a joint confidence
+#' region).
 #'
 #' The \code{Resolution} line states that the p-value is exact but
-#' \emph{discrete}: it can only take multiples of \eqn{1/(K+1)}, so the
-#' smallest value it can ever attain is \eqn{1/(K+1)} itself. Reading a
-#' p-value without that context is the most common way to over- or
-#' under-state what the test has shown -- a p equal to \eqn{1/(K+1)} is the
-#' strongest available evidence rather than a precise number, and a design
-#' with \eqn{1/(K+1) > \alpha} cannot reject at \eqn{\alpha} however large
-#' the effect.
+#' \emph{discrete}: it can only take multiples of 1/(K+1), so the smallest value
+#' it can ever attain is 1/(K+1) itself. Reading a p-value without that context
+#' is the most common way to over- or under-state what the test has shown -- a p
+#' equal to 1/(K+1) is the strongest available evidence rather than a precise
+#' number, and a design with 1/(K+1) > alpha cannot reject at alpha however
+#' large the effect.
 #'
-#' With several coefficients the \code{H0} line marks the null as a
-#' \emph{joint} test over all of them, and the printed brackets are the
-#' marginal extent of one joint confidence region -- not separate
-#' per-coefficient intervals.
+#' With several coefficients the \code{H0} line marks the null as a \emph{joint}
+#' test over all of them, and the printed brackets are the marginal extent of
+#' one joint confidence region -- not separate per-coefficient intervals.
 #'
 #' @param x An object of class \code{"mwperm"}.
 #' @param digits Number of significant digits for the estimate and interval.
@@ -41,13 +39,9 @@
 #'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{summary.mwperm}}.
 #' @examples
-#' data(trade_dyadic)
-#' fit <- with(trade_dyadic,
-#'             mwperm_dyadic(log_trade, log_dist,
-#'                           x = cbind(log_gdp_i, log_gdp_j),
-#'                           row = importer, col = exporter,
-#'                           n_reps = 2, seed = 1))
-#' print(fit)
+#' data(trade_dyadic) fit <- with(trade_dyadic, mwperm_dyadic(log_trade,
+#' log_dist, x = cbind(log_gdp_i, log_gdp_j), row = importer, col = exporter,
+#' n_reps = 2, seed = 1)) print(fit)
 #' @export
 print.mwperm <- function(x, digits = 4L, ...) {
   ## formatC(format = "g") right-pads the non-finite and exactly-zero cases to
@@ -149,37 +143,32 @@ print.mwperm <- function(x, digits = 4L, ...) {
 
 #' Summarise a multi-way permutation test
 #'
-#' Returns (invisibly, after printing) a one-row-per-coefficient data frame
-#' with the OLS point estimate, naive standard error, the IPT confidence
-#' limits, and the permutation p-value for \eqn{H_0:\beta = b}; see
-#' \emph{Value} for the exact meaning of each column.
+#' Returns (invisibly, after printing) a one-row-per-coefficient data frame with
+#' the OLS point estimate, naive standard error, the IPT confidence limits, and
+#' the permutation p-value for H0:beta = b; see \emph{Value} for the exact
+#' meaning of each column.
 #'
 #' @param object An object of class \code{"mwperm"}.
 #' @param ... Ignored.
 #' @return A data frame, invisibly, with one row per coefficient and columns
-#'   \code{term}, \code{ols_estimate}, \code{ols_se_naive},
-#'   \code{ipt_ci_low}, \code{ipt_ci_high} and \code{p_value}; the column
-#'   names carry the provenance of each quantity. \code{ols_estimate} is the
-#'   \emph{OLS} point estimate (least squares on the full design) and
-#'   \code{ols_se_naive} its naive homoskedastic OLS standard error, used
-#'   internally only to centre and scale the confidence-set search -- not an
-#'   inferential quantity; \code{ipt_ci_low}/\code{ipt_ci_high} are the
-#'   limits of the IPT (inverted permutation test) confidence set -- the
-#'   inverted-test interval for a single coefficient, or the marginal extent
-#'   of the joint confidence region for several; \code{p_value} is the IPT
-#'   permutation p-value of the joint test (repeated across rows when there
-#'   are several coefficients).
+#' \code{term}, \code{ols_estimate}, \code{ols_se_naive}, \code{ipt_ci_low},
+#' \code{ipt_ci_high} and \code{p_value}; the column names carry the provenance
+#' of each quantity. \code{ols_estimate} is the \emph{OLS} point estimate (least
+#' squares on the full design) and \code{ols_se_naive} its naive homoskedastic
+#' OLS standard error, used internally only to centre and scale the
+#' confidence-set search -- not an inferential quantity;
+#' \code{ipt_ci_low}/\code{ipt_ci_high} are the limits of the IPT (inverted
+#' permutation test) confidence set -- the inverted-test interval for a single
+#' coefficient, or the marginal extent of the joint confidence region for
+#' several; \code{p_value} is the IPT permutation p-value of the joint test
+#' (repeated across rows when there are several coefficients).
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 #'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{print.mwperm}}, \code{\link{confint.mwperm}}.
 #' @examples
-#' data(trade_dyadic)
-#' fit <- with(trade_dyadic,
-#'             mwperm_dyadic(log_trade, log_dist,
-#'                           x = cbind(log_gdp_i, log_gdp_j),
-#'                           row = importer, col = exporter,
-#'                           n_reps = 2, seed = 1))
-#' summary(fit)
+#' data(trade_dyadic) fit <- with(trade_dyadic, mwperm_dyadic(log_trade,
+#' log_dist, x = cbind(log_gdp_i, log_gdp_j), row = importer, col = exporter,
+#' n_reps = 2, seed = 1)) summary(fit)
 #' @export
 summary.mwperm <- function(object, ...) {
   d <- length(object$estimate)         # number of coefficients
@@ -211,20 +200,19 @@ summary.mwperm <- function(object, ...) {
 #' Confidence interval from an inverted permutation test
 #'
 #' Extracts the test-inversion confidence set stored in a \code{"mwperm"}
-#'   object:
-#' the interval for a single coefficient, or the marginal extent of the joint
-#' confidence region for several. This is the IPT (inverted permutation test)
-#' set -- obtained by inverting the finite-sample-valid test, \emph{not} a Wald
-#' interval around the OLS estimate. Note that \code{level} is fixed at fitting
-#' time (\code{1 - alpha}); a different level requires refitting with the
-#' corresponding \code{alpha}.
+#' object: the interval for a single coefficient, or the marginal extent of the
+#' joint confidence region for several. This is the IPT (inverted permutation
+#' test) set -- obtained by inverting the finite-sample-valid test, \emph{not} a
+#' Wald interval around the OLS estimate. Note that \code{level} is fixed at
+#' fitting time (\code{1 - alpha}); a different level requires refitting with
+#' the corresponding \code{alpha}.
 #'
 #' @section How the set is defined:
 #' Procedure 1, step 3 of Guo, Toulis and Wang (2026) defines the confidence
-#' region as the set of null values the test does not reject, that is
-#' \code{\{b : pval(b) > alpha\}}. With \code{n_reps > 1} there is one p-value
-#' per repetition, and the package uses a single aggregation rule everywhere.
-#' The confidence set is
+#' region as the set of null values the test does not reject, that is \code{\{b
+#' : pval(b) > alpha\}}. With \code{n_reps > 1} there is one p-value per
+#' repetition, and the package uses a single aggregation rule everywhere. The
+#' confidence set is
 #'
 #' \preformatted{  \{ b : median over repetitions of pval(b)  >  alpha \}}
 #'
@@ -240,55 +228,49 @@ summary.mwperm <- function(object, ...) {
 #' For a single coefficient the set is computed exactly. The p-value is a step
 #' function of the null value whose jumps are at known roots, so the package
 #' evaluates it at every root and every interval between roots rather than
-#' assuming the set is one interval and bisecting to a tolerance. The set need not be
-#' connected; its components are in \code{object$conf_set} (a two-column matrix
-#' of end points, one row per component), and \code{confint()} and
+#' assuming the set is one interval and bisecting to a tolerance. The set need
+#' not be connected; its components are in \code{object$conf_set} (a two-column
+#' matrix of end points, one row per component), and \code{confint()} and
 #' \code{object$conf_int} report their \emph{hull}, which is conservative when
 #' there is more than one component. \code{object$ci_method} records which path
 #' produced the set: \code{"exact"}, \code{"grid"}, or \code{"bisection"} (the
 #' fallback used when the exact candidate count would exceed its budget).
 #'
-#' \strong{The reported components are the \emph{closure} of
-#' \eqn{\{b : \mathrm{pval}(b) > \alpha\}}, not the set itself.} The p-value
-#' is a step function, so an acceptance region often begins and ends strictly
-#' between two of its jumps; there is then no attained value at the boundary to
-#' report, and the exact path reports the bounding jump. A printed or returned
-#' end point may therefore be a value the test itself \emph{rejects}, while
-#' every point strictly inside the interval is accepted. The convention errs
-#' outward -- the interval is conservative and never omits an accepted value --
-#' and it is the reason a value exactly equal to an end point should not be read
-#' as "just inside". (The \code{"grid"} and \code{"bisection"} paths report
-#' attained accepted points instead, to their own accuracy.)
+#' \strong{The reported components are the \emph{closure} of \{b :
+#' pval(b) > alpha\}, not the set itself.} The p-value is a step
+#' function, so an acceptance region often begins and ends strictly between two
+#' of its jumps; there is then no attained value at the boundary to report, and
+#' the exact path reports the bounding jump. A printed or returned end point may
+#' therefore be a value the test itself \emph{rejects}, while every point
+#' strictly inside the interval is accepted. The convention errs outward -- the
+#' interval is conservative and never omits an accepted value -- and it is the
+#' reason a value exactly equal to an end point should not be read as "just
+#' inside". (The \code{"grid"} and \code{"bisection"} paths report attained
+#' accepted points instead, to their own accuracy.)
 #'
 #' @param object An object of class \code{"mwperm"}.
 #' @param parm Optional subset of coefficients: names (matching the rows of
 #'   the returned matrix) or integer positions. Defaults to all coefficients.
 #' @param level Confidence level; must match the level used at fitting,
-#'   otherwise
-#'   an error is raised (the set cannot be re-derived without the stored
-#'   permutations). Defaults to the stored level.
+#' otherwise an error is raised (the set cannot be re-derived without the stored
+#' permutations). Defaults to the stored level.
 #' @param ... Ignored.
 #' @return A matrix with the lower and upper limits, one row per coefficient
-#'   (rows are named by coefficient; columns keep the percentile labels the
-#'   \code{confint} generic promises, e.g. \code{"2.5 \%"}/\code{"97.5 \%"}).
-#'   The interval is the \emph{IPT inverted-test} set, not a Wald interval:
-#'   for a single coefficient the inverted-test interval, for several the
-#'   \emph{marginal} extent of the joint confidence region (see
-#'   \code{object$conf_region} for the full set of retained vectors). The
-#'   provenance is recorded in the matrix's \code{"method"} attribute,
-#'   \code{"IPT (inverted permutation test)"}.
+#' (rows are named by coefficient; columns keep the percentile labels the
+#' \code{confint} generic promises, e.g. \code{"2.5 \%"}/\code{"97.5 \%"}). The
+#' interval is the \emph{IPT inverted-test} set, not a Wald interval: for a
+#' single coefficient the inverted-test interval, for several the
+#' \emph{marginal} extent of the joint confidence region (see
+#' \code{object$conf_region} for the full set of retained vectors). The
+#' provenance is recorded in the matrix's \code{"method"} attribute, \code{"IPT
+#' (inverted permutation test)"}.
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 #'   inference under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso \code{\link{mwperm_dyadic}}, \code{\link{print.mwperm}}.
 #' @examples
-#' data(trade_dyadic)
-#' fit <- with(trade_dyadic,
-#'             mwperm_dyadic(log_trade, log_dist,
-#'                           x = cbind(log_gdp_i, log_gdp_j),
-#'                           row = importer, col = exporter,
-#'                           n_reps = 2, seed = 1))
-#' confint(fit)
-#' confint(fit, parm = "log_dist")
+#' data(trade_dyadic) fit <- with(trade_dyadic, mwperm_dyadic(log_trade,
+#' log_dist, x = cbind(log_gdp_i, log_gdp_j), row = importer, col = exporter,
+#' n_reps = 2, seed = 1)) confint(fit) confint(fit, parm = "log_dist")
 #' @export
 confint.mwperm <- function(object, parm, level = NULL, ...) {
   has_int <- !is.null(object$conf_int)

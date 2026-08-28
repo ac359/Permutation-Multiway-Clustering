@@ -26,11 +26,11 @@ mwperm_threeway(
 \item{y}{Numeric outcome vector, one entry per observed cell.}
 
 \item{d}{Numeric vector or matrix of the covariate(s) of interest
-(\eqn{d_{ij}}). With a single covariate a confidence interval is produced;
+(d_ij). With a single covariate a confidence interval is produced;
 with several, a joint confidence region (see \code{conf_int}).}
 
 \item{x}{Optional numeric matrix or data frame of nuisance covariates
-(\eqn{x_{ij}}); an intercept is always added internally. May be
+(x_ij); an intercept is always added internally. May be
 \code{NULL}.}
 
 \item{id1, id2, id3}{Cluster identifiers for the three dimensions.}
@@ -41,7 +41,7 @@ with several, a joint confidence region (see \code{conf_int}).}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -59,7 +59,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -108,16 +108,19 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} in the three-way model
-\deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta +
-  \varepsilon_{ijl},}
-\eqn{i \in [m], j \in [n], l \in [\ell]}, under full three-way
+Finite-sample valid test of H0: beta = b in the three-way model
+
+\preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
+
+with i in [m], j in [n] and l in [ell], under full three-way
 exchangeability of the errors (condition InvA of Guo, Toulis and Wang,
 2026),
-\deqn{(\varepsilon_{ijl}) \;{\buildrel d \over =}\;
-       (\varepsilon_{\pi(i)\sigma(j)\psi(l)}) \mid X, D,}
-which holds, e.g., for the random-effects structure \eqn{\varepsilon_{ijl} =
-\eta_i + \xi_j + \zeta_l + u_{ijl}} with all components i.i.d. within family.
+
+\preformatted{  (eps_ijl) has the same distribution as
+    (eps_pi(i),sigma(j),psi(l)), for every permutation pi of the rows,
+    sigma of the columns and psi of the third dimension, given X and D}
+
+which holds, e.g., for the random-effects structure eps_ijl = eta_i + xi_j + zeta_l + u_ijl with all components i.i.d. within family.
 A permutation is drawn independently for each of the three dimensions and
 applied jointly.
 }

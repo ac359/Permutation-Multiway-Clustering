@@ -42,7 +42,7 @@ interval endpoints bit for bit. Under a \emph{different} BLAS the
 underlying matrix products are blocked and reassociated differently, so
 endpoints may differ in their final decimals. The p-value is unaffected in
 any practical sense: it lives on the grid
-\eqn{\{1, \dots, K+1\}/(K+1)}, whose resolution \eqn{1/(K+1)} is coarser
+\{1, ..., K+1\}/(K+1), whose resolution 1/(K+1) is coarser
 than such perturbations by many orders of magnitude.
 }
 \references{

@@ -29,12 +29,12 @@ permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
 joint confidence region).
 
 The \code{Resolution} line states that the p-value is exact but
-\emph{discrete}: it can only take multiples of \eqn{1/(K+1)}, so the
-smallest value it can ever attain is \eqn{1/(K+1)} itself. Reading a
+\emph{discrete}: it can only take multiples of 1/(K+1), so the
+smallest value it can ever attain is 1/(K+1) itself. Reading a
 p-value without that context is the most common way to over- or
-under-state what the test has shown -- a p equal to \eqn{1/(K+1)} is the
+under-state what the test has shown -- a p equal to 1/(K+1) is the
 strongest available evidence rather than a precise number, and a design
-with \eqn{1/(K+1) > \alpha} cannot reject at \eqn{\alpha} however large
+with 1/(K+1) > alpha cannot reject at alpha however large
 the effect.
 
 With several coefficients the \code{H0} line marks the null as a
