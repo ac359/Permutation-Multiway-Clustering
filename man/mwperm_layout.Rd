@@ -72,7 +72,7 @@ Must satisfy \code{K + 1 <= min(cell size)}.}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -90,7 +90,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -139,29 +139,31 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} for a two-way layout
-\deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta + \varepsilon_{ijl}}
-in which each \eqn{(i, j)} cell contains \eqn{\ell_{ij}} replicate
+Finite-sample valid test of H0: beta = b for a two-way layout
+
+\preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
+
+in which each (i, j) cell contains ell_ij replicate
 observations and the cell sizes may be \emph{unequal}. Permutations are
-applied only within cells, over the replication index \eqn{l}, drawn
+applied only within cells, over the replication index l, drawn
 \emph{independently} for each cell. This is valid under the relaxed
-condition that errors are exchangeable with respect to \eqn{l} within each
-cell (condition InvA restricted to \eqn{l}), e.g.
-\eqn{\varepsilon_{ijl} = \eta_{ij} + u_{ijl}} with arbitrary cell effects
-\eqn{\eta_{ij}} and \eqn{u_{ijl}} i.i.d. within each cell. Note that a
-replicate effect \eqn{\zeta_l} \emph{shared across cells} (the same draw
-entering every cell's \eqn{l}-th replicate) is not covered by the
+condition that errors are exchangeable with respect to l within each
+cell (condition InvA restricted to l), e.g.
+eps_ijl = eta_ij + u_ijl with arbitrary cell effects
+eta_ij and u_ijl i.i.d. within each cell. Note that a
+replicate effect zeta_l \emph{shared across cells} (the same draw
+entering every cell's l-th replicate) is not covered by the
 within-cell invariance argument, because the independent per-cell
-permutations change the cross-cell alignment of \eqn{\zeta}; simulations
+permutations change the cross-cell alignment of zeta; simulations
 found no measurable size effect from such a component, but validity is
 only guaranteed when the within-cell exchangeability holds cell by cell.
-The test is appropriate when \eqn{l} indexes independent replications
+The test is appropriate when l indexes independent replications
 (two-way layouts in randomised experiments). See Guo, Toulis and Wang
 (2026), Section 6.3.
 }
 \details{
-Note: the covariate of interest must vary within cells. If \eqn{d_{ijl}} is
-constant within every \eqn{(i, j)} cell (a cell-level covariate), within-cell
+Note: the covariate of interest must vary within cells. If d_ijl is
+constant within every (i, j) cell (a cell-level covariate), within-cell
 permutation yields a trivial test with no power; a warning is issued.
 
 Supplying \code{L0} balances an unbalanced layout to exactly \code{L0}

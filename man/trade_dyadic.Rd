@@ -12,21 +12,21 @@ self-trade where \code{importer == exporter}) and 8 variables:
   \item{exporter}{Factor with 40 levels (ISO3 codes); the column cluster.}
   \item{log_trade}{Numeric outcome: log bilateral trade flow.}
   \item{log_dist}{Numeric dyad-level covariate: log geographic distance
-    between the pair (true coefficient \eqn{-1.0}).}
+    between the pair (true coefficient -1.0).}
   \item{log_gdp_i}{Numeric node-level covariate: log GDP of the importer
-    (true coefficient \eqn{0.7}); constant across exporters within an
+    (true coefficient 0.7); constant across exporters within an
     importer.}
   \item{log_gdp_j}{Numeric node-level covariate: log GDP of the exporter
-    (true coefficient \eqn{0.7}).}
+    (true coefficient 0.7).}
   \item{border}{Integer 0/1 dyad-level covariate: shared land border (true
-    coefficient \eqn{0.4}).}
+    coefficient 0.4).}
   \item{placebo}{Numeric dyad-level covariate independent of the outcome
-    (true coefficient \eqn{0}); useful for checking the null rejection rate.}
+    (true coefficient 0); useful for checking the null rejection rate.}
 }
 The attribute \code{"true_coef"} stores the data-generating coefficients
-(intercept \eqn{2.0}, \code{log_dist} \eqn{-1.0}, \code{log_gdp_i} and
-\code{log_gdp_j} \eqn{0.7}, \code{border} \eqn{0.4}, \code{placebo}
-\eqn{0}).
+(intercept 2.0, \code{log_dist} -1.0, \code{log_gdp_i} and
+\code{log_gdp_j} 0.7, \code{border} 0.4, \code{placebo}
+0).
 }
 \source{
 Seeded simulation; the generator script is
@@ -39,8 +39,8 @@ trade_dyadic
 \description{
 A simulated cross-section of bilateral trade among 40 countries, generated
 from a gravity equation with a two-way (importer + exporter) clustered error
-structure \eqn{\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}} and heavy-tailed
-(scaled \eqn{t_4}) idiosyncratic shocks. Designed to exercise
+structure eps_ij = eta_i + xi_j + u_ij and heavy-tailed
+(scaled t_4) idiosyncratic shocks. Designed to exercise
 \code{\link{mwperm_dyadic}}; dropping the self-trade diagonal yields an
 incomplete array suitable for \code{\link{mwperm_missing}}.
 }

@@ -423,7 +423,8 @@
 #'
 #' and every inversion path -- the exact set (.exact_ci_set), the
 #' explicit-`grid` path, the bracketing fallback, and the joint region
-#' (.invert_region) -- calls this function to get that number. Before 0.3.0 the three
+#' (.invert_region) -- calls this function to get that number. Before 0.3.0
+#' the three
 #' single-coefficient paths disagreed: the default path took the MEDIAN OF THE
 #' PER-REP END POINTS (not an inversion of anything), and the grid path took a
 #' UNION over reps (systematically wider, and growing with `n_reps`). Neither
