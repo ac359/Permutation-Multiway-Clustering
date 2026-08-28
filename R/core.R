@@ -8,9 +8,9 @@
 #' pivoted QR so that rank-deficient `M` (e.g. a duplicated intercept after
 #' stacking X with a permuted copy of X) is handled correctly.
 #'
-#' **Not on the fit path.** Nothing in R/ calls this. `.ipt_prepare()` computes
-#' the same residuals through an eigendecomposition pseudo-inverse of the
-#' 2p x 2p Gram matrix: that never materializes the N x 2p stack, and it
+#' **Not on the fit path.** Nothing in R/ calls this. `.ipt_prepare()`
+#' computes the same residuals through an eigendecomposition pseudo-inverse of
+#' the 2p x 2p Gram matrix: that never materializes the N x 2p stack, and it
 #' replaces a QR of that stack (O(N (2p)^2)) with one O(N p^2) cross product
 #' plus an O(p^3) eigendecomposition that does not grow with N. This function
 #' survives as the obvious, obviously correct formulation that
@@ -30,10 +30,9 @@
 #'
 #' `apply(m, 2L, max)` routes the whole matrix through `aperm()` and a list
 #' split, which showed up as ~a quarter of the permutation builder's time in
-#' profiling. This loop returns the same numbers (max is a
-#' comparison reduction: no arithmetic, so no reassociation to worry about)
-#' without copying the matrix. Names are dropped -- every caller indexes by
-#' position.
+#' profiling. This loop returns the same numbers (max is a comparison
+#' reduction: no arithmetic, so no reassociation to worry about) without
+#' copying the matrix. Names are dropped -- every caller indexes by position.
 #'
 #' @param m numeric matrix.
 #' @return numeric vector of length `ncol(m)`.
@@ -47,8 +46,8 @@
 
 #' Encode integer cluster coordinates as a unique numeric code
 #'
-#' Maps a matrix of integer coordinates (each column taking values in
-#' 1..max) to a single numeric mixed-radix code, so cells can be matched with
+#' Maps a matrix of integer coordinates (each column taking values in 1..max)
+#' to a single numeric mixed-radix code, so cells can be matched with
 #' `match()`. Uses doubles to avoid 32-bit integer overflow.
 #'
 #' @param coords integer matrix, one row per observation, one column per
@@ -87,23 +86,24 @@
 #' Within-cell slot index: the position of each observation inside its cell
 #'
 #' The cell-code machinery keys an observation by its cluster coordinates, and
-#' those coordinates identify an observation uniquely only when each cell holds
-#' one observation. Designs with replication inside a cell (two-way layouts,
-#' and the irregular designs of Section 6.4) therefore need a third coordinate:
-#' the slot l = 1..ell_ij that an observation occupies inside its cell. Held
-#' fixed by the permutation, it plays exactly the role the time index plays in
-#' mwperm_panel(): cell (i, j) slot l maps to cell (pi(i), sigma(j)) slot l.
+#' those coordinates identify an observation uniquely only when each cell
+#' holds one observation. Designs with replication inside a cell (two-way
+#' layouts, and the irregular designs of Section 6.4) therefore need a third
+#' coordinate: the slot l = 1..ell_ij that an observation occupies inside its
+#' cell. Held fixed by the permutation, it plays exactly the role the time
+#' index plays in mwperm_panel(): cell (i, j) slot l maps to cell (pi(i),
+#' sigma(j)) slot l.
 #'
-#' The ordering is the one \code{mwperm_layout()} has always used, extracted
-#' here so every design that needs a slot index derives it identically: by
-#' \code{rep} where supplied (as a factor, so labels of any type order
-#' consistently), by order of appearance otherwise, with ties broken by
-#' position. Equivalent to \code{rank(ties.method = "first")} within each cell,
-#' computed as one stable sort.
+#' The ordering is the one `mwperm_layout()` has always used, extracted here
+#' so every design that needs a slot index derives it identically: by `rep`
+#' where supplied (as a factor, so labels of any type order consistently), by
+#' order of appearance otherwise, with ties broken by position. Equivalent to
+#' `rank(ties.method = "first")` within each cell, computed as one stable
+#' sort.
 #'
 #' @param cell integer vector of dense 1-based cell ids, one per observation.
-#' @param rep optional within-cell replication identifier; `NULL` means use the
-#'   order of appearance.
+#' @param rep optional within-cell replication identifier; `NULL` means use
+#'   the order of appearance.
 #' @param ncell number of cells (the maximum cell id).
 #' @return integer vector of slot indices, running 1..ell inside each cell.
 #' @keywords internal
@@ -119,20 +119,18 @@
 
 #' Precompute the beta-independent pieces of Procedure 1
 #'
-#' Implements the expensive, beta-independent part of Procedure 1 of Guo, Toulis
-#' and Wang (2026). For each non-identity permutation k = 1..K it partials out
-#' the nuisance design by residualizing on M_k = [X | X_k] (the
+#' Implements the expensive, beta-independent part of Procedure 1 of Guo,
+#' Toulis and Wang (2026). For each non-identity permutation k = 1..K it
+#' partials out the nuisance design by residualizing on M_k = [X | X_k] (the
 #' Frisch-Waugh-Lovell step, equivalent to projecting with the orthonormal V_k
 #' that satisfies V_k' X = V_k' X_k = 0) and stores the small d-dimensional
 #' cross products needed to evaluate the test statistic at *any* null value
-#' beta = b. Because residualization is linear in the outcome, the
-#' statistics
-#'   a_k(b) = || D' V_k V_k' (y - D b) ||,
-#'   b_k(b) = || D' V_k V_k' (y - D b)_k ||
-#' are affine in `b` once the residualized covariate Dr = V_k V_k' D and its
-#' inner products with `y`, `y_k`, `D` and `D_k` are known. Caching them here
-#' lets \code{\link{.invert_ci}} sweep many candidate values of `b` without
-#' redoing a single QR decomposition.
+#' beta = b. Because residualization is linear in the outcome, the statistics
+#' a_k(b) = || D' V_k V_k' (y - D b) ||, b_k(b) = || D' V_k V_k' (y - D b)_k
+#' || are affine in `b` once the residualized covariate Dr = V_k V_k' D and
+#' its inner products with `y`, `y_k`, `D` and `D_k` are known. Caching them
+#' here lets `.invert_ci()` sweep many candidate values of `b` without redoing
+#' a single QR decomposition.
 #'
 #' @param y numeric outcome, length N (the *unshifted* outcome).
 #' @param D numeric N x d matrix of covariate(s) of interest.
@@ -151,16 +149,16 @@
 #' @param degenerate what to do when the residualized `D` is numerically zero
 #'   for some permutation k, i.e. no identifying variation in `d` survives the
 #'   projection onto the orthogonal complement of `[X | X_k]`. `"stop"` (the
-#'   default) raises an error naming the design: that slice's statistic is pure
-#'   rounding noise, so the comparison a_k vs b_k is decided by float error
-#'   rather than by the data, and silently returning a number would be worse
-#'   than failing. `"zero"` restores the exact-arithmetic answer instead
+#'   default) raises an error naming the design: that slice's statistic is
+#'   pure rounding noise, so the comparison a_k vs b_k is decided by float
+#'   error rather than by the data, and silently returning a number would be
+#'   worse than failing. `"zero"` restores the exact-arithmetic answer instead
 #'   (a_k = b_k = 0, hence p = 1 through the minorization) and is used by the
 #'   engine when it has ALREADY established that beta is unidentified -- `d`
 #'   constant or collinear with `x` -- and warned about it. In that case p = 1
 #'   is the correct answer, not a failure.
 #' @param design short label for the calling design, used in that error.
-#' @return a list (the "prep" object) consumed by \code{\link{.ipt_eval}}.
+#' @return a list (the "prep" object) consumed by `.ipt_eval()`.
 #' @keywords internal
 #' @noRd
 .ipt_prepare <- function(y, D, X, obs_perms, need_perm_D = TRUE, n_cores = 1L,
@@ -292,10 +290,10 @@
 #' Evaluate the Procedure 1 p-value at a null value beta = b
 #'
 #' Cheap: O(K d^2), no matrix factorizations. Uses the cached cross products
-#' from \code{\link{.ipt_prepare}}. Returns the minorized randomization p-value
-#'   (1 + sum_k 1{ min_j a_j(b) <= b_k(b) }) / (K + 1).
+#' from `.ipt_prepare()`. Returns the minorized randomization p-value (1 +
+#' sum_k 1{ min_j a_j(b) <= b_k(b) }) / (K + 1).
 #'
-#' @param prep a prep object from \code{\link{.ipt_prepare}}.
+#' @param prep a prep object from `.ipt_prepare()`.
 #' @param beta numeric null value(s); recycled to length `prep$d`.
 #' @return list with `pvalue`, and diagnostic vectors `a`, `b`.
 #' @keywords internal
@@ -326,10 +324,10 @@
 
 #' Core invariant permutation p-value (Procedure 1), convenience wrapper
 #'
-#' Thin wrapper combining \code{\link{.ipt_prepare}} and \code{\link{.ipt_eval}}
-#' to evaluate the test at beta = 0 for an already-shifted outcome `y`.
-#' Kept for direct use and testing; the engine uses prepare/eval separately so
-#' the QR work is shared across the confidence-interval search.
+#' Thin wrapper combining `.ipt_prepare()` and `.ipt_eval()` to evaluate the
+#' test at beta = 0 for an already-shifted outcome `y`. Kept for direct use
+#' and testing; the engine uses prepare/eval separately so the QR work is
+#' shared across the confidence-interval search.
 #'
 #' @inheritParams .ipt_prepare
 #' @return list with `pvalue`, and diagnostic vectors `a`, `b`.
@@ -348,15 +346,16 @@
 #' coordinate dimension can be held fixed by passing `NULL` for its group.
 #'
 #' Every returned gather vector is checked to be a genuine permutation of
-#' `seq_len(N)` before it is handed back (see \code{\link{.assert_bijection}}):
-#' the cells are keyed by a mixed-radix code and translated back to observation
+#' `seq_len(N)` before it is handed back (see `.assert_bijection()`): the
+#' cells are keyed by a mixed-radix code and translated back to observation
 #' indices, and a code shared by two observations would make that translation
 #' many-to-one, silently computing the statistic on duplicated rows. Duplicate
 #' cell codes are therefore rejected up front as well.
 #'
 #' @param coords integer matrix N x C of cluster ids (1-based, dense).
 #' @param groups list of length C; each element is either `NULL` (dimension
-#'   held fixed) or a list of K+1 image vectors permuting that dimension's ids.
+#'   held fixed) or a list of K+1 image vectors permuting that dimension's
+#'   ids.
 #' @param design short label for the calling design, used in error messages.
 #' @param front_end the front end a user should reach for instead, named in
 #'   the duplicate-cell error.
@@ -464,10 +463,10 @@
 #' observed data: Procedure 1 needs X_k = Pi_k X for a permutation matrix
 #' Pi_k, and .ipt_prepare() exploits that identity directly (it reuses X'X as
 #' the lower-right Gram block, which is only correct for a bijection). A
-#' gather vector that repeated an index would give
-#' a wrong statistic silently -- no NA, no warning, just numbers computed on
-#' duplicated rows. This is cheap next to a single permutation's linear
-#' algebra (O(N) per element against O(N p^2)), so it runs unconditionally.
+#' gather vector that repeated an index would give a wrong statistic silently
+#' -- no NA, no warning, just numbers computed on duplicated rows. This is
+#' cheap next to a single permutation's linear algebra (O(N) per element
+#' against O(N p^2)), so it runs unconditionally.
 #'
 #' @param obs_perms list of integer gather-vectors.
 #' @param N expected length (the number of observations).

@@ -3,69 +3,71 @@
 #' Finite-sample valid test of H0: beta = b in the three-way model
 #' \preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
 #'
-#' with i in [m], j in [n] and l in [ell], under full three-way
+#' with i in `[m]`, j in `[n]` and l in `[ell]`, under full three-way
 #' exchangeability of the errors (condition InvA of Guo, Toulis and Wang,
 #' 2026),
 #' \preformatted{  (eps_ijl) has the same distribution as
 #'     (eps_pi(i),sigma(j),psi(l)), for every permutation pi of the rows,
 #'     sigma of the columns and psi of the third dimension, given X and D}
 #'
-#' which holds, e.g., for the random-effects structure eps_ijl = eta_i + xi_j +
-#' zeta_l + u_ijl with all components i.i.d. within family. A permutation is
+#' which holds, e.g., for the random-effects structure eps_ijl = eta_i + xi_j
+#' + zeta_l + u_ijl with all components i.i.d. within family. A permutation is
 #' drawn independently for each of the three dimensions and applied jointly.
 #'
-#' Use this when all three dimensions are genuinely exchangeable (e.g. importer,
-#' exporter and product category). If one dimension is time with
-#' autocorrelation, use \code{\link{mwperm_panel}} instead. The data must form a
+#' Use this when all three dimensions are genuinely exchangeable (e.g.
+#' importer, exporter and product category). If one dimension is time with
+#' autocorrelation, use [mwperm_panel()] instead. The data must form a
 #' complete balanced array.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param id1,id2,id3 Cluster identifiers for the three dimensions.
-#' @param K Number of non-identity permutations; defaults to
-#'   \code{min(m, n, ell) - 1} capped at 199.
+#' @param K Number of non-identity permutations; defaults to `min(m, n, ell) -
+#'   1` capped at 199.
 #'
-#' @param aggregate How the \code{n_reps} per-repetition p-values are
-#'   combined into the reported p-value, and into the confidence set that
-#'   inverts it. \code{"median"} (the default) is the median, as recommended in
-#'   Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
-#'   \code{min(1, 2 * median)}.
+#' @param aggregate How the `n_reps` per-repetition p-values are combined into
+#'   the reported p-value, and into the confidence set that inverts it.
+#'   `"median"` (the default) is the median, as recommended in Remark 1 of
+#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
 #'
-#'   The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#'   validity for a single random permutation group, so at \code{n_reps = 1}
-#'   the p-value is exact as stated. The median of several dependent randomised
-#'   p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-#'   behaved in practice, but not itself guaranteed valid at level
-#'   \code{alpha}. Twice the median is guaranteed, under arbitrary dependence
-#'   across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#' The choice decides what "exact" covers. Theorem 1 gives finite-sample
+#' validity for a single random permutation group, so at `n_reps = 1` the
+#' p-value is exact as stated. The median of several dependent randomised
+#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+#' behaved in practice, but not itself guaranteed valid at level `alpha`.
+#' Twice the median is guaranteed, under arbitrary dependence across
+#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
 #'
-#'   So use \code{"median2"} when the guarantee must hold as stated with
-#'   \code{n_reps > 1}. It is conservative: it never rejects where
-#'   \code{"median"} would not, and its confidence set is never narrower. The
-#'   default is unchanged, so existing numbers stand.
+#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
+#' 1`. It is conservative: it never rejects where `"median"` would not, and
+#' its confidence set is never narrower. The default is unchanged, so existing
+#' numbers stand.
 #'
-#'   The cost is resolution. \code{"median2"} reports
-#'   \code{min(1, 2 * median)}, so its smallest attainable p-value is
-#'   \code{2/(K+1)}, not \code{1/(K+1)}, and rejecting at level \code{alpha}
-#'   needs \code{K + 1 >= 2/alpha} -- at \code{alpha = 0.05} that is 40 levels
-#'   in the smallest permuted dimension, twice what \code{"median"} needs.
-#'   Below that the p-value is still exact but cannot reach \code{alpha}, and
-#'   the fit says so in a note.
-#' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
-#' are the OLS estimate and naive SE, \code{conf_int} (or
-#' \code{conf_region}/\code{conf_box} for several coefficients) the IPT
-#' inverted-test confidence set, and \code{pvalue} the IPT permutation p-value;
-#' see \code{\link{mwperm_dyadic}} for the field provenance in full.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#' inference under multi-way clustering and missing data, Section 6.1.
-#' arXiv:2601.08610.
-#' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}}.
+#' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
+#' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
+#' level `alpha` needs `K + 1 >= 2/alpha` -- at `alpha = 0.05` that is 40
+#' levels in the smallest permuted dimension, twice what `"median"` needs.
+#' Below that the p-value is still exact but cannot reach `alpha`, and the fit
+#' says so in a note.
+#' @return An object of class `"mwperm"`: `estimate`/`se_naive` are the OLS
+#'   estimate and naive SE, `conf_int` (or `conf_region`/`conf_box` for
+#'   several coefficients) the IPT inverted-test confidence set, and `pvalue`
+#'   the IPT permutation p-value; see [mwperm_dyadic()] for the field
+#'   provenance in full.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data, Section 6.1.
+#'   arXiv:2601.08610.
+#' @seealso [mwperm_dyadic()], [mwperm_panel()].
 #' @examples
-#' ## small balanced 3-way array with a random-effects error set.seed(1) m <- 8
-#' g <- expand.grid(i = seq_len(m), j = seq_len(m), l = seq_len(m)) a <-
-#' rnorm(m); b <- rnorm(m); cc <- rnorm(m) g$d <- rnorm(nrow(g)) g$y <- 0.6 *
-#' g$d + a[g$i] + b[g$j] + cc[g$l] + rnorm(nrow(g)) fit <- with(g,
-#' mwperm_threeway(y = y, d = d, id1 = i, id2 = j, id3 = l, conf_int = FALSE,
-#' seed = 1)) fit
+#' ## small balanced 3-way array with a random-effects error
+#' set.seed(1)
+#' m <- 8
+#' g <- expand.grid(i = seq_len(m), j = seq_len(m), l = seq_len(m))
+#' a <- rnorm(m); b <- rnorm(m); cc <- rnorm(m)
+#' g$d <- rnorm(nrow(g))
+#' g$y <- 0.6 * g$d + a[g$i] + b[g$j] + cc[g$l] + rnorm(nrow(g))
+#' fit <- with(g, mwperm_threeway(y = y, d = d, id1 = i, id2 = j, id3 = l,
+#'                                conf_int = FALSE, seed = 1))
+#' fit
 #' @export
 mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                             alpha = 0.05, beta_null = 0, conf_int = TRUE,

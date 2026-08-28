@@ -35,5 +35,6 @@ Imports: stats, graphics, grDevices, parallel
 Suggests: knitr, rmarkdown, RhpcBLASctl
 VignetteBuilder: knitr
 LazyData: true
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 NeedsCompilation: no

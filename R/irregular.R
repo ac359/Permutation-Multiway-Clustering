@@ -3,118 +3,121 @@
 #' Finite-sample valid test of H0: beta = b for a two-way layout
 #' \preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
 #'
-#' where cell (i, j) holds ell_ij observations indexed by l, the cell sizes are
-#' unequal, and permuting \emph{within} a cell is either invalid or powerless.
-#' This is the procedure of Guo, Toulis and Wang (2026), Section 6.4. Two cases
-#' motivate it, and \code{\link{mwperm_layout}} handles neither:
-#' \itemize{
-#'   \item the replication index l is really \emph{time}, so the errors are not
-#'     exchangeable across l (invariance InvB, not InvA) and within-cell
-#'     permutation is \strong{invalid};
-#'   \item d is constant within each (i, j) cell (a dyad-level covariate), so
-#'     within-cell permutation leaves the residual statistic unchanged and the
-#'     test has \strong{no power}.
-#' }
-#' In both cases the fix is to permute the \emph{cells}, across i and j,
-#' exactly as \code{\link{mwperm_dyadic}} does -- which needs equal cell sizes
-#' and a complete array, neither of which an irregular layout has. Section 6.4
-#' obtains both by combining the missing-data machinery of Procedure 2 with the
-#' panel construction:
-#' \enumerate{
-#'   \item form the cell sizes ell_ij and, for a threshold L0, the mask
-#'     M_ij = 1 if ell_ij >= L0, and 0 otherwise;
-#'   \item run the biclique search (\code{\link{find_bicliques}}, Algorithm 2)
-#'     on that mask to obtain disjoint fully observed blocks I_q by J_q;
-#'   \item inside each selected block, discard ell_ij - L0 observations from
-#'     each cell uniformly at random, leaving exactly L0 everywhere;
-#'   \item apply Procedure 2 to what remains: a row group on I_q and a column
-#'     group on J_q per block, of common order K + 1, applied identically across
-#'     the L0 within-cell slots, so cell (i, j) slot l maps to cell
-#'     (pi(i), sigma(j)) slot l.
-#' }
-#' Holding the slot fixed is the same device \code{\link{mwperm_panel}} uses
-#' for time, and it is what makes the test valid when l indexes periods.
+#' where cell (i, j) holds ell_ij observations indexed by l, the cell sizes
+#' are unequal, and permuting *within* a cell is either invalid or powerless.
+#' This is the procedure of Guo, Toulis and Wang (2026), Section 6.4. Two
+#' cases motivate it, and [mwperm_layout()] handles neither:
+#' - the replication index l is really *time*, so the errors are not
+#'   exchangeable across l (invariance InvB, not InvA) and within-cell
+#'   permutation is **invalid**;
+#' - d is constant within each (i, j) cell (a dyad-level covariate), so
+#'   within-cell permutation leaves the residual statistic unchanged and the
+#'   test has **no power**.
 #'
-#' @section Assumptions:
-#' This test does \strong{not} assume within-cell exchangeability. What it needs
-#' is exchangeability across the cell indices (i, j) \emph{within each slot}:
-#' for every slot l, the errors in a block satisfy
+#' In both cases the fix is to permute the *cells*, across i and j, exactly as
+#' [mwperm_dyadic()] does -- which needs equal cell sizes and a complete
+#' array, neither of which an irregular layout has. Section 6.4 obtains both
+#' by combining the missing-data machinery of Procedure 2 with the panel
+#' construction:
+#' 1. form the cell sizes ell_ij and, for a threshold L0, the mask M_ij = 1 if
+#'   ell_ij >= L0, and 0 otherwise;
+#' 2. run the biclique search ([find_bicliques()], Algorithm 2) on that mask
+#'   to obtain disjoint fully observed blocks I_q by J_q;
+#' 3. inside each selected block, discard ell_ij - L0 observations from each
+#'   cell uniformly at random, leaving exactly L0 everywhere;
+#' 4. apply Procedure 2 to what remains: a row group on I_q and a column group
+#'   on J_q per block, of common order K + 1, applied identically across the
+#'   L0 within-cell slots, so cell (i, j) slot l maps to cell (pi(i),
+#'   sigma(j)) slot l.
 #'
-#' (eps_ijl for i in I_q, j in J_q)  has the same distribution, given X and D,
+#' Holding the slot fixed is the same device [mwperm_panel()] uses for time,
+#' and it is what makes the test valid when l indexes periods.
+#'
+#' @section Assumptions: This test does **not** assume within-cell
+#'   exchangeability. What it needs is exchangeability across the cell indices
+#'   (i, j) *within each slot*: for every slot l, the errors in a block
+#'   satisfy
+#'
+#' (eps_ijl for i in I_q, j in J_q) has the same distribution, given X and D,
 #' as (eps_[pi(i)][sigma(j)]l for i in I_q, j in J_q)
 #'
-#' with the \emph{same} (pi, sigma) used in every slot -- invariance (InvB) of
+#' with the *same* (pi, sigma) used in every slot -- invariance (InvB) of
 #' Section 6.2, applied blockwise. That is required together with Assumption 4
 #' on the mask: the missingness pattern (here, which cells clear the L0
-#' threshold) is independent of the errors given the covariates. Under those two
-#' conditions the p-value is exact in finite samples by the argument of Theorem
+#' threshold) is independent of the errors given the covariates. Under those
+#' two conditions the p-value is exact in finite samples by the argument of
+#' Theorem
 #' 4. Arbitrary slot effects shared across cells -- an arbitrary common time
+#'
 #' trend -- are permitted, which is the whole point.
 #'
-#' @section Choosing L0:
-#' L0 trades cells against within-cell depth: a small L0 keeps more cells in the
-#' mask (so larger blocks, larger K, finer p-value resolution) but throws away
-#' more observations per cell; a large L0 keeps deeper cells but fewer of them.
-#' The paper recommends tuning it by grid search to minimise the loss of
-#' observations. There is no free lunch in choosing it from the data on the
-#' \emph{outcome}; select it from the cell sizes alone, which are ancillary
-#' under Assumption 4. The \code{note} field of the fitted object reports how
-#' many cells and observations survived.
+#' @section Choosing L0: L0 trades cells against within-cell depth: a small L0
+#'   keeps more cells in the mask (so larger blocks, larger K, finer p-value
+#'   resolution) but throws away more observations per cell; a large L0 keeps
+#'   deeper cells but fewer of them. The paper recommends tuning it by grid
+#'   search to minimise the loss of observations. There is no free lunch in
+#'   choosing it from the data on the *outcome*; select it from the cell sizes
+#'   alone, which are ancillary under Assumption 4. The `note` field of the
+#'   fitted object reports how many cells and observations survived.
 #'
-#' @section Reproducibility:
-#' Step (iii) deletes observations at random. That draw is taken \strong{once},
-#' from \code{seed}, before the permutation loop, so the \code{n_reps}
-#' repetitions average over the permutation-group draw but not over the
-#' subsample. To average over the subsample as well -- as Section B of the paper
-#' does -- run the test under several seeds and take the median p-value across
-#' those runs.
+#' @section Reproducibility: Step (iii) deletes observations at random. That
+#'   draw is taken **once**, from `seed`, before the permutation loop, so the
+#'   `n_reps` repetitions average over the permutation-group draw but not over
+#'   the subsample. To average over the subsample as well -- as Section B of
+#'   the paper does -- run the test under several seeds and take the median
+#'   p-value across those runs.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest. Unlike
-#' \code{\link{mwperm_layout}}, \code{d} \emph{may} be constant within cells;
-#' that is one of the cases this design exists for, and no warning is issued.
+#'   [mwperm_layout()], `d` *may* be constant within cells; that is one of the
+#'   cases this design exists for, and no warning is issued.
 #' @param x Optional numeric matrix or data frame of nuisance covariates; an
-#'   intercept is always added internally. May be \code{NULL}.
+#'   intercept is always added internally. May be `NULL`.
 #' @param row,col Cell identifiers along the two layout dimensions.
 #' @param rep Optional within-cell index (the replication or period
-#' identifier). It fixes which slot each observation occupies, and hence which
-#' observations are aligned across cells; when \code{NULL}, order of appearance
-#' within the cell is used. Supply it when the within-cell index means something
-#' -- a period, a wave -- so that slot l is the same period in every cell.
-#' @param L0 Integer threshold, at least 2: cells with fewer than \code{L0}
-#' observations are masked out, and every retained cell is reduced to exactly
-#' \code{L0}. Required.
-#' @param K Number of non-identity permutations; defaults to the smallest block
-#' side over the selected blocks -- that is, the smallest of |I_q| and |J_q|
-#' over all q -- minus one, capped at 199. Must satisfy \code{K + 1 <=} that
-#' smallest block side.
+#'   identifier). It fixes which slot each observation occupies, and hence
+#'   which observations are aligned across cells; when `NULL`, order of
+#'   appearance within the cell is used. Supply it when the within-cell index
+#'   means something -- a period, a wave -- so that slot l is the same period
+#'   in every cell.
+#' @param L0 Integer threshold, at least 2: cells with fewer than `L0`
+#'   observations are masked out, and every retained cell is reduced to
+#'   exactly `L0`. Required.
+#' @param K Number of non-identity permutations; defaults to the smallest
+#'   block side over the selected blocks -- that is, the smallest of |I_q| and
+#'   |J_q| over all q -- minus one, capped at 199. Must satisfy `K + 1 <=`
+#'   that smallest block side.
 #' @param min_block Minimum block side(s) for the biclique search; see
-#'   \code{\link{find_bicliques}}.
-#' @param block_method \code{"greedy"} (default) or \code{"exact"}; see
-#'   \code{\link{find_bicliques}}.
+#'   [find_bicliques()].
+#' @param block_method `"greedy"` (default) or `"exact"`; see
+#'   [find_bicliques()].
 #'
-#' @return An object of class \code{"mwperm"}, with the extra fields
-#' \code{n_blocks}, \code{cells_used}, \code{cells_total} and \code{L0}.
-#' \code{estimate}/\code{se_naive} are the OLS estimate and naive SE on the
-#' retained data, \code{conf_int}/\code{conf_set} (or
-#' \code{conf_region}/\code{conf_box} for several coefficients) the IPT
-#' inverted-test confidence set, and \code{pvalue} the IPT permutation p-value;
-#' see \code{\link{mwperm_dyadic}} for the field provenance in full.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#' inference under multi-way clustering and missing data, Section 6.4 and
-#' Procedure 2. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm_layout}} (Section 6.3, within-cell permutation),
-#' \code{\link{mwperm_missing}} (Procedure 2 with one observation per cell),
-#' \code{\link{mwperm_panel}} (Section 6.2, complete balanced panels).
+#' @return An object of class `"mwperm"`, with the extra fields `n_blocks`,
+#'   `cells_used`, `cells_total` and `L0`. `estimate`/`se_naive` are the OLS
+#'   estimate and naive SE on the retained data, `conf_int`/`conf_set` (or
+#'   `conf_region`/`conf_box` for several coefficients) the IPT inverted-test
+#'   confidence set, and `pvalue` the IPT permutation p-value; see
+#'   [mwperm_dyadic()] for the field provenance in full.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data, Section 6.4 and Procedure 2.
+#'   arXiv:2601.08610.
+#' @seealso [mwperm_layout()] (Section 6.3, within-cell permutation),
+#'   [mwperm_missing()] (Procedure 2 with one observation per cell),
+#'   [mwperm_panel()] (Section 6.2, complete balanced panels).
 #' @examples
-#' ## 8 x 8 cells, unequal cell sizes, treatment CONSTANT within each cell -- ##
-#' the case where the within-cell test of mwperm_layout() has no power.
-#' set.seed(11) dat <- do.call(rbind, lapply(1:8, function(i) do.call(rbind,
-#' lapply(1:8, function(j) { L <- sample(c(0L, 2L, 4L, 6L, 9L), 1L) if (L == 0L)
-#' return(NULL) data.frame(i = i, j = j, l = seq_len(L), d = rnorm(1), eta =
-#' rnorm(1)) })))) dat$y <- 0.5 * dat$d + dat$eta + rnorm(nrow(dat)) with(dat,
-#' mwperm_irregular(y = y, d = d, row = i, col = j, rep = l, L0 = 4L, min_block
-#' = 2L, conf_int = FALSE, seed = 1))
+#' ## 8 x 8 cells, unequal cell sizes, treatment CONSTANT within each cell --
+#' ## the case where the within-cell test of mwperm_layout() has no power.
+#' set.seed(11)
+#' dat <- do.call(rbind, lapply(1:8, function(i)
+#'   do.call(rbind, lapply(1:8, function(j) {
+#'     L <- sample(c(0L, 2L, 4L, 6L, 9L), 1L)
+#'     if (L == 0L) return(NULL)
+#'     data.frame(i = i, j = j, l = seq_len(L), d = rnorm(1), eta = rnorm(1))
+#'   }))))
+#' dat$y <- 0.5 * dat$d + dat$eta + rnorm(nrow(dat))
+#' with(dat, mwperm_irregular(y = y, d = d, row = i, col = j, rep = l,
+#'                            L0 = 4L, min_block = 2L, conf_int = FALSE,
+#'                            seed = 1))
 #' @export
 mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
                              K = NULL, min_block = 3L,
