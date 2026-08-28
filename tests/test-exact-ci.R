@@ -139,6 +139,7 @@ mk_preps <- function(nr, K) lapply(seq_len(nr), function(r) {
 })
 
 n_rejected_end <- 0L                 # end points the test itself rejects
+n_end_examined <- 0L                 # finite end points probed at all
 for (nr in c(1L, 3L)) {
   fit <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
                        alpha = alpha, n_reps = nr, seed = 7)
@@ -177,6 +178,7 @@ for (nr in c(1L, 3L)) {
       j <- match(lo, atoms)
       in_lo <- pval_at(lo) > alpha
       ok(in_lo || (j < length(atoms) && acc[j + 1L]))
+      n_end_examined <- n_end_examined + 1L
       if (!in_lo) n_rejected_end <- n_rejected_end + 1L
     }
     if (is.finite(hi)) {
@@ -184,15 +186,30 @@ for (nr in c(1L, 3L)) {
       j <- match(hi, atoms)
       in_hi <- pval_at(hi) > alpha
       ok(in_hi || (j > 1L && acc[j - 1L]))
+      n_end_examined <- n_end_examined + 1L
       if (!in_hi) n_rejected_end <- n_rejected_end + 1L
     }
   }
 }
-## The closure case is REACHED on this fixture, so section 6 is not vacuous and
-## the stronger iff claim is demonstrably false here: at least one reported end
-## point is a value the test rejects. If this ever fails because the exact path
-## moved to the attained side, that is a numeric change -- update NEWS, the
-## golden baseline and the docs rather than deleting the assertion.
-ok(n_rejected_end > 0L)
+## Non-vacuity: the loop above must actually have probed end points, or every
+## assertion in section 6 passes for the wrong reason.
+##
+## What it does NOT assert is that any end point is REJECTED. An end point is a
+## root of the step function, and at a root |v_k - W_k b| and min_j |u_j - M_j b|
+## are equal in exact arithmetic -- so which side the evaluation falls on is
+## settled by the last bits of the root and of the two norms, and that differs
+## by BLAS. This machine and the Linux runners reject some end points; the macOS
+## and Windows runners accept all of them. Both are correct: the reported set is
+## the CLOSURE of {b : pval(b) > alpha}, so an end point may be rejected, and
+## when none is, the reported set simply coincides with the attained one and is
+## no less conservative.
+##
+## The platform-independent invariant is (c), checked above for EVERY end point:
+## accepted, or the infimum / supremum of an accepted open cell. That is the
+## claim the documentation makes, and it is what this section pins.
+ok(n_end_examined > 0L)
+cat(sprintf(paste0("test-exact-ci.R: %d of %d reported end points are ",
+                   "rejected on this platform\n"),
+            n_rejected_end, n_end_examined))
 
 cat("test-exact-ci.R: all assertions passed\n")

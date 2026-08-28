@@ -28,12 +28,13 @@ script <- sub("baseline\\.rds$", "make_baseline.R", rds[1L])
 old_args <- commandArgs
 env <- new.env(parent = globalenv())
 assign("commandArgs", function(trailingOnly = FALSE) "--check", envir = env)
-## run from the package root so the script's relative paths resolve
-wd <- getwd()
-if (basename(wd) == "tests") setwd("..")
-script_path <- file.path("tests", "golden", "make_baseline.R")
-out <- utils::capture.output(sys.source(script_path, envir = env))
-setwd(wd)
+## Source the script NEXT TO the snapshot that was actually found. The previous
+## version discovered the snapshot and then ignored it, hardcoding
+## tests/golden/make_baseline.R and changing directory only when the working
+## directory happened to be named "tests". That holds under R CMD check and
+## fails under covr, which runs from <pkg>-tests: the script was not found and
+## every coverage run errored.
+out <- utils::capture.output(sys.source(script, envir = env))
 
 bad <- grep("^DIFFERS|^MISSING", out, value = TRUE)
 if (length(bad)) {
