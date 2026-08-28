@@ -78,6 +78,29 @@ below.
 
 ## Corrections that change a number
 
+* **A no-power design's p-value no longer depends on the platform's BLAS.** In
+  the Section 6.3 within-cell test with `d` constant inside every cell -- the
+  case `mwperm_layout()` already warns has no power -- the residualized `d` is
+  constant within each cell and the permutation only reshuffles inside cells.
+  The permuted statistic therefore equals the unpermuted one in exact
+  arithmetic: `Dr' y_k = Dr' y` and `Dr' D_k = Dr' Dr`, so `a_k == b_k` for
+  every `k` and the correct p-value is exactly 1.
+
+  `.ipt_prepare()` recomputed `v` and `W` rather than recognising the identity.
+  That sums the same terms in a different order, so they came back differing
+  from `u` and `M` by about 1e-13 -- and that rounding noise, not the data, then
+  decided the `a_j <= b_k` comparisons. The reported p-value was whatever the
+  local BLAS happened to produce: 1 on this project's macOS build, 0.75 or 0.5
+  on the Linux and Windows CI runners, from bit-identical inputs.
+
+  When the gather leaves the residualized regressor unchanged
+  (`identical(Dr[g, ], Dr)`), the package now asserts the identity instead of
+  recomputing it. Degenerate fits report p = 1 on every platform; every
+  non-degenerate fit takes the same path as before and is bit-identical, which
+  the golden baseline confirms. Only designs the package already warns are
+  powerless are affected -- no valid inference changes -- but a seeded p-value
+  did move on non-macOS platforms, so it is recorded here.
+
 * **The confidence set is now computed exactly, not by bisection.** Procedure 1,
   step 3 defines `CI = {b : pval(b) > alpha}`. `.invert_ci()` approximated it: it
   assumed a single interval, bracketed outward, bisected to a tolerance, and

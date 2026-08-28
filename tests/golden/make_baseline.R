@@ -152,13 +152,36 @@ if (!check) {
 } else {
   old <- readRDS(rds)
   bad <- 0L
+  ## Two classes of field, compared two ways.
+  ##
+  ## Everything the inference actually reports -- the p-value (a count over
+  ## K + 1, so exactly representable), the per-rep p-values, K, the cluster and
+  ## observation counts, the labels and notes -- is reproducible to the bit on
+  ## every platform, and is compared with identical(). Drift there is a defect.
+  ##
+  ## The fields below come out of BLAS: estimate and se_naive from the OLS
+  ## solve, conf_int / conf_set / conf_region / conf_box from cross products
+  ## and the breakpoint roots (u_j - v_k) / (M_j - W_k). A different BLAS sums
+  ## the same terms in a different order, so these agree to ~1e-15 relative but
+  ## not bitwise -- across Linux, Windows and macOS, and even between two
+  ## builds on the same architecture. identical() on them tests the linear
+  ## algebra library, not this package. The tolerance is still seven orders
+  ## tighter than any real change: the 0.3.0 exact-CI rewrite moved endpoints
+  ## by ~7e-3.
+  approx_fields <- c("estimate", "se_naive", "conf_int", "conf_set",
+                     "conf_region", "conf_box")
+  same <- function(f, x, y) {
+    if (f %in% approx_fields && is.numeric(x) && is.numeric(y))
+      isTRUE(all.equal(x, y, tolerance = 1e-8))
+    else identical(x, y)
+  }
   for (nm in names(old)) {
     if (!nm %in% names(B)) { cat("MISSING: ", nm, "\n"); bad <- bad + 1L; next }
     a <- old[[nm]]; b <- B[[nm]]
     if (identical(a, b)) next
     if (is.list(a) && is.list(b) && !is.null(names(a))) {
       diff <- names(a)[!vapply(names(a),
-                function(f) identical(a[[f]], b[[f]]), logical(1))]
+                function(f) same(f, a[[f]], b[[f]]), logical(1))]
       diff <- setdiff(diff, "call")
       if (!length(diff)) next
       cat(sprintf("DIFFERS: %-22s fields: %s\n", nm,
