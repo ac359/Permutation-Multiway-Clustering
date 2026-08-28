@@ -260,9 +260,26 @@
                   M = matrix(0, d, d),
                   W = if (need_perm_D) matrix(0, d, d)))
     }
-    list(u = crossprod(Dr, y),                     # = Dr' y
+    ## Permutation-invariant slice. When the gather leaves the residualized
+    ## regressor bitwise unchanged -- Dr[g, ] == Dr -- the permuted statistic
+    ## EQUALS the unpermuted one in exact arithmetic:
+    ##     Dr' y_k = sum_i Dr_i y_g(i) = sum_m Dr_g^-1(m) y_m = Dr' y,
+    ## and likewise Dr' D_k = Dr' Dr. Recomputing them instead sums the same
+    ## terms in a different order, so v and W come back differing from u and M
+    ## by ~1e-13 of pure rounding noise, and that noise -- not the data --
+    ## then decides the a_j <= b_k comparisons. This is the no-power case
+    ## Section 6.3 warns about (`d` constant within cell, permuted within
+    ## cell): the exact answer is a_k == b_k for every k, hence p = 1. Assert
+    ## the identity rather than recompute it, so the answer is the same on
+    ## every platform's BLAS. Non-degenerate slices never take this branch.
+    uu <- crossprod(Dr, y)                         # = Dr' y
+    MM <- crossprod(Dr)                            # = Dr' Dr
+    if (identical(Dr[g, , drop = FALSE], Dr))
+      return(list(u = uu, v = uu, M = MM,
+                  W = if (need_perm_D) MM))
+    list(u = uu,
          v = crossprod(Dr, y[g]),                  # = Dr' y_k
-         M = crossprod(Dr),                        # = Dr' Dr
+         M = MM,
          W = if (need_perm_D)          # only for CI / non-zero null
            crossprod(Dr, D[g, , drop = FALSE]))
   }
