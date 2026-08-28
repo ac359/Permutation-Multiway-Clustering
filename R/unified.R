@@ -82,8 +82,8 @@
 #' strictly fewer levels than every other dimension (the typical few-periods
 #' panel shape). Consecutive integer cluster ids satisfy the weak rule above,
 #' so this stricter form is what decides whether a NAME-based time assignment
-#' is corroborated by the values. Used only to gate warnings --
-#' never to assign the time role itself (assignment behaviour is frozen).
+#' is corroborated by the values. Used only to gate warnings -- never to
+#' assign the time role itself (assignment behaviour is frozen).
 #' @keywords internal
 #' @noRd
 .timelike_strong <- function(v, n_levels, min_other) {
@@ -99,70 +99,64 @@
 #'
 #' Inspects the clustering structure of a dataset -- number of index
 #' dimensions, repeated cells, completeness/balance -- and reports which
-#' \code{mwperm_*} test applies, without running any permutations or fitting
-#' anything. \code{\link{mwperm}} uses it for automatic dispatch; call it
-#' directly to see the diagnosis.
+#' `mwperm_*` test applies, without running any permutations or fitting
+#' anything. [mwperm()] uses it for automatic dispatch; call it directly to
+#' see the diagnosis.
 #'
 #' Structural forks (dyadic vs missing vs layout-by-replication) are resolved
-#' silently from the data. Two forks depend on an \emph{exchangeability
-#' assumption the data cannot reveal} and are therefore announced with
-#' override instructions, defaulting to the choice that remains valid under
-#' the widest set of error processes:
-#' \itemize{
-#'   \item \strong{panel vs three-way} (complete balanced 3-index arrays):
-#'     running \code{\link{mwperm_threeway}} on a panel whose errors are
-#'     dependent over time is \emph{invalid} (size distortion), while running
-#'     \code{\link{mwperm_panel}} on genuinely three-way exchangeable data is
-#'     valid, only less powerful. The default is therefore \code{panel}. The
-#'     time role is assigned by, in order: an explicit \code{time =} tag; a
-#'     time-like \emph{name} (case-insensitive vocabulary: year, yr, time, t,
-#'     date, period, wave, month, quarter, day, decade, week, season, annum,
-#'     and their plurals); time-like \emph{values} (temporal class, or
-#'     regularly spaced numeric). A name-based assignment that the values do
-#'     not corroborate (temporal class, or regularly spaced with strictly
-#'     fewer levels than every other dimension) carries a \strong{warning} --
-#'     a column merely \emph{named} like time may be a cluster, and permuting
-#'     the true time dimension over-rejects badly. An ambiguous case defaults
-#'     to holding the third index fixed, with a warning. Forcing
-#'     \code{design = "threeway"} when an index looks time-like also warns;
-#'     force it only when all three dimensions are genuinely exchangeable.
-#'   \item \strong{layout vs suppressed panel} (2 indices with repeated
-#'     cells): repeats are treated as within-cell replication
-#'     (\code{\link{mwperm_layout}}), which assumes the replicates are
-#'     exchangeable within cells -- if they are really a time series, pass the
-#'     time variable via \code{time =} to get the panel test instead. A
-#'     notice is attached.
-#' }
+#' silently from the data. Two forks depend on an *exchangeability assumption
+#' the data cannot reveal* and are therefore announced with override
+#' instructions, defaulting to the choice that remains valid under the widest
+#' set of error processes:
+#' - **panel vs three-way** (complete balanced 3-index arrays): running
+#'   [mwperm_threeway()] on a panel whose errors are dependent over time is
+#'   *invalid* (size distortion), while running [mwperm_panel()] on genuinely
+#'   three-way exchangeable data is valid, only less powerful. The default is
+#'   therefore `panel`. The time role is assigned by, in order: an explicit
+#'   `time =` tag; a time-like *name* (case-insensitive vocabulary: year, yr,
+#'   time, t, date, period, wave, month, quarter, day, decade, week, season,
+#'   annum, and their plurals); time-like *values* (temporal class, or
+#'   regularly spaced numeric). A name-based assignment that the values do not
+#'   corroborate (temporal class, or regularly spaced with strictly fewer
+#'   levels than every other dimension) carries a **warning** -- a column
+#'   merely *named* like time may be a cluster, and permuting the true time
+#'   dimension over-rejects badly. An ambiguous case defaults to holding the
+#'   third index fixed, with a warning. Forcing `design = "threeway"` when an
+#'   index looks time-like also warns; force it only when all three dimensions
+#'   are genuinely exchangeable.
+#' - **layout vs suppressed panel** (2 indices with repeated cells): repeats
+#'   are treated as within-cell replication ([mwperm_layout()]), which assumes
+#'   the replicates are exchangeable within cells -- if they are really a time
+#'   series, pass the time variable via `time =` to get the panel test
+#'   instead. A notice is attached.
 #'
-#' @param index The clustering dimensions (2 or 3): a data frame, a named
-#'   list of vectors, or a character vector of column names resolved against
-#'   \code{data}.
+#' @param index The clustering dimensions (2 or 3): a data frame, a named list
+#'   of vectors, or a character vector of column names resolved against
+#'   `data`.
 #' @param y,d Optional outcome and covariate(s) of interest; only used for
-#'   extra diagnostics (e.g. the layout no-power warning when \code{d} is
-#'   constant within every cell), never for fitting.
-#' @param data Optional data frame against which character \code{index},
-#'   \code{time} and \code{rep} entries are resolved.
+#'   extra diagnostics (e.g. the layout no-power warning when `d` is constant
+#'   within every cell), never for fitting.
+#' @param data Optional data frame against which character `index`, `time` and
+#'   `rep` entries are resolved.
 #' @param time Optional explicit time dimension: a vector, or the name of a
-#'   column of \code{data} (or of one of the \code{index} columns). Forces
-#'   the panel interpretation of that dimension.
+#'   column of `data` (or of one of the `index` columns). Forces the panel
+#'   interpretation of that dimension.
 #' @param rep Optional explicit replication identifier (vector or column
 #'   name): declares within-cell replication and forces the layout design.
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it).
 #'
-#' @return An object of class \code{"mwperm_design"}: a list with fields
-#'   \code{design} (the chosen design), \code{roles} (which index plays
-#'   row/col/id1..3/time/rep), \code{dims} (levels per dimension),
-#'   \code{n_obs}, \code{cells} (observed/expected), \code{balance},
-#'   \code{K_default} and \code{resolution_ok} (whether a 95\% confidence set
-#'   is attainable), \code{call_str} (the downstream call), \code{reason}
-#'   (one-line explanation), and \code{warnings}/\code{notes} (the
-#'   assumption-fork notices etc.). Its \code{print} method lays this out as
-#'   a short human diagnosis.
+#' @return An object of class `"mwperm_design"`: a list with fields `design`
+#'   (the chosen design), `roles` (which index plays row/col/id1..3/time/rep),
+#'   `dims` (levels per dimension), `n_obs`, `cells` (observed/expected),
+#'   `balance`, `K_default` and `resolution_ok` (whether a 95\% confidence set
+#'   is attainable), `call_str` (the downstream call), `reason` (one-line
+#'   explanation), and `warnings`/`notes` (the assumption-fork notices etc.).
+#'   Its `print` method lays this out as a short human diagnosis.
 #'
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm}} for one-call dispatch.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [mwperm()] for one-call dispatch.
 #' @examples
 #' data(trade_dyadic)
 #' mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)
@@ -599,7 +593,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
 }
 
 #' @rdname mwperm_check
-#' @param x An object of class \code{"mwperm_design"} (print method).
+#' @param x An object of class `"mwperm_design"` (print method).
 #' @param ... Ignored.
 #' @export
 print.mwperm_design <- function(x, ...) {
@@ -650,89 +644,82 @@ print.mwperm_design <- function(x, ...) {
 
 #' One-call invariant permutation test with automatic design detection
 #'
-#' Detects the clustering design of the data via \code{\link{mwperm_check}}
-#' and dispatches to the matching test -- \code{\link{mwperm_dyadic}},
-#' \code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
-#' \code{\link{mwperm_layout}} or \code{\link{mwperm_missing}} -- forwarding
+#' Detects the clustering design of the data via [mwperm_check()] and
+#' dispatches to the matching test -- [mwperm_dyadic()], [mwperm_panel()],
+#' [mwperm_threeway()], [mwperm_layout()] or [mwperm_missing()] -- forwarding
 #' all arguments unchanged. A thin convenience layer: the returned object is
 #' exactly what the underlying function returns (plus a record of what was
 #' detected), and calling the specific function directly with the same seed
 #' gives identical results.
 #'
-#' See \code{\link{mwperm_check}} for the detection rules, in particular the
-#' two assumption-dependent forks (panel-vs-threeway and
+#' See [mwperm_check()] for the detection rules, in particular the two
+#' assumption-dependent forks (panel-vs-threeway and
 #' layout-vs-suppressed-panel) that are announced rather than silently
 #' resolved. Structural forks (complete vs incomplete arrays, replicated
 #' cells) are resolved silently.
 #'
 #' @param y,d,x Outcome, covariate(s) of interest, and optional nuisance
-#'   covariates, as in \code{\link{mwperm_dyadic}}. With \code{data} given,
-#'   each may also be a character (vector of) column name(s) resolved
-#'   against it.
+#'   covariates, as in [mwperm_dyadic()]. With `data` given, each may also be
+#'   a character (vector of) column name(s) resolved against it.
 #' @param index The clustering dimensions (2 or 3): a data frame, named list
-#'   of vectors, or character vector of column names in \code{data}.
-#' @param data Optional data frame; column names in \code{y}, \code{d},
-#'   \code{x}, \code{index}, \code{time}, \code{rep} are resolved against it.
+#'   of vectors, or character vector of column names in `data`.
+#' @param data Optional data frame; column names in `y`, `d`, `x`, `index`,
+#'   `time`, `rep` are resolved against it.
 #' @param time,rep Optional explicit role tags (vector or column name); see
-#'   \code{\link{mwperm_check}}.
+#'   [mwperm_check()].
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it).
 #' @param K Number of non-identity permutations; the default and the
 #'   admissible range depend on the dispatched design -- see the dispatched
 #'   function.
-#' @param time_fe Passed to \code{\link{mwperm_panel}} (panel only;
-#'   supplying it for another design warns and ignores it).
-#' @param L0 Passed to \code{\link{mwperm_layout}} (layout only).
-#' @param min_block,block_method,permute Passed to
-#'   \code{\link{mwperm_missing}} (missing only).
-#' @param verbose If \code{TRUE} (default) print one line stating the
-#'   detected design and the dispatched call.
+#' @param time_fe Passed to [mwperm_panel()] (panel only; supplying it for
+#'   another design warns and ignores it).
+#' @param L0 Passed to [mwperm_layout()] (layout only).
+#' @param min_block,block_method,permute Passed to [mwperm_missing()] (missing
+#'   only).
+#' @param verbose If `TRUE` (default) print one line stating the detected
+#'   design and the dispatched call.
 #' @inheritParams mwperm_dyadic
 #'
-#' @param aggregate How the \code{n_reps} per-repetition p-values are
-#'   combined into the reported p-value, and into the confidence set that
-#'   inverts it. \code{"median"} (the default) is the median, as recommended in
-#'   Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
-#'   \code{min(1, 2 * median)}.
+#' @param aggregate How the `n_reps` per-repetition p-values are combined into
+#'   the reported p-value, and into the confidence set that inverts it.
+#'   `"median"` (the default) is the median, as recommended in Remark 1 of
+#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
 #'
-#'   The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#'   validity for a single random permutation group, so at \code{n_reps = 1}
-#'   the p-value is exact as stated. The median of several dependent randomised
-#'   p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-#'   behaved in practice, but not itself guaranteed valid at level
-#'   \code{alpha}. Twice the median is guaranteed, under arbitrary dependence
-#'   across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#' The choice decides what "exact" covers. Theorem 1 gives finite-sample
+#' validity for a single random permutation group, so at `n_reps = 1` the
+#' p-value is exact as stated. The median of several dependent randomised
+#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+#' behaved in practice, but not itself guaranteed valid at level `alpha`.
+#' Twice the median is guaranteed, under arbitrary dependence across
+#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
 #'
-#'   So use \code{"median2"} when the guarantee must hold as stated with
-#'   \code{n_reps > 1}. It is conservative: it never rejects where
-#'   \code{"median"} would not, and its confidence set is never narrower. The
-#'   default is unchanged, so existing numbers stand.
+#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
+#' 1`. It is conservative: it never rejects where `"median"` would not, and
+#' its confidence set is never narrower. The default is unchanged, so existing
+#' numbers stand.
 #'
-#'   The cost is resolution. \code{"median2"} reports
-#'   \code{min(1, 2 * median)}, so its smallest attainable p-value is
-#'   \code{2/(K+1)}, not \code{1/(K+1)}, and rejecting at level \code{alpha}
-#'   needs \code{K + 1 >= 2/alpha} -- at \code{alpha = 0.05} that is 40 levels
-#'   in the smallest permuted dimension, twice what \code{"median"} needs.
-#'   Below that the p-value is still exact but cannot reach \code{alpha}, and
-#'   the fit says so in a note.
-#' @return The \code{"mwperm"} object of the dispatched test, with an extra
-#'   \code{auto} field recording the detection (design, roles, reason); the
-#'   detection notices are prepended to the object's \code{note} field and
-#'   shown by \code{\link{print.mwperm}}, and any assumption-fork or
-#'   weak-evidence notice is additionally raised as a \code{warning} at fit
-#'   time. Field provenance (see
-#'   \code{\link{mwperm_dyadic}} for the full account):
-#'   \code{estimate}/\code{se_naive} are the OLS estimate and naive SE,
-#'   \code{conf_int} (or \code{conf_region}/\code{conf_box} for several
-#'   coefficients) the IPT inverted-test confidence set, and \code{pvalue}
+#' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
+#' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
+#' level `alpha` needs `K + 1 >= 2/alpha` -- at `alpha = 0.05` that is 40
+#' levels in the smallest permuted dimension, twice what `"median"` needs.
+#' Below that the p-value is still exact but cannot reach `alpha`, and the fit
+#' says so in a note.
+#' @return The `"mwperm"` object of the dispatched test, with an extra `auto`
+#'   field recording the detection (design, roles, reason); the detection
+#'   notices are prepended to the object's `note` field and shown by
+#'   [print.mwperm()], and any assumption-fork or weak-evidence notice is
+#'   additionally raised as a `warning` at fit time. Field provenance (see
+#'   [mwperm_dyadic()] for the full account): `estimate`/`se_naive` are the
+#'   OLS estimate and naive SE, `conf_int` (or `conf_region`/`conf_box` for
+#'   several coefficients) the IPT inverted-test confidence set, and `pvalue`
 #'   the IPT permutation p-value.
 #'
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm_check}} for the diagnosis without any
-#'   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
-#'   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
-#'   \code{\link{mwperm_irregular}}, \code{\link{mwperm_missing}} for the
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [mwperm_check()] for the diagnosis without any computation;
+#'   [mwperm_dyadic()], [mwperm_panel()], [mwperm_threeway()],
+#'   [mwperm_layout()], [mwperm_irregular()], [mwperm_missing()] for the
 #'   underlying tests.
 #' @examples
 #' data(trade_dyadic)

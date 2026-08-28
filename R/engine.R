@@ -2,21 +2,20 @@
 
 #' Parallel lapply with a serial default and a Windows PSOCK fallback.
 #'
-#' Runs \code{lapply(X, FUN)} on \code{n_cores} workers: forked
-#' \code{parallel::mclapply} on Unix, a PSOCK cluster elsewhere (or when
-#' forced via \code{method}, used by the tests). A pre-made cluster can be
-#' supplied via \code{cl} and is then reused, NOT stopped -- the engine
-#' creates one PSOCK cluster per fit and shares it across the per-rep calls
-#' (spawning a fresh cluster per rep made parallel runs slower
-#' than serial on the Windows path). With \code{n_cores = 1} it is
-#' exactly \code{lapply}, so the default path stays base-R single-threaded.
-#' Because every task in this package is either explicitly seeded or free of
-#' RNG use, scheduling cannot perturb results: parallel output is identical to
-#' serial (asserted by tests). Worker errors are re-thrown in the parent. If a
+#' Runs `lapply(X, FUN)` on `n_cores` workers: forked `parallel::mclapply` on
+#' Unix, a PSOCK cluster elsewhere (or when forced via `method`, used by the
+#' tests). A pre-made cluster can be supplied via `cl` and is then reused, NOT
+#' stopped -- the engine creates one PSOCK cluster per fit and shares it
+#' across the per-rep calls (spawning a fresh cluster per rep made parallel
+#' runs slower than serial on the Windows path). With `n_cores = 1` it is
+#' exactly `lapply`, so the default path stays base-R single-threaded. Because
+#' every task in this package is either explicitly seeded or free of RNG use,
+#' scheduling cannot perturb results: parallel output is identical to serial
+#' (asserted by tests). Worker errors are re-thrown in the parent. If a
 #' multithreaded BLAS is in use, R-level parallelism can oversubscribe cores;
-#' where RhpcBLASctl is installed, workers pin BLAS to one thread.
-#' \code{n_cores} beyond the detected core count is clamped silently here
-#' (the engine warns once per fit, naming the argument).
+#' where RhpcBLASctl is installed, workers pin BLAS to one thread. `n_cores`
+#' beyond the detected core count is clamped silently here (the engine warns
+#' once per fit, naming the argument).
 #' @keywords internal
 #' @noRd
 .plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock"),
@@ -55,8 +54,8 @@
 }
 
 #' Upper bound on worker count: the detected core count, further capped by
-#' \code{getOption("mc.cores")} when the user (or R CMD check) has set it, so
-#' the package honours the standard throttle. Inf when detection fails and no
+#' `getOption("mc.cores")` when the user (or R CMD check) has set it, so the
+#' package honours the standard throttle. Inf when detection fails and no
 #' option is set, so the clamp becomes a no-op rather than blocking a
 #' legitimate request.
 #' @keywords internal
@@ -98,19 +97,19 @@
 
 #' The IPT engine: shared driver behind every mwperm_* front end.
 #'
-#' Given the data and a design-specific permutation builder, this runs the test
-#' for `n_reps` independent random permutation groups, aggregates the per-rep
-#' p-values by `ci_agg` (\code{\link{.agg_pvals}}), and (optionally) inverts
-#' the test to a confidence set. All six front ends differ only in how they
-#' build their permutations and validate their inputs; everything downstream of
-#' that is handled here.
+#' Given the data and a design-specific permutation builder, this runs the
+#' test for `n_reps` independent random permutation groups, aggregates the
+#' per-rep p-values by `ci_agg` (`.agg_pvals()`), and (optionally) inverts the
+#' test to a confidence set. All six front ends differ only in how they build
+#' their permutations and validate their inputs; everything downstream of that
+#' is handled here.
 #'
-#' The aggregation rule is applied in exactly one place for the p-value and one
-#' for the confidence set, and it is the same rule, so the reported decision and
-#' the reported set are guaranteed consistent:
+#' The aggregation rule is applied in exactly one place for the p-value and
+#' one for the confidence set, and it is the same rule, so the reported
+#' decision and the reported set are guaranteed consistent:
 #'
-#'   confidence set = { b : agg_r p_r(b) > alpha }
-#'   p-value        =   agg_r p_r(beta_null)
+#' confidence set = { b : agg_r p_r(b) > alpha } p-value = agg_r
+#' p_r(beta_null)
 #'
 #' What is REPORTED for d = 1 is the closure of that set (.exact_ci_set()), so
 #' an end point may itself be rejected while every interior point is accepted;
@@ -120,8 +119,8 @@
 #'   (intercept already included), all with N rows.
 #' @param perm_builder function(rep_seed) -> list of K+1 observation gather
 #'   vectors (element 1 the identity), independent of any shift of `y`.
-#' @param K,n_reps,seed group order (non-identity count), number of repetitions,
-#'   and base RNG seed.
+#' @param K,n_reps,seed group order (non-identity count), number of
+#'   repetitions, and base RNG seed.
 #' @param alpha,conf_int,beta_null,grid test level, whether to invert a
 #'   confidence set, the null value(s), and an optional inversion grid.
 #' @param type,d_names,n_clusters,call metadata stored on the result for
@@ -419,20 +418,19 @@
 #'
 #' The confidence set is defined ONCE, in one place, as
 #'
-#'   { b : agg_r p_r(b) > alpha }
+#' { b : agg_r p_r(b) > alpha }
 #'
 #' and every inversion path -- the exact set (.exact_ci_set), the
 #' explicit-`grid` path, the bracketing fallback, and the joint region
 #' (.invert_region) -- calls this function to get that number. Before 0.3.0
-#' the three
-#' single-coefficient paths disagreed: the default path took the MEDIAN OF THE
-#' PER-REP END POINTS (not an inversion of anything), and the grid path took a
-#' UNION over reps (systematically wider, and growing with `n_reps`). Neither
-#' inverted the same function as the reported p-value.
+#' the three single-coefficient paths disagreed: the default path took the
+#' MEDIAN OF THE PER-REP END POINTS (not an inversion of anything), and the
+#' grid path took a UNION over reps (systematically wider, and growing with
+#' `n_reps`). Neither inverted the same function as the reported p-value.
 #'
 #' @param P numeric matrix, one row per candidate `b`, one column per rep.
-#' @param agg "median" (Guo, Toulis and Wang 2026, Remark 1 -- the default, and
-#'   the rule the reported p-value uses), "median2" (min(1, 2 * median), a
+#' @param agg "median" (Guo, Toulis and Wang 2026, Remark 1 -- the default,
+#'   and the rule the reported p-value uses), "median2" (min(1, 2 * median), a
 #'   genuine level-alpha p-value under arbitrary dependence across reps;
 #'   Ruschendorf 1982, Vovk and Wang 2020), or "union" (the pre-0.2.0
 #'   maximum-over-reps behaviour, kept only so regression tests can reproduce
@@ -480,10 +478,11 @@
 
 #' Row-wise median, bit-identical to apply(P, 1L, stats::median).
 #'
-#' The exact confidence set evaluates the aggregated p-value at every breakpoint
-#' and every cell between breakpoints, so `P` has O(K^2 * n_reps) rows --
-#' 60,841 x 10 for a 40 x 40 dyadic fit at defaults. apply() then makes one
-#' R-level median() call per row, which profiled as ~49% of the whole fit.
+#' The exact confidence set evaluates the aggregated p-value at every
+#' breakpoint and every cell between breakpoints, so `P` has O(K^2 * n_reps)
+#' rows -- 60,841 x 10 for a 40 x 40 dyadic fit at defaults. apply() then
+#' makes one R-level median() call per row, which profiled as ~49% of the
+#' whole fit.
 #'
 #' Bit-identity is a HARD requirement, not a nicety: this value is compared to
 #' alpha with `>`, the per-rep p-values sit exactly on the grid j/(K+1), and
@@ -523,10 +522,10 @@
 
 #' Per-rep p-values at a vector of candidate null values (d = 1).
 #'
-#' Vectorized counterpart of \code{\link{.ipt_eval}}: the statistic is affine in
-#' `b`, so a whole vector of candidates costs one K x length(b) outer product
-#' per rep instead of one R-level call per candidate. Chunked so a large
-#' candidate set cannot blow up memory.
+#' Vectorized counterpart of `.ipt_eval()`: the statistic is affine in `b`, so
+#' a whole vector of candidates costs one K x length(b) outer product per rep
+#' instead of one R-level call per candidate. Chunked so a large candidate set
+#' cannot blow up memory.
 #'
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param b numeric vector of candidate null values.
@@ -569,20 +568,20 @@
 #'
 #' For a single coefficient the Procedure 1 statistics are
 #'
-#'   a_j(b) = |u_j - M_j b|,   b_k(b) = |v_k - W_k b|
+#' a_j(b) = |u_j - M_j b|, b_k(b) = |v_k - W_k b|
 #'
-#' both piecewise linear in b. The p-value counts how many k satisfy
-#' b_k(b) >= min_j a_j(b), so it can only change where two of these lines
-#' cross. Dropping the absolute values, a crossing solves
-#' v_k - W_k b = +/- (u_j - M_j b), giving the two root families
+#' both piecewise linear in b. The p-value counts how many k satisfy b_k(b) >=
+#' min_j a_j(b), so it can only change where two of these lines cross.
+#' Dropping the absolute values, a crossing solves v_k - W_k b = +/- (u_j -
+#' M_j b), giving the two root families
 #'
-#'   b = (u_j - v_k) / (M_j - W_k)      [the + branch]
-#'   b = (u_j + v_k) / (M_j + W_k)      [the - branch]
+#' b = (u_j - v_k) / (M_j - W_k) [the + branch] b = (u_j + v_k) / (M_j + W_k)
+#' [the - branch]
 #'
-#' over all (j, k) in 1..K. Non-finite roots (a zero denominator: the two lines
-#' are parallel and never cross) are discarded. Between consecutive roots the
-#' p-value is exactly constant, which is what makes the confidence set
-#' computable in closed form rather than by search.
+#' over all (j, k) in 1..K. Non-finite roots (a zero denominator: the two
+#' lines are parallel and never cross) are discarded. Between consecutive
+#' roots the p-value is exactly constant, which is what makes the confidence
+#' set computable in closed form rather than by search.
 #'
 #' @param prep_list list of per-rep prep objects.
 #' @return sorted numeric vector of distinct finite roots, pooled over reps.
@@ -605,34 +604,34 @@
 
 #' Exact confidence set by test inversion (d = 1).
 #'
-#' Computes { b : agg_r p_r(b) > alpha } exactly, rather than approximating it.
-#' Procedure 1 step 3 defines the confidence region as that set; the aggregated
-#' p-value is a step function of b whose only jumps are at the roots from
-#' .ci_breakpoints(), so evaluating it at every root and at one interior point
-#' of every interval between consecutive roots (plus one point beyond each end)
-#' determines the set completely. No bracketing assumption, no bisection
-#' tolerance, and disconnected sets are returned as they are instead of being
-#' replaced by their hull.
+#' Computes { b : agg_r p_r(b) > alpha } exactly, rather than approximating
+#' it. Procedure 1 step 3 defines the confidence region as that set; the
+#' aggregated p-value is a step function of b whose only jumps are at the
+#' roots from .ci_breakpoints(), so evaluating it at every root and at one
+#' interior point of every interval between consecutive roots (plus one point
+#' beyond each end) determines the set completely. No bracketing assumption,
+#' no bisection tolerance, and disconnected sets are returned as they are
+#' instead of being replaced by their hull.
 #'
 #' The components are reported CLOSED. A maximal run of accepted atoms that
 #' begins or ends inside an open cell is reported with the bounding breakpoint
 #' as its end point, and that breakpoint is a value the run excluded -- so a
-#' returned component is the topological CLOSURE of { b : agg_r p_r(b) > alpha }
-#' and not the set itself. An end point may therefore be rejected by the very
-#' test this inverts, while every point strictly inside the component is
-#' accepted. This is the usual convention for a discrete p-value: the acceptance
-#' set is a finite union of pieces whose exact end points are generally not
-#' attained, so there is no attained value to report there, and closing the
-#' component errs OUTWARD -- the reported set never omits an accepted value.
-#' Reporting the attained side instead is a different object and would move
-#' published end points; see the 0.3.0 section of NEWS.md.
+#' returned component is the topological CLOSURE of { b : agg_r p_r(b) > alpha
+#' } and not the set itself. An end point may therefore be rejected by the
+#' very test this inverts, while every point strictly inside the component is
+#' accepted. This is the usual convention for a discrete p-value: the
+#' acceptance set is a finite union of pieces whose exact end points are
+#' generally not attained, so there is no attained value to report there, and
+#' closing the component errs OUTWARD -- the reported set never omits an
+#' accepted value. Reporting the attained side instead is a different object
+#' and would move published end points; see the 0.3.0 section of NEWS.md.
 #'
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param alpha test level.
 #' @param agg cross-rep aggregation rule; see .agg_pvals().
-#' @param budget maximum number of candidate points to evaluate. The root count
-#'   grows as 2 * K^2 * n_reps, so a large group on many reps is capped; the
-#'   caller then falls back to bracketing.
+#' @param budget maximum number of candidate points to evaluate. The root
+#'   count grows as 2 * K^2 * n_reps, so a large group on many reps is capped;
+#'   the caller then falls back to bracketing.
 #' @return `NULL` when the budget is exceeded (the caller must fall back);
 #'   otherwise a two-column matrix of interval end points, one row per
 #'   connected component, ordered and disjoint, each component CLOSED (see
@@ -692,49 +691,46 @@
 #'
 #' Procedure 1 step 3 of Guo, Toulis and Wang (2026) defines the confidence
 #' region as { b : pval(b) > alpha }. This function computes that set.
-#' Permutations are held fixed across candidate values of b, so the p-value is a
-#' deterministic step function of b within each rep, and every evaluation is
+#' Permutations are held fixed across candidate values of b, so the p-value is
+#' a deterministic step function of b within each rep, and every evaluation is
 #' read off the cached prep objects (.ipt_prepare) in O(K) -- the whole search
 #' costs no extra matrix factorizations.
 #'
 #' Three paths produce the set, all inverting the SAME aggregated p-value
-#' agg_r p_r(b) (see .agg_pvals), and all reporting the connected components in
-#' the `"conf_set"` attribute with their hull as the returned interval:
-#' \describe{
-#'   \item{exact (default)}{.exact_ci_set() evaluates the step function at
-#'     every breakpoint and every cell between breakpoints, giving the set with
-#'     no tolerance and no connectedness assumption. Components are reported
-#'     closed, so an end point can be a rejected breakpoint bounding an
-#'     accepted open cell; the interior is always accepted (see
-#'     .exact_ci_set()).}
-#'   \item{explicit `grid`}{the retained grid points, hulled; end points are
-#'     accurate to the grid spacing and a set reaching a grid edge is reported
-#'     as infinite there.}
-#'   \item{bracketing fallback}{used only when the exact path's candidate count
-#'     would exceed its budget (roughly 2 * K^2 * n_reps): outward bracketing
-#'     then bisection to `tol_factor * step`, on the aggregated p-value.
-#'     Accepted per-permutation estimates outside the bracket flag a
-#'     disconnected set and widen the interval to the hull.}
-#' }
+#' agg_r p_r(b) (see .agg_pvals), and all reporting the connected components
+#' in the `"conf_set"` attribute with their hull as the returned interval:
+#' - `exact (default)`: .exact_ci_set() evaluates the step function at every
+#'   breakpoint and every cell between breakpoints, giving the set with no
+#'   tolerance and no connectedness assumption. Components are reported
+#'   closed, so an end point can be a rejected breakpoint bounding an accepted
+#'   open cell; the interior is always accepted (see .exact_ci_set()).
+#' - `explicit `grid``: the retained grid points, hulled; end points are
+#'   accurate to the grid spacing and a set reaching a grid edge is reported
+#'   as infinite there.
+#' - `bracketing fallback`: used only when the exact path's candidate count
+#'   would exceed its budget (roughly 2 * K^2 * n_reps): outward bracketing
+#'   then bisection to `tol_factor * step`, on the aggregated p-value.
+#'   Accepted per-permutation estimates outside the bracket flag a
+#'   disconnected set and widen the interval to the hull.
 #'
 #' @param prep_list list of per-rep prep objects (each with `has_perm_D =
 #'   TRUE`).
 #' @param alpha,centre,scale test level, and the OLS estimate / naive SE used
 #'   only to place and scale the bracketing fallback.
-#' @param y,D the (unshifted) outcome and single covariate, used only to derive
-#'   a sensible step size when the naive SE is unavailable.
+#' @param y,D the (unshifted) outcome and single covariate, used only to
+#'   derive a sensible step size when the naive SE is unavailable.
 #' @param grid optional explicit numeric grid of candidate `b`; when supplied
 #'   the interval is the hull of the retained grid points (see Details).
 #' @param agg cross-rep aggregation of the p-value; see .agg_pvals().
 #' @param exact_budget candidate-count cap for the exact path; 0 forces the
-#'   bracketing fallback. Overridable with
-#'   \code{options(mwperm.ci_exact_budget = )}.
-#' @return numeric length-2 interval (the hull of the set), carrying attributes
-#'   `"conf_set"` (components), `"ci_method"`, `"disconnected"`, and, in grid
-#'   mode, `"truncated"` / `"grid_step"` / `"grid_limit"`. On the exact path the
-#'   components, and hence the interval, are the CLOSURE of the acceptance set;
-#'   the grid and bracketing paths instead report attained, accepted points
-#'   (accurate to the grid spacing / bisection tolerance).
+#'   bracketing fallback. Overridable with `options(mwperm.ci_exact_budget =
+#'   )`.
+#' @return numeric length-2 interval (the hull of the set), carrying
+#'   attributes `"conf_set"` (components), `"ci_method"`, `"disconnected"`,
+#'   and, in grid mode, `"truncated"` / `"grid_step"` / `"grid_limit"`. On the
+#'   exact path the components, and hence the interval, are the CLOSURE of the
+#'   acceptance set; the grid and bracketing paths instead report attained,
+#'   accepted points (accurate to the grid spacing / bisection tolerance).
 #' @keywords internal
 #' @noRd
 .invert_ci <- function(prep_list, alpha, centre, scale, y, D, grid = NULL,
@@ -893,16 +889,15 @@
 #'
 #' Inverts the exact joint test H0: beta = b over a grid of candidate vectors
 #' `b`: each retained point is one at which the AGGREGATED test (.agg_pvals --
-#' the median across reps by default, the same rule the reported p-value and the
-#' interval paths use) does not reject at level `alpha`, so the retained set is
-#' a finite-sample valid (1 - alpha) confidence region (discretised by the
-#' grid). Cheap
-#' because every evaluation reuses the cached `prep` objects via
-#' \code{\link{.ipt_eval}} (no QR refactorisation).
+#' the median across reps by default, the same rule the reported p-value and
+#' the interval paths use) does not reject at level `alpha`, so the retained
+#' set is a finite-sample valid (1 - alpha) confidence region (discretised by
+#' the grid). Cheap because every evaluation reuses the cached `prep` objects
+#' via `.ipt_eval()` (no QR refactorisation).
 #'
 #' @param prep_list list of per-rep prep objects (with `has_perm_D = TRUE`).
-#' @param centre,scale length-d OLS estimate / naive SE, used to place a default
-#'   grid around the estimate.
+#' @param centre,scale length-d OLS estimate / naive SE, used to place a
+#'   default grid around the estimate.
 #' @param d_names column labels for the returned box.
 #' @param grid optional explicit grid: a list of d numeric vectors (one set of
 #'   candidate values per coordinate), or a single vector used for every
@@ -1008,7 +1003,7 @@
 
 #' Validate and coerce a cluster id vector to dense 1-based integers.
 #'
-#' @param x the cluster id vector (any type coercible by \code{factor}).
+#' @param x the cluster id vector (any type coercible by `factor`).
 #' @param what the user-facing argument name, used in the error message.
 #' @keywords internal
 #' @noRd
@@ -1023,11 +1018,10 @@
 
 #' Coerce the outcome to numeric, refusing factors.
 #'
-#' \code{as.numeric(factor)} yields the internal level codes -- silent data
-#' corruption for an outcome. \code{d}/\code{x} are protected by
-#' matrix coercion (their mode stays character and \code{.check_finite}
-#' rejects it); \code{y} needs this explicit guard because factors are
-#' numeric-coercible.
+#' `as.numeric(factor)` yields the internal level codes -- silent data
+#' corruption for an outcome. `d`/`x` are protected by matrix coercion (their
+#' mode stays character and `.check_finite` rejects it); `y` needs this
+#' explicit guard because factors are numeric-coercible.
 #' @keywords internal
 #' @noRd
 .check_y <- function(y) {
@@ -1097,14 +1091,14 @@
 
 #' Default / validate the permutation-group order K.
 #'
-#' The group has order \code{K + 1}, so the smallest attainable p-value is
-#' \code{1 / (K + 1)} and a non-trivial group needs \code{K + 1 <= } the
-#' smallest permuted dimension. When \code{K} is \code{NULL} the largest group
-#' the design supports is used, capped at \code{cap}.
+#' The group has order `K + 1`, so the smallest attainable p-value is `1 / (K
+#' + 1)` and a non-trivial group needs `K + 1 <= ` the smallest permuted
+#' dimension. When `K` is `NULL` the largest group the design supports is
+#' used, capped at `cap`.
 #'
-#' @param K user-supplied \code{K} or \code{NULL}.
-#' @param dim_sizes the sizes of the permuted dimensions (scalar or vector); the
-#'   smallest one bounds the group order.
+#' @param K user-supplied `K` or `NULL`.
+#' @param dim_sizes the sizes of the permuted dimensions (scalar or vector);
+#'   the smallest one bounds the group order.
 #' @keywords internal
 #' @noRd
 .default_K <- function(K, dim_sizes, cap = 199L) {
@@ -1144,13 +1138,14 @@
 #' share a relabelling for that cell, so they are not independent and the
 #' cross-rep aggregation is averaging fewer effective draws than it thinks.
 #'
-#' The fix is deliberately value-preserving in two ways. The arithmetic is done
-#' in double, so a large seed can never overflow to a silent NA that
+#' The fix is deliberately value-preserving in two ways. The arithmetic is
+#' done in double, so a large seed can never overflow to a silent NA that
 #' `set.seed()` would reject with a cryptic message; and the stride is widened
 #' only by callers whose j-range would actually collide, so every design that
-#' was already collision-free keeps the seeds -- and hence the seeded results --
-#' it always had. Widening the stride for a design that needs it DOES change
-#' that design's seeded output; that is the point, and it is recorded in NEWS.
+#' was already collision-free keeps the seeds -- and hence the seeded results
+#' -- it always had. Widening the stride for a design that needs it DOES
+#' change that design's seeded output; that is the point, and it is recorded
+#' in NEWS.
 #'
 #' @param rep_seed the rep-level seed, or `NULL` for the ambient RNG.
 #' @param j the within-rep offset (dimension, cell, or block slot).
@@ -1179,19 +1174,19 @@
 
 #' Column labels for the coefficient(s) of interest.
 #'
-#' Uses the column names of \code{D} when present, else the deparsed user
-#' expression \code{fallback} (suffixed by column index when \code{D} has
-#' several columns).
+#' Uses the column names of `D` when present, else the deparsed user
+#' expression `fallback` (suffixed by column index when `D` has several
+#' columns).
 #'
-#' \code{deparse()} yields ONE element for an ordinary symbol or short call,
-#' but SEVERAL when the argument arrived as a value rather than an expression
-#' -- which is exactly what \code{do.call(mwperm_dyadic, list(y, d, ...))}
-#' does, a normal way to drive the package programmatically. A multi-element
-#' deparse is never a usable label, and passing it to \code{setNames()} in the
-#' engine errored with an opaque \code{'names' attribute [N] must be the same
-#' length as the vector [1]}. Fall back to a generic \code{"d"} in that case.
-#' Single-line deparses (every call that worked before) are untouched, so no
-#' existing label or seeded result changes.
+#' `deparse()` yields ONE element for an ordinary symbol or short call, but
+#' SEVERAL when the argument arrived as a value rather than an expression --
+#' which is exactly what `do.call(mwperm_dyadic, list(y, d, ...))` does, a
+#' normal way to drive the package programmatically. A multi-element deparse
+#' is never a usable label, and passing it to `setNames()` in the engine
+#' errored with an opaque `'names' attribute [N] must be the same length as
+#' the vector [1]`. Fall back to a generic `"d"` in that case. Single-line
+#' deparses (every call that worked before) are untouched, so no existing
+#' label or seeded result changes.
 #' @keywords internal
 #' @noRd
 .coef_names <- function(D, fallback) {
@@ -1201,15 +1196,16 @@
   if (ncol(D) == 1L) fallback else paste0(fallback, seq_len(ncol(D)))
 }
 
-#' Error unless a design is a complete balanced array (one observation per cell,
-#' every cell present).
+#' Error unless a design is a complete balanced array (one observation per
+#' cell, every cell present).
 #'
-#' Consolidates the identical check used by \code{\link{mwperm_panel}} and
-#' \code{\link{mwperm_threeway}}.
+#' Consolidates the identical check used by [mwperm_panel()] and
+#' [mwperm_threeway()].
 #'
-#' @param coords integer matrix of cluster coordinates, one row per observation.
-#' @param sizes named integer vector of per-dimension sizes; the names label the
-#'   dimensions in the error messages.
+#' @param coords integer matrix of cluster coordinates, one row per
+#'   observation.
+#' @param sizes named integer vector of per-dimension sizes; the names label
+#'   the dimensions in the error messages.
 #' @param N the number of observations.
 #' @param what a short noun phrase naming the design (for the message).
 #' @keywords internal

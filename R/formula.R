@@ -5,33 +5,29 @@
 
 #' Formula interface to the invariant permutation test
 #'
-#' Fits \code{\link{mwperm}} from a formula \code{y ~ d | x} (the nuisance
-#' part is optional: \code{y ~ d}): the part between \code{~} and \code{|}
-#' gives the covariate(s) of interest, the part after \code{|} the nuisance
-#' covariates. Both parts are standard formula algebra evaluated by
-#' \code{\link[stats]{model.matrix}} in \code{data}, so transformed terms
-#' (\code{log(z)}, \code{I(z^2)}, factors) work; intercept columns are
-#' stripped (the engine always adds its own). The result is
-#' \emph{identical} to calling \code{\link{mwperm}} -- or the dispatched
-#' design-specific function -- with the same inputs and seed; this wrapper
-#' only assembles the arguments.
+#' Fits [mwperm()] from a formula `y ~ d | x` (the nuisance part is optional:
+#' `y ~ d`): the part between `~` and `|` gives the covariate(s) of interest,
+#' the part after `|` the nuisance covariates. Both parts are standard formula
+#' algebra evaluated by `[stats::model.matrix()]` in `data`, so transformed
+#' terms (`log(z)`, `I(z^2)`, factors) work; intercept columns are stripped
+#' (the engine always adds its own). The result is *identical* to calling
+#' [mwperm()] -- or the dispatched design-specific function -- with the same
+#' inputs and seed; this wrapper only assembles the arguments.
 #'
-#' @param formula A two-sided formula, \code{y ~ d} or \code{y ~ d | x}.
+#' @param formula A two-sided formula, `y ~ d` or `y ~ d | x`.
 #' @param data A data frame in which the formula (and character
-#'   \code{index}/\code{time}/\code{rep}) are evaluated.
+#'   `index`/`time`/`rep`) are evaluated.
 #' @param index The clustering dimensions (2 or 3): a character vector of
-#'   column names in \code{data}, or a data frame / named list of vectors.
-#' @param time,rep Optional role tags (a column name in \code{data}, or a
-#'   vector); see \code{\link{mwperm_check}}.
-#' @param ... Passed on to \code{\link{mwperm}} (\code{design}, \code{K},
-#'   \code{alpha}, \code{beta_null}, \code{conf_int}, \code{n_reps},
-#'   \code{seed}, \code{verbose}, ...).
-#' @return The \code{"mwperm"} object of the dispatched test; see
-#'   \code{\link{mwperm}} for the fields and their provenance.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm}}; \code{\link{coef.mwperm}} /
-#'   \code{\link{nobs.mwperm}} for accessors.
+#'   column names in `data`, or a data frame / named list of vectors.
+#' @param time,rep Optional role tags (a column name in `data`, or a vector);
+#'   see [mwperm_check()].
+#' @param ... Passed on to [mwperm()] (`design`, `K`, `alpha`, `beta_null`,
+#'   `conf_int`, `n_reps`, `seed`, `verbose`, ...).
+#' @return The `"mwperm"` object of the dispatched test; see [mwperm()] for
+#'   the fields and their provenance.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [mwperm()]; [coef.mwperm()] / [nobs.mwperm()] for accessors.
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
@@ -69,19 +65,18 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
 
 #' Accessors for mwperm fits
 #'
-#' \code{coef()} returns the \emph{OLS} point estimate(s), named by
-#' coefficient -- the same provenance as the printed \code{"OLS estimate"};
-#' the inferential quantity is the IPT confidence set, see
-#' \code{\link{confint.mwperm}}. \code{nobs()} returns the number of
-#' observations the fit used (for \code{\link{mwperm_missing}}, the cells
+#' `coef()` returns the *OLS* point estimate(s), named by coefficient -- the
+#' same provenance as the printed `"OLS estimate"`; the inferential quantity
+#' is the IPT confidence set, see [confint.mwperm()]. `nobs()` returns the
+#' number of observations the fit used (for [mwperm_missing()], the cells
 #' inside the selected blocks).
 #'
-#' @param object An object of class \code{"mwperm"}.
+#' @param object An object of class `"mwperm"`.
 #' @param ... Ignored.
-#' @return \code{coef()}: a named numeric vector; \code{nobs()}: an integer.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{confint.mwperm}}, \code{\link{summary.mwperm}}.
+#' @return `coef()`: a named numeric vector; `nobs()`: an integer.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [confint.mwperm()], [summary.mwperm()].
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,

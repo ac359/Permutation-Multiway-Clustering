@@ -1,122 +1,125 @@
 #' Invariant permutation test for dyadic regression with missing cells
 #'
-#' Finite-sample valid test of H0: beta = b in the dyadic model when the design
-#' is \emph{not} a complete array, i.e. some (i, j) cells are unobserved
-#' (Procedure 2 of Guo, Toulis and Wang, 2026). General row/column permutations
-#' are infeasible once cells are missing, so the test is built on \emph{fully
-#' observed bicliques}: maximal-ish blocks of row clusters I_q and column
-#' clusters J_q for which every cell I_q x J_q is observed. The block-cyclic
-#' permutation group (\code{\link{build_perm_set}}) is applied within each
-#' block, the blocks are chosen to be disjoint in both rows and columns so that
-#' the joint permutation is a genuine relabelling of exchangeable clusters, and
-#' the residual statistics are pooled across blocks. Cells outside every
-#' selected block are discarded; this is the price of validity under missingness
-#' and is reported in the result.
+#' Finite-sample valid test of H0: beta = b in the dyadic model when the
+#' design is *not* a complete array, i.e. some (i, j) cells are unobserved
+#' (Procedure 2 of Guo, Toulis and Wang, 2026). General row/column
+#' permutations are infeasible once cells are missing, so the test is built on
+#' *fully observed bicliques*: maximal-ish blocks of row clusters I_q and
+#' column clusters J_q for which every cell I_q x J_q is observed. The
+#' block-cyclic permutation group ([build_perm_set()]) is applied within each
+#' block, the blocks are chosen to be disjoint in both rows and columns so
+#' that the joint permutation is a genuine relabelling of exchangeable
+#' clusters, and the residual statistics are pooled across blocks. Cells
+#' outside every selected block are discarded; this is the price of validity
+#' under missingness and is reported in the result.
 #'
-#' Finding the largest fully observed biclique is NP-hard, so a greedy heuristic
-#' is used; an approximate (sub-maximal) solution still yields a valid test,
-#' only a less powerful one. \strong{The smallest selected block is the binding
-#' constraint on resolution}: the group order \code{K + 1} is capped at its
-#' smaller side, so the smallest attainable p-value is \code{1/(K + 1) >=
-#' 1/min_side} no matter how large the other blocks are. Adding small blocks
-#' pools more data yet can destroy resolution -- rejecting at level \code{alpha}
-#' requires a fully observed block with both sides at least
-#' \code{ceiling(1/alpha)} (20 for \code{alpha = 0.05}). When the default
-#' \code{K} makes rejection at \code{alpha} unattainable the fit says so in its
-#' \code{note}; raise \code{min_block} to stop small blocks from setting
-#' \code{K}, at the price of discarding their cells.
+#' Finding the largest fully observed biclique is NP-hard, so a greedy
+#' heuristic is used; an approximate (sub-maximal) solution still yields a
+#' valid test, only a less powerful one. **The smallest selected block is the
+#' binding constraint on resolution**: the group order `K + 1` is capped at
+#' its smaller side, so the smallest attainable p-value is `1/(K + 1) >=
+#' 1/min_side` no matter how large the other blocks are. Adding small blocks
+#' pools more data yet can destroy resolution -- rejecting at level `alpha`
+#' requires a fully observed block with both sides at least `ceiling(1/alpha)`
+#' (20 for `alpha = 0.05`). When the default `K` makes rejection at `alpha`
+#' unattainable the fit says so in its `note`; raise `min_block` to stop small
+#' blocks from setting `K`, at the price of discarding their cells.
 #'
-#' \strong{One-sided permutation} (\code{permute = "rows"} or \code{"cols"}):
-#' permuting only one dimension uses a subgroup of the full invariance group, so
-#' the test remains exactly valid under the same separate-exchangeability
-#' assumption -- validity needs the errors to be exchangeable under the group
-#' actually applied, and every subgroup action qualifies. The practical gain is
-#' that \code{K + 1} is then capped by the \emph{permuted} side only: blocks
-#' need \code{min_block} clusters on the permuted side but as few as one on the
-#' other, so designs whose blocks are short in one dimension (many rows, few
-#' columns, or vice versa) can reach resolutions the two-sided test cannot. The
-#' price is power: a smaller group ignores invariance information in the
-#' unpermuted dimension, so when both sides are large enough for \code{permute =
-#' "both"}, the default is the better choice.
+#' **One-sided permutation** (`permute = "rows"` or `"cols"`): permuting only
+#' one dimension uses a subgroup of the full invariance group, so the test
+#' remains exactly valid under the same separate-exchangeability assumption --
+#' validity needs the errors to be exchangeable under the group actually
+#' applied, and every subgroup action qualifies. The practical gain is that `K
+#' + 1` is then capped by the *permuted* side only: blocks need `min_block`
+#' clusters on the permuted side but as few as one on the other, so designs
+#' whose blocks are short in one dimension (many rows, few columns, or vice
+#' versa) can reach resolutions the two-sided test cannot. The price is power:
+#' a smaller group ignores invariance information in the unpermuted dimension,
+#' so when both sides are large enough for `permute = "both"`, the default is
+#' the better choice.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param row,col Cluster identities of each observed cell. Cells that are
-#' absent from the data are treated as missing.
+#'   absent from the data are treated as missing.
 #' @param min_block Integer; only bicliques whose smaller side is at least
-#' \code{min_block} are used. Larger values give finer p-value resolution
-#' (larger \code{K}) but discard more data. Defaults to 3. With one-sided
-#' \code{permute}, a scalar binds the permuted side only (the other side is
-#' floored at 1); a length-2 vector \code{c(rows, cols)} sets both sides
-#' explicitly (see \code{\link{find_bicliques}}).
-#' @param block_method Passed to \code{\link{find_bicliques}}: \code{"greedy"}
-#' (default) for the fast heuristic, or \code{"exact"} for a branch-and-bound
-#' search of maximum-area blocks (with a node-budget fallback to greedy).
-#' @param permute Which dimension(s) to permute: \code{"both"} (default,
-#' Procedure 2), or \code{"rows"}/\code{"cols"} to permute only that dimension.
-#' One-sided permutation is valid under the same assumption (it applies a
-#' subgroup of the invariance group) and lets \code{K + 1} be capped by the
-#' permuted side alone -- with \code{"rows"}, blocks need \code{min_block} row
-#' clusters but only one column (a scalar \code{min_block} then binds the
-#' permuted side; pass a length-2 vector to \code{min_block} for full control)
-#' -- at some cost in power; see Details.
-#' @param K Number of non-identity permutations. Defaults to
-#' \code{min_q min(|I_q|, |J_q|) - 1} over the selected blocks, capped at 199.
-#' Must not exceed that quantity.
+#'   `min_block` are used. Larger values give finer p-value resolution (larger
+#'   `K`) but discard more data. Defaults to 3. With one-sided `permute`, a
+#'   scalar binds the permuted side only (the other side is floored at 1); a
+#'   length-2 vector `c(rows, cols)` sets both sides explicitly (see
+#'   [find_bicliques()]).
+#' @param block_method Passed to [find_bicliques()]: `"greedy"` (default) for
+#'   the fast heuristic, or `"exact"` for a branch-and-bound search of
+#'   maximum-area blocks (with a node-budget fallback to greedy).
+#' @param permute Which dimension(s) to permute: `"both"` (default, Procedure
+#'   2), or `"rows"`/`"cols"` to permute only that dimension. One-sided
+#'   permutation is valid under the same assumption (it applies a subgroup of
+#'   the invariance group) and lets `K + 1` be capped by the permuted side
+#'   alone -- with `"rows"`, blocks need `min_block` row clusters but only one
+#'   column (a scalar `min_block` then binds the permuted side; pass a
+#'   length-2 vector to `min_block` for full control) -- at some cost in
+#'   power; see Details.
+#' @param K Number of non-identity permutations. Defaults to `min_q min(|I_q|,
+#'   |J_q|) - 1` over the selected blocks, capped at 199. Must not exceed that
+#'   quantity.
 #'
-#' @param aggregate How the \code{n_reps} per-repetition p-values are
-#'   combined into the reported p-value, and into the confidence set that
-#'   inverts it. \code{"median"} (the default) is the median, as recommended in
-#'   Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
-#'   \code{min(1, 2 * median)}.
+#' @param aggregate How the `n_reps` per-repetition p-values are combined into
+#'   the reported p-value, and into the confidence set that inverts it.
+#'   `"median"` (the default) is the median, as recommended in Remark 1 of
+#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
 #'
-#'   The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#'   validity for a single random permutation group, so at \code{n_reps = 1}
-#'   the p-value is exact as stated. The median of several dependent randomised
-#'   p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-#'   behaved in practice, but not itself guaranteed valid at level
-#'   \code{alpha}. Twice the median is guaranteed, under arbitrary dependence
-#'   across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#' The choice decides what "exact" covers. Theorem 1 gives finite-sample
+#' validity for a single random permutation group, so at `n_reps = 1` the
+#' p-value is exact as stated. The median of several dependent randomised
+#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+#' behaved in practice, but not itself guaranteed valid at level `alpha`.
+#' Twice the median is guaranteed, under arbitrary dependence across
+#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
 #'
-#'   So use \code{"median2"} when the guarantee must hold as stated with
-#'   \code{n_reps > 1}. It is conservative: it never rejects where
-#'   \code{"median"} would not, and its confidence set is never narrower. The
-#'   default is unchanged, so existing numbers stand.
+#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
+#' 1`. It is conservative: it never rejects where `"median"` would not, and
+#' its confidence set is never narrower. The default is unchanged, so existing
+#' numbers stand.
 #'
-#'   The cost is resolution. \code{"median2"} reports
-#'   \code{min(1, 2 * median)}, so its smallest attainable p-value is
-#'   \code{2/(K+1)}, not \code{1/(K+1)}, and rejecting at level \code{alpha}
-#'   needs \code{K + 1 >= 2/alpha} -- at \code{alpha = 0.05} that is 40 levels
-#'   in the smallest permuted dimension, twice what \code{"median"} needs.
-#'   Below that the p-value is still exact but cannot reach \code{alpha}, and
-#'   the fit says so in a note.
-#' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
-#' are the OLS estimate and naive SE, \code{conf_int} (or
-#' \code{conf_region}/\code{conf_box} for several coefficients) the IPT
-#' inverted-test confidence set, and \code{pvalue} the IPT permutation p-value;
-#' see \code{\link{mwperm_dyadic}} for the field provenance in full. Its
-#' \code{n_obs} is the number of cells actually used (inside the selected
-#' blocks), and the \code{note} field records how many cells and blocks were
-#' retained.
+#' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
+#' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
+#' level `alpha` needs `K + 1 >= 2/alpha` -- at `alpha = 0.05` that is 40
+#' levels in the smallest permuted dimension, twice what `"median"` needs.
+#' Below that the p-value is still exact but cannot reach `alpha`, and the fit
+#' says so in a note.
+#' @return An object of class `"mwperm"`: `estimate`/`se_naive` are the OLS
+#'   estimate and naive SE, `conf_int` (or `conf_region`/`conf_box` for
+#'   several coefficients) the IPT inverted-test confidence set, and `pvalue`
+#'   the IPT permutation p-value; see [mwperm_dyadic()] for the field
+#'   provenance in full. Its `n_obs` is the number of cells actually used
+#'   (inside the selected blocks), and the `note` field records how many cells
+#'   and blocks were retained.
 #'
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
 #'
-#' @seealso \code{\link{mwperm_dyadic}} for the complete-array case;
-#'   \code{\link{find_bicliques}} for the block finder used internally.
+#' @seealso [mwperm_dyadic()] for the complete-array case; [find_bicliques()]
+#'   for the block finder used internally.
 #'
 #' @examples
-#' data(trade_dyadic) ## drop self-trade and a few random links to create
-#' missingness set.seed(1) d <- trade_dyadic[trade_dyadic$importer !=
-#' trade_dyadic$exporter, ] d <- d[sample(nrow(d), round(0.9 * nrow(d))), ] fit
-#' <- with(d, mwperm_missing(y = log_trade, d = log_dist, x = cbind(log_gdp_i,
-#' log_gdp_j), row = importer, col = exporter, min_block = 3, seed = 1)) fit ##
-#' permute rows only: the same assumption covers the subgroup action, and ## K
-#' is capped by the permuted (row) side of the blocks alone -- asking ## for
-#' tall blocks (>= 20 rows, any width) restores resolution at ## alpha = .05,
-#' which the two-sided test cannot reach on these blocks with(d,
-#' mwperm_missing(y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
-#' row = importer, col = exporter, permute = "rows", min_block = c(20, 1),
-#' conf_int = FALSE, seed = 1))
+#' data(trade_dyadic)
+#' ## drop self-trade and a few random links to create missingness
+#' set.seed(1)
+#' d <- trade_dyadic[trade_dyadic$importer != trade_dyadic$exporter, ]
+#' d <- d[sample(nrow(d), round(0.9 * nrow(d))), ]
+#' fit <- with(d, mwperm_missing(y = log_trade, d = log_dist,
+#'                               x = cbind(log_gdp_i, log_gdp_j),
+#'                               row = importer, col = exporter,
+#'                               min_block = 3, seed = 1))
+#' fit
+#' ## permute rows only: the same assumption covers the subgroup action, and
+#' ## K is capped by the permuted (row) side of the blocks alone -- asking
+#' ## for tall blocks (>= 20 rows, any width) restores resolution at
+#' ## alpha = .05, which the two-sided test cannot reach on these blocks
+#' with(d, mwperm_missing(y = log_trade, d = log_dist,
+#'                        x = cbind(log_gdp_i, log_gdp_j),
+#'                        row = importer, col = exporter,
+#'                        permute = "rows", min_block = c(20, 1),
+#'                        conf_int = FALSE, seed = 1))
 #' @export
 mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            alpha = 0.05, beta_null = 0, conf_int = TRUE,
@@ -268,33 +271,33 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
 #' Block-diagonal observation permutations for the missing-data design
 #'
-#' Permutes rows and columns independently within each fully observed block (the
-#' blocks are disjoint in both dimensions, so the joint map is a genuine
+#' Permutes rows and columns independently within each fully observed block
+#' (the blocks are disjoint in both dimensions, so the joint map is a genuine
 #' relabelling), then expresses the result as observation gather-vectors over
-#' the retained cells. Extracted from \code{mwperm_missing()}'s inline closure
-#' so the group-closure tests exercise the SAME code the fit runs;
+#' the retained cells. Extracted from `mwperm_missing()`'s inline closure so
+#' the group-closure tests exercise the SAME code the fit runs;
 #' behaviour-identical to the old inline version, same seed offsets.
 #'
 #' @param rep_seed rep-level seed (or NULL); block q draws its row/col groups
-#' at \code{.sub_seed(rep_seed, 4q - 1)} / \code{.sub_seed(rep_seed, 4q)} (each
-#' drawn only when that dimension is permuted, so the \code{"both"} stream is
-#' unchanged and the one-dimensional streams reuse its draws).
+#'   at `.sub_seed(rep_seed, 4q - 1)` / `.sub_seed(rep_seed, 4q)` (each drawn
+#'   only when that dimension is permuted, so the `"both"` stream is unchanged
+#'   and the one-dimensional streams reuse its draws).
 #' @param K group order minus one (common across blocks and dimensions).
-#' @param blocks list of blocks as returned by \code{find_bicliques()}.
+#' @param blocks list of blocks as returned by `find_bicliques()`.
 #' @param ri,ci global row/col cluster ids of the retained cells.
 #' @param blk block index of each retained cell.
 #' @param lrow,lcol 1-based position of each retained cell within its block's
-#'   \code{rows}/\code{cols} vectors.
-#' @param permute \code{"both"} (Procedure 2), \code{"rows"} or \code{"cols"}
+#'   `rows`/`cols` vectors.
+#' @param permute `"both"` (Procedure 2), `"rows"` or `"cols"`
 #'   (one-dimensional subgroup; the other dimension is held fixed).
-#' @param slot optional within-cell slot index (see
-#' \code{\link{.within_cell_slot}}), one entry per retained observation. NULL
-#' (the default) is the one-observation-per-cell case: cells are keyed by (row,
-#' col) and the code below is exactly what it always was. When supplied, cells
-#' are keyed by (row, col, slot) and the slot is HELD FIXED, so cell (i, j) slot
-#' l maps to cell (pi(i), sigma(j)) slot l -- the structure mwperm_panel() uses
-#' for time, and what Section 6.4 needs once each retained cell has been reduced
-#' to exactly L0 observations. Used by mwperm_irregular().
+#' @param slot optional within-cell slot index (see `.within_cell_slot()`),
+#'   one entry per retained observation. NULL (the default) is the
+#'   one-observation-per-cell case: cells are keyed by (row, col) and the code
+#'   below is exactly what it always was. When supplied, cells are keyed by
+#'   (row, col, slot) and the slot is HELD FIXED, so cell (i, j) slot l maps
+#'   to cell (pi(i), sigma(j)) slot l -- the structure mwperm_panel() uses for
+#'   time, and what Section 6.4 needs once each retained cell has been reduced
+#'   to exactly L0 observations. Used by mwperm_irregular().
 #' @return list of K+1 integer gather-vectors over the retained cells.
 #' @keywords internal
 #' @noRd
@@ -451,75 +454,73 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
 #' Disjoint fully observed bicliques (greedy or exact)
 #'
-#' Partitions (part of) a sparse two-way layout into blocks of row clusters I_q
-#' and column clusters J_q such that every cell of I_q x J_q is observed and the
-#' blocks share no row or column cluster. Blocks are peeled off one at a time:
-#' the largest fully observed biclique among the still-available rows and
-#' columns is found, removed, and the search repeats on the remainder. Used by
-#' \code{\link{mwperm_missing}}.
+#' Partitions (part of) a sparse two-way layout into blocks of row clusters
+#' I_q and column clusters J_q such that every cell of I_q x J_q is observed
+#' and the blocks share no row or column cluster. Blocks are peeled off one at
+#' a time: the largest fully observed biclique among the still-available rows
+#' and columns is found, removed, and the search repeats on the remainder.
+#' Used by [mwperm_missing()].
 #'
-#' Two ways to find each block are offered through \code{method}:
-#' \describe{
-#'   \item{\code{"greedy"}}{(default) a fast seed-and-intersect heuristic that,
-#'     starting from each of a few highest-degree rows, adds rows while keeping
-#'     the common set of fully observed columns. Always valid but may return a
-#'     sub-maximal block.}
-#'   \item{\code{"exact"}}{a branch-and-bound search for the maximum-area fully
-#'     observed biclique, with area-based pruning. Maximum-edge biclique is
-#'     NP-hard, so a per-block node budget caps the work; if it is hit the
-#'     search falls back to the greedy block for that step (still valid) and a
-#'     warning is issued. Note what is maximised: each block \emph{in turn},
-#'     not the total covered area of the returned partition -- the greedy
-#'     peeling after each exact block can leave less for later blocks, so
-#'     \code{"exact"} does not always cover more cells than \code{"greedy"}
-#'     overall, and it costs orders of magnitude more time on large masks.
-#'     Worthwhile when a single largest block (finest p-value resolution)
-#'     matters more than total coverage.}
-#' }
+#' Two ways to find each block are offered through `method`:
+#' - ``"greedy"``: (default) a fast seed-and-intersect heuristic that,
+#'   starting from each of a few highest-degree rows, adds rows while keeping
+#'   the common set of fully observed columns. Always valid but may return a
+#'   sub-maximal block.
+#' - ``"exact"``: a branch-and-bound search for the maximum-area fully
+#'   observed biclique, with area-based pruning. Maximum-edge biclique is
+#'   NP-hard, so a per-block node budget caps the work; if it is hit the
+#'   search falls back to the greedy block for that step (still valid) and a
+#'   warning is issued. Note what is maximised: each block *in turn*, not the
+#'   total covered area of the returned partition -- the greedy peeling after
+#'   each exact block can leave less for later blocks, so `"exact"` does not
+#'   always cover more cells than `"greedy"` overall, and it costs orders of
+#'   magnitude more time on large masks. Worthwhile when a single largest
+#'   block (finest p-value resolution) matters more than total coverage.
 #'
-#' Both methods maximise \emph{area}, and with an asymmetric \code{min_block} an
-#' area-maximal block can violate the floor even when conforming blocks exist (a
-#' tall thin block never maximises area on a dense mask). When that happens the
-#' growth is retried under the floor -- rows that would push the common column
-#' set below the column minimum are skipped, and the block is grown past the
-#' area optimum until the row minimum is met (and vice versa) -- so an
-#' asymmetric floor finds the tall/wide blocks it asks for. With a symmetric
-#' floor the behaviour is exactly the historical one.
+#' Both methods maximise *area*, and with an asymmetric `min_block` an
+#' area-maximal block can violate the floor even when conforming blocks exist
+#' (a tall thin block never maximises area on a dense mask). When that happens
+#' the growth is retried under the floor -- rows that would push the common
+#' column set below the column minimum are skipped, and the block is grown
+#' past the area optimum until the row minimum is met (and vice versa) -- so
+#' an asymmetric floor finds the tall/wide blocks it asks for. With a
+#' symmetric floor the behaviour is exactly the historical one.
 #'
 #' @param row,col Integer (or factor-coercible) cluster ids of the observed
 #'   cells; the two vectors have equal length, one entry per observed cell.
 #' @param min_block Minimum block side(s). A single integer applies to both
-#' sides (default 2; values below 2 are silently raised to 2 -- a 1x1 block
-#' cannot be permuted). A length-2 integer vector sets the row and column minima
-#' separately, e.g. \code{c(3, 1)} admits tall single-column blocks for
-#' one-dimensional permutations (\code{mwperm_missing(permute = "rows")}); each
-#' side is floored at 1 and at least one side must be 2 or more.
-#' @param method Either \code{"greedy"} (default) or \code{"exact"}; see
-#'   Details.
-#' @param retry_peels Number of extra attempts, under \code{method =
-#' "greedy"} only, to find a conforming block after one peel returned a block
-#' below \code{min_block}. Each attempt slides the heuristic's seed window eight
-#' rows further down the degree order. The greedy search seeds from the
-#' highest-degree available rows, so a small block there is not proof that no
-#' larger conforming block remains elsewhere in the mask, and stopping
-#' immediately forfeits every later block too. Retrying can only add blocks,
-#' never change or remove one already found, and the added blocks are ordinary
-#' disjoint bicliques -- so this affects power only, never validity. Set to
-#' \code{0L} for the pre-0.3.0 behaviour. Ignored for \code{method = "exact"},
-#' where a sub-floor block \emph{is} proof.
-#' @param node_budget Integer node cap for the \code{"exact"} branch-and-bound
-#'   per block (default 200000). Ignored when \code{method = "greedy"}.
+#'   sides (default 2; values below 2 are silently raised to 2 -- a 1x1 block
+#'   cannot be permuted). A length-2 integer vector sets the row and column
+#'   minima separately, e.g. `c(3, 1)` admits tall single-column blocks for
+#'   one-dimensional permutations (`mwperm_missing(permute = "rows")`); each
+#'   side is floored at 1 and at least one side must be 2 or more.
+#' @param method Either `"greedy"` (default) or `"exact"`; see Details.
+#' @param retry_peels Number of extra attempts, under `method = "greedy"`
+#'   only, to find a conforming block after one peel returned a block below
+#'   `min_block`. Each attempt slides the heuristic's seed window eight rows
+#'   further down the degree order. The greedy search seeds from the
+#'   highest-degree available rows, so a small block there is not proof that
+#'   no larger conforming block remains elsewhere in the mask, and stopping
+#'   immediately forfeits every later block too. Retrying can only add blocks,
+#'   never change or remove one already found, and the added blocks are
+#'   ordinary disjoint bicliques -- so this affects power only, never
+#'   validity. Set to `0L` for the pre-0.3.0 behaviour. Ignored for `method =
+#'   "exact"`, where a sub-floor block *is* proof.
+#' @param node_budget Integer node cap for the `"exact"` branch-and-bound per
+#'   block (default 200000). Ignored when `method = "greedy"`.
 #'
-#' @return A list of blocks, each a list with integer components \code{rows} and
-#'   \code{cols} giving the (original-coding) cluster ids in that biclique.
+#' @return A list of blocks, each a list with integer components `rows` and
+#'   `cols` giving the (original-coding) cluster ids in that biclique.
 #'
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm_missing}}.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [mwperm_missing()].
 #' @examples
-#' ## a 4x4 grid missing its diagonal g <- expand.grid(i = 1:4, j = 1:4) g <-
-#' g[g$i != g$j, ] find_bicliques(g$i, g$j, min_block = 2) find_bicliques(g$i,
-#' g$j, min_block = 2, method = "exact")
+#' ## a 4x4 grid missing its diagonal
+#' g <- expand.grid(i = 1:4, j = 1:4)
+#' g <- g[g$i != g$j, ]
+#' find_bicliques(g$i, g$j, min_block = 2)
+#' find_bicliques(g$i, g$j, min_block = 2, method = "exact")
 #' @export
 find_bicliques <- function(row, col, min_block = 2L,
                            method = c("greedy", "exact"),
@@ -687,12 +688,12 @@ find_bicliques <- function(row, col, min_block = 2L,
 
 #' Grow one all-ones submatrix under a min_block floor (constrained greedy)
 #'
-#' Fallback used by \code{find_bicliques()} when an ASYMMETRIC floor rejects the
-#' area-maximal block: same seed-and-intersect scheme as \code{.grow_biclique},
-#' but rows whose addition would push the common column set below \code{mb_c}
-#' are skipped, and rows are added past the area optimum until \code{mb_r} is
-#' reached (after which the usual non-shrinking-area rule resumes). Returns an
-#' empty block when no seed satisfies the floor.
+#' Fallback used by `find_bicliques()` when an ASYMMETRIC floor rejects the
+#' area-maximal block: same seed-and-intersect scheme as `.grow_biclique`, but
+#' rows whose addition would push the common column set below `mb_c` are
+#' skipped, and rows are added past the area optimum until `mb_r` is reached
+#' (after which the usual non-shrinking-area rule resumes). Returns an empty
+#' block when no seed satisfies the floor.
 #' @param A logical matrix.
 #' @param mb_r,mb_c minimum row / column count of the returned block.
 #' @return list(rows, cols) of local indices; empty vectors if none found.
@@ -734,26 +735,26 @@ find_bicliques <- function(row, col, min_block = 2L,
 
 #' Maximum-area all-ones submatrix by branch-and-bound (exact)
 #'
-#' Finds the row set R maximising \code{|R| * |cols(R)|}, where \code{cols(R)}
-#' is the set of columns observed for every row in R (so the selected submatrix
-#' is all ones by construction). Rows are processed in decreasing support order
-#' and the branch is pruned whenever the optimistic bound \code{(rows so far +
-#' rows remaining) * current common columns} cannot beat the incumbent. A node
-#' budget bounds the work; if exhausted the best block found so far is returned
-#' with \code{exact = FALSE}.
+#' Finds the row set R maximising `|R| * |cols(R)|`, where `cols(R)` is the
+#' set of columns observed for every row in R (so the selected submatrix is
+#' all ones by construction). Rows are processed in decreasing support order
+#' and the branch is pruned whenever the optimistic bound `(rows so far + rows
+#' remaining) * current common columns` cannot beat the incumbent. A node
+#' budget bounds the work; if exhausted the best block found so far is
+#' returned with `exact = FALSE`.
 #'
 #' @param A logical matrix.
-#' @param retry_peels Number of extra attempts, under \code{method =
-#' "greedy"} only, to find a conforming block after one peel returned a block
-#' below \code{min_block}. Each attempt slides the heuristic's seed window eight
-#' rows further down the degree order. The greedy search seeds from the
-#' highest-degree available rows, so a small block there is not proof that no
-#' larger conforming block remains elsewhere in the mask, and stopping
-#' immediately forfeits every later block too. Retrying can only add blocks,
-#' never change or remove one already found, and the added blocks are ordinary
-#' disjoint bicliques -- so this affects power only, never validity. Set to
-#' \code{0L} for the pre-0.3.0 behaviour. Ignored for \code{method = "exact"},
-#' where a sub-floor block \emph{is} proof.
+#' @param retry_peels Number of extra attempts, under `method = "greedy"`
+#'   only, to find a conforming block after one peel returned a block below
+#'   `min_block`. Each attempt slides the heuristic's seed window eight rows
+#'   further down the degree order. The greedy search seeds from the
+#'   highest-degree available rows, so a small block there is not proof that
+#'   no larger conforming block remains elsewhere in the mask, and stopping
+#'   immediately forfeits every later block too. Retrying can only add blocks,
+#'   never change or remove one already found, and the added blocks are
+#'   ordinary disjoint bicliques -- so this affects power only, never
+#'   validity. Set to `0L` for the pre-0.3.0 behaviour. Ignored for `method =
+#'   "exact"`, where a sub-floor block *is* proof.
 #' @param node_budget integer cap on the number of search nodes.
 #' @return list(rows, cols, area, exact); rows/cols are local indices.
 #' @keywords internal
