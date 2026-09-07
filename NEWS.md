@@ -212,7 +212,8 @@ below.
   the test accepts falls outside the reported set, and every point strictly
   inside a component is accepted. `README.md` and `?confint.mwperm` previously
   claimed an exact if-and-only-if, which does not hold at the boundary; both now
-  state the closure relation, and `tests/test-exact-ci.R` probes the breakpoints
+  state the closure relation, and `tests/lower-level-tests/test-exact-ci.R`
+  probes the breakpoints
   themselves and pins it. Numbers are unchanged — only the claim was wrong.
   (The `"grid"` and `"bisection"` routes report attained, accepted end points.)
 
@@ -283,6 +284,47 @@ below.
 * **`DESCRIPTION`.** Version 0.3.0. `grDevices` was already declared in
   `Imports` and imported in `NAMESPACE`; verified against the source (`R/plot.R`
   uses `chull`, `adjustcolor` and the device openers) and left as is.
+
+* **`README.md`: two shown outputs were still the 0.2.0 numbers**, missed when
+  the exact confidence set changed eight seeded end points earlier in this
+  release. The quick-start block showed `[-1.246, -0.5486]` where the package
+  prints `[-1.246, -0.5485]`, and the panel example under *Extensions* showed
+  `[0.4441, 0.8776]` where it prints `[0.442, 0.8803]`. Both are corrected; the
+  package's own output never changed, only the transcript of it. Every shown
+  output in `README.md` was re-run against the installed package.
+
+* **"Choosing the right design" now gives the formal model for each row.** The
+  table gained a column with the error decomposition each design is exact
+  under -- $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$ for the two-way case,
+  $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$ with $\zeta_t$
+  arbitrary for the panel, and so on -- plus a column saying which labels are
+  permuted. A new subsection states the invariance each design actually needs
+  as a display equation (InvA, InvB, within-cell, blockwise InvB, and
+  Assumption 4 on the mask), and a four-question checklist walks a reader who
+  is still unsure to a function. The invariance statements that were duplicated
+  under *Extensions* were removed from there, so each condition is now stated
+  in exactly one place.
+
+* **The test suite is reorganised around the public API, and documented.**
+  `tests/` was organised by concern -- `test-edgecases.R`, `test-paths.R`,
+  `test-fixes.R` -- so there was no file to open to find out how a given front
+  end was tested, and three files accumulated most of the assertions for all
+  five designs. The top level now holds **one file per user-facing entry
+  point** (`test-dyadic.R`, `test-threeway.R`, `test-panel.R`,
+  `test-layout.R`, `test-missing.R`, `test-irregular.R`, `test-formula.R`,
+  `test-main.R`), plus the cross-cutting contracts (`test-validation.R`,
+  `test-methods.R`, `test-equivariance.R`) and the seeded gate
+  (`test-golden.R`). Tests of the machinery underneath -- the permutation
+  group, the gather vectors, the projector, the p-value, the aggregation rule,
+  the confidence-set routines -- moved to `tests/lower-level-tests/`, driven by
+  `test-lower-level.R` so `R CMD check` still runs every one of them.
+  Assertions shared by several files moved to `tests/helpers/assertions.R`, and
+  `tests/README.md` documents the layout and where a new test belongs. **No
+  assertion was dropped**; the suite is the same coverage, reorganised, plus
+  new per-design checks that had no home before -- the default `K` each design
+  derives, dense recoding of arbitrary cluster labels, the panel test's
+  invariance to an arbitrary common time trend, and row-order invariance for
+  every design.
 
 ## Authorized numerical changes, in full
 

@@ -79,6 +79,11 @@ R CMD INSTALL .
 for f in tests/test-*.R; do Rscript "$f"; done
 ```
 
+The top level of `tests/` holds one file per user-facing function --
+`test-dyadic.R` tests `mwperm_dyadic()`, and so on -- with the machinery
+underneath in `tests/lower-level-tests/`, which `test-lower-level.R` runs.
+[`tests/README.md`](tests/README.md) maps the whole suite.
+
 ## Quick start
 
 Hand over the data once; `mwperm()` detects the design and runs the matching
@@ -109,7 +114,7 @@ Clusters     : row=40, col=40 (1600 observations)
 Permutations : K = 39  (group order 40, 15 reps)
 Resolution   : p-values are multiples of 1/40 = 0.025
 
-  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.246, -0.5486]
+  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.246, -0.5485]
 
 H0: beta = 0    p-value = 0.025
 Decision     : reject at alpha = 0.05
@@ -172,15 +177,130 @@ This is the decision that matters. For a finite-sample-exact method the main
 practical risk is not arithmetic — it is testing under an exchangeability
 assumption your data does not satisfy.
 
-| Your data | Use | Because |
-|---|---|---|
-| Two crossed dimensions, one observation per cell | `mwperm_dyadic()` | errors exchangeable in both margins |
-| Three crossed dimensions, **all** exchangeable | `mwperm_threeway()` | permutes all three |
-| Two dimensions observed **over time** | `mwperm_panel()` | holds time fixed; valid under an *arbitrary* common time trend |
-| Repeated **independent** observations per cell | `mwperm_layout()` | permutes replicates within cells |
-| Repeated observations per cell, but they are **time periods**, or `d` is constant within a cell | `mwperm_irregular()` | permutes the *cells*, holding the within-cell slot fixed |
-| Two dimensions with **missing cells** | `mwperm_missing()` | restricts to fully observed blocks |
-| Not sure | `mwperm()` or `mwperm_check()` | detects and tells you |
+Every design tests the same null in the same model. What differs is **which
+labels are permuted**, and therefore **which errors have to be exchangeable**.
+Find your data in the first column, then satisfy yourself that the error model
+in the third is one you are willing to assume.
+
+| Your data | Use | Exact whenever the errors can be written | What is permuted |
+|---|---|---|---|
+| Two crossed dimensions, one observation per cell | `mwperm_dyadic()` | $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$ | row and column labels, jointly |
+| Three crossed dimensions, **all** exchangeable | `mwperm_threeway()` | $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$ | all three index sets, jointly |
+| Two dimensions observed **over time** | `mwperm_panel()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary** | rows and columns — the *same* relabelling in every period; $t$ is never moved |
+| Repeated **independent** observations per cell | `mwperm_layout()` | $\varepsilon_{ijl} = \eta_{ij} + u_{ijl}$, with $\eta_{ij}$ **arbitrary** | the replicates $l$ inside each cell, drawn independently per cell |
+| Repeated observations per cell, but they are **time periods**, or `d` is constant within a cell | `mwperm_irregular()` | $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$, with $\zeta_l$ **arbitrary**, and which cells clear $L_0$ not depending on $y$ | whole cells, across rows and columns; the within-cell slot $l$ is never moved |
+| Two dimensions with **missing cells** | `mwperm_missing()` | $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns *within* each fully observed block |
+| Not sure | `mwperm()` or `mwperm_check()` | — | detects the structure and tells you |
+
+In every row the $u$ terms are i.i.d. given the covariates — for
+`mwperm_layout()`, i.i.d. *within* each cell, which may differ freely from one
+another — and each named family of random effects is i.i.d. within itself;
+nothing requires homoskedasticity or normality. A term marked **arbitrary** is completely
+unrestricted — no distribution, no independence, not even randomness — and
+that freedom is the reason the row exists. These are *sufficient* models, given
+as the easiest way to recognise your setting; the actual requirement is the
+invariance below, which each of them implies.
+
+### The invariance each design needs
+
+All six designs test the same null in the same regression (Guo et al., 2026,
+Eq. 12)
+
+$$y_{ijl} = x_{ijl}^{\top}\gamma + d_{ijl}^{\top}\beta + \varepsilon_{ijl},
+\qquad i \in [m],\; j \in [n],\; l \in [\ell_{ij}],$$
+
+against $H_0 : \beta = b$, conditional on $(\mathbf{X}, \mathbf{D})$. With
+$\ell_{ij} \equiv 1$ this is the dyadic model of
+[The model and the null](#the-model-and-the-null); with $\ell_{ij} \equiv \ell$
+constant, $l$ is simply a third cluster dimension. What changes from design to
+design is only the group of relabellings the test is invariant to.
+
+**`mwperm_dyadic()` — two-way, condition InvA.** For all permutations $\pi$ on
+$[m]$ and $\sigma$ on $[n]$,
+
+$$(\varepsilon_{ij}) \overset{d}{=} (\varepsilon_{\pi(i)\sigma(j)})
+\mid \mathbf{X}, \mathbf{D}.$$
+
+**`mwperm_threeway()` — three-way, condition InvA (§6.1).** The same, extended
+to a third permutation $\psi$ on $[\ell]$:
+
+$$(\varepsilon_{ijl}) \overset{d}{=}
+(\varepsilon_{\pi(i)\sigma(j)\psi(l)}) \mid \mathbf{X}, \mathbf{D}.$$
+
+Use it only if the third dimension really is exchangeable — an industry or a
+product category, not a year.
+
+**`mwperm_panel()` — condition InvB (§6.2).** Exchangeability is required
+*within* each period only, with the **same** $(\pi, \sigma)$ used in every
+period:
+
+$$(\varepsilon_{ijt})_{i \in [m], j \in [n]} \overset{d}{=}
+(\varepsilon_{\pi(i)\sigma(j)t})_{i \in [m], j \in [n]}
+\mid \mathbf{X}, \mathbf{D}.$$
+
+Nothing at all is assumed *across* $t$: the common trend $\zeta_t$ is arbitrary
+and the errors may be autocorrelated over time. This is the first
+finite-sample-valid test in that setting. `time_fe = TRUE` (the default) adds
+period dummies, which are invariant to the within-period permutation and so
+cost no validity, to de-bias the point estimate.
+
+**`mwperm_layout()` — within-cell exchangeability (§6.3).** Independently in
+each cell $(i, j)$, for permutations $\pi_{ij}$ on $[\ell_{ij}]$,
+
+$$(\varepsilon_{ijl})_{l \in [\ell_{ij}]} \overset{d}{=}
+(\varepsilon_{ij\pi_{ij}(l)})_{l \in [\ell_{ij}]} \mid \mathbf{X}, \mathbf{D}.$$
+
+The cell effects $\eta_{ij}$ are unrestricted, so the clusters themselves need
+no exchangeability at all — only the replicates inside a cell. The price is
+resolution: $K + 1 \le \min_{ij} \ell_{ij}$ unless `L0 =` balances the array.
+Note that $l$ must be an *independent replication*. If the $l$-th observation
+means the same thing in every cell — a period, a survey wave — then errors are
+usually not exchangeable across $l$ at all, and even a benign shared replicate
+effect $\zeta_l$ falls outside this argument, because the independent per-cell
+permutations change its alignment across cells. Use `mwperm_irregular()`.
+
+**`mwperm_irregular()` — §6.4.** Condition InvB applied blockwise, with the
+within-cell slot playing time's role. Form the mask
+$M_{ij} = \mathbf{1}(\ell_{ij} \ge L_0)$, find disjoint fully observed
+blocks under it, trim every retained cell to exactly $L_0$ observations, then
+require, within each block $I_q \times J_q$ and with the same $(\pi, \sigma)$
+in every slot,
+
+$$(\varepsilon_{ijl})_{i \in I_q, j \in J_q} \overset{d}{=}
+(\varepsilon_{\pi(i)\sigma(j)l})_{i \in I_q, j \in J_q}
+\mid \mathbf{X}, \mathbf{D}.$$
+
+An arbitrary slot effect shared across cells is permitted, which is the whole
+point. It also needs the mask condition below: which cells clear $L_0$ must not
+depend on the outcomes.
+
+**`mwperm_missing()` — §5.** Cell $(i, j)$ is observed iff $M_{ij} = 1$, and
+Assumption 4 requires
+
+$$M \perp\mkern-10mu\perp (\varepsilon_{ij})_{i, j} \mid \mathbf{X}, \mathbf{D}.$$
+
+The mask may depend on $\mathbf{X}$ and $\mathbf{D}$ in any way whatsoever, but
+not on $y$. Inference then restricts to disjoint fully observed blocks
+$I_q \times J_q$ and applies the two-way invariance inside each; cells outside
+the blocks are discarded, and the fit reports how many.
+
+### Still unsure? Four questions
+
+1. **Is one of your indices time, or otherwise ordered?** Then it must never be
+   permuted. One observation per $(i, j, t)$ → `mwperm_panel()`; several
+   observations per $(i, j)$ that are really periods → `mwperm_irregular()`.
+2. **Do you have more than one observation per $(i, j)$ cell?**
+   `mwperm_layout()` if they are exchangeable replicates;
+   `mwperm_irregular()` if they are periods, or if `d` is constant within a
+   cell — within-cell permutation then has *no power*, because residualizing
+   removes all of `d`'s variation.
+3. **Are cells missing?** `mwperm_missing()`. It is not an error path; it is a
+   different, valid procedure that trades discarded cells for exactness.
+4. **Otherwise:** `mwperm_dyadic()` for two indices, `mwperm_threeway()` for
+   three genuinely exchangeable ones.
+
+`mwperm_check(index = ...)` answers all four from the data, prints the
+diagnosis and the attainable resolution, and computes nothing.
 
 > **The most costly mistake is treating time as an exchangeable third
 > dimension.** Running the three-way test on panel data is *invalid* under
@@ -392,24 +512,20 @@ Measured coverage of nominal 95% intervals, at 600 simulations per cell (`inst/r
 ## Extensions
 
 All extensions reuse the same machinery; only the invariance condition and the
-construction of $\mathcal{G}$ change (Guo et al., 2026, §6).
+construction of $\mathcal{G}$ change (Guo et al., 2026, §6). The invariance
+each one needs is in [Choosing the right design](#choosing-the-right-design);
+what follows is what each function actually does with it.
 
-**Three-way clustering** (`mwperm_threeway()`) applies Algorithm 1 three times
-under three-way exchangeability (InvA), which holds e.g. under
-$\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$.
+**Three-way clustering** (`mwperm_threeway()`) applies Algorithm 1 three times,
+once per index set, and composes the three into a joint group under InvA.
 
-**Panel data** (`mwperm_panel()`) requires exchangeability across the first two
-dimensions only (InvB):
-
-$$(\varepsilon_{ijt})_{i\in[m],j\in[n]} \overset{d}{=}
-(\varepsilon_{\pi(i)\sigma(j)t})_{i\in[m],j\in[n]} \mid \mathbf{X},\mathbf{D},$$
-
-which holds under $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$ with
-$\zeta_t$ an **arbitrary common time trend**. The *same* row/column permutation
-is applied in every period and time is held fixed. This is the first
-finite-sample-valid test of $\beta = 0$ under (InvB). Time fixed effects
-(`time_fe = TRUE`, the default) de-bias the point estimate; they are invariant
-to the within-period permutation, so they do not disturb validity.
+**Panel data** (`mwperm_panel()`) applies Algorithm 1 twice, to $[m]$ and
+$[n]$, then uses that *same* row/column relabelling in every period with time
+held fixed — so the dyadic test runs within each period and the unknown trend
+is never disturbed. This is the first finite-sample-valid test of $\beta = 0$
+under (InvB). Time fixed effects (`time_fe = TRUE`, the default) de-bias the
+point estimate; they are invariant to the within-period permutation, so they do
+not disturb validity.
 
 ```r
 data(trade_panel)
@@ -424,21 +540,19 @@ Detected design: panel ('year' identified as time by name)
 Permutations : K = 21  (group order 22, 10 reps)
 Resolution   : p-values are multiples of 1/22 = 0.045
 
-  fta          OLS estimate = 0.6774   95% IPT CI [0.4441, 0.8776]
+  fta          OLS estimate = 0.6774   95% IPT CI [0.442, 0.8803]
 
 H0: beta = 0    p-value = 0.045
 Decision     : reject at alpha = 0.05
 ```
 
-**Replicated two-way layouts** (`mwperm_layout()`) permute only *within* each
-cell $(i,j)$ over $[\ell_{ij}]$, valid under
-$\varepsilon_{ijl} = \eta_{ij} + \zeta_l + u_{ijl}$ with $\eta_{ij}$ arbitrary —
-appropriate when $l$ indexes independent replications. For unbalanced layouts,
-`L0` keeps cells with $\ell_{ij}\ge L_0$ and uniformly downsamples each to
-exactly $L_0$ replicates (reproducibly, via `seed`). Note that the `L0`
-threshold itself comes from Section 6.4 of the paper, not Section 6.3;
-`mwperm_layout()` uses it to balance the array and then runs the Section 6.3
-within-cell test.
+**Replicated two-way layouts** (`mwperm_layout()`) apply Algorithm 1 once per
+cell, on $[\ell_{ij}]$, and permute only *within* cells — appropriate when $l$
+indexes independent replications. For unbalanced layouts, `L0` keeps cells with
+$\ell_{ij}\ge L_0$ and uniformly downsamples each to exactly $L_0$ replicates
+(reproducibly, via `seed`). Note that the `L0` threshold itself comes from
+Section 6.4 of the paper, not Section 6.3; `mwperm_layout()` uses it to balance
+the array and then runs the Section 6.3 within-cell test.
 
 **Irregular layouts** (`mwperm_irregular()`) are the actual Section 6.4
 procedure, and cover the two cases where within-cell permutation fails: the
@@ -449,8 +563,8 @@ search on $M$, reduces each retained cell to exactly $L_0$ observations at
 random, and then applies Procedure 2 *across* cells with the within-cell slot
 held fixed — cell $(i,j)$ slot $l$ maps to cell $(\pi(i),\sigma(j))$ slot $l$,
 the same device the panel test uses for time. It therefore needs
-exchangeability across $(i,j)$ within each slot plus Assumption 4 on the mask,
-not within-cell exchangeability.
+exchangeability across $(i,j)$ within each slot, not within-cell
+exchangeability.
 
 ## Missing cells
 

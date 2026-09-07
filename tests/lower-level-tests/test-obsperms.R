@@ -3,7 +3,14 @@
 ## rests on (GTW 2026, Proposition 2 lifted to observations); if it fails for a
 ## design the finite-sample guarantee is void there. Also: a permutation to an
 ## unobserved cell must ERROR, never silently NA.
+##
+## Lower-level test (tests/lower-level-tests/): it exercises the machinery
+## beneath the front ends, mostly through package internals, so it must run
+## against a FRESHLY INSTALLED copy -- mwperm::: resolves against the
+## installed package, never against a source()d working tree.
 library(mwperm)
+source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
+       else file.path("tests", "helpers", "assertions.R"))
 
 compose <- function(a, b) a[b]                 # gather-vector composition
 ## O is closed as a cyclic group iff O[[r]] o O[[s]] == O[[(r+s) mod B]] for all
@@ -20,7 +27,7 @@ bop  <- mwperm:::.build_obs_perms
 bopl <- mwperm:::.build_obs_perms_layout
 cc   <- mwperm:::.cell_code
 
-## ---- 1. dyadic: paired row/col groups compose cyclically --------------------
+## ---- 1. dyadic: paired row/col groups compose cyclically ------------------
 g <- expand.grid(i = 1:6, j = 1:6)
 co <- cbind(g$i, g$j)
 Od <- bop(co, list(build_perm_set(6, K, seed = 1), build_perm_set(6, K,
@@ -28,7 +35,7 @@ Od <- bop(co, list(build_perm_set(6, K, seed = 1), build_perm_set(6, K,
 stopifnot(is_closed(Od))
 stopifnot(identical(Od[[1]], seq_len(nrow(co))))          # element 0 = identity
 
-## ---- 2. three-way (InvA): all three dimensions permuted jointly -------------
+## ---- 2. three-way (InvA): all three dimensions permuted jointly -----------
 g3 <- expand.grid(i = 1:5, j = 1:5, l = 1:5)
 co3 <- cbind(g3$i, g3$j, g3$l)
 O3 <- bop(co3, list(build_perm_set(5, K, seed = 1), build_perm_set(5, K,
@@ -36,7 +43,7 @@ O3 <- bop(co3, list(build_perm_set(5, K, seed = 1), build_perm_set(5, K,
                     build_perm_set(5, K, seed = 3)))
 stopifnot(is_closed(O3))
 
-## ---- 3. panel (InvB): SAME (pi,sigma) every period, time held fixed ---------
+## ---- 3. panel (InvB): SAME (pi,sigma) every period, time held fixed -------
 gp <- expand.grid(i = 1:5, j = 1:5, t = 1:4)
 cop <- cbind(gp$i, gp$j, gp$t)
 Op <- bop(cop, list(build_perm_set(5, K, seed = 1),
@@ -47,7 +54,7 @@ stopifnot(is_closed(Op))
 stopifnot(all(vapply(Op, function(o) identical(cop[o, 3], cop[, 3]),
                      logical(1))))
 
-## ---- 4. two-way layout: within-cell permutations only -----------------------
+## ---- 4. two-way layout: within-cell permutations only ---------------------
 gl <- expand.grid(rep = 1:4, i = 1:3, j = 1:3)
 cell <- as.integer(interaction(gl$i, gl$j, drop = TRUE))
 ncell <- max(cell)
@@ -62,7 +69,7 @@ stopifnot(is_closed(Ol))
 ## no observation is ever moved out of its (i,j) cell
 stopifnot(all(vapply(Ol, function(o) identical(cell[o], cell), logical(1))))
 
-## ---- 5. missing block-diagonal: two disjoint blocks -------------------------
+## ---- 5. missing block-diagonal: two disjoint blocks -----------------------
 ## Closure of the SAME code the fit runs: the builder was extracted from
 ## mwperm_missing()'s inline closure to the named internal
 ## .build_obs_perms_blocks(), so this test can no longer
@@ -87,7 +94,7 @@ stopifnot(!anyNA(unlist(Om)))                # never leaves the observed set
 stopifnot(all(vapply(Om, function(o) identical(blk_k[o], blk_k),
                      logical(1))))  # stays in-block
 
-## ---- 6. a permutation to an unobserved cell ERRORS (not NA) -----------------
+## ---- 6. a permutation to an unobserved cell ERRORS (not NA) ---------------
 gi <- expand.grid(i = 1:5, j = 1:5)
 coi <- cbind(gi$i, gi$j)[-1, ]   # drop cell (1,1)
 msg <- tryCatch({
@@ -96,4 +103,4 @@ msg <- tryCatch({
 }, error = function(e) conditionMessage(e))
 stopifnot(!is.na(msg), grepl("unobserved", msg))
 
-cat("test-obsperms.R: all assertions passed\n")
+passed("test-obsperms.R")
