@@ -14,8 +14,9 @@
 #' replaces a QR of that stack (O(N (2p)^2)) with one O(N p^2) cross product
 #' plus an O(p^3) eigendecomposition that does not grow with N. This function
 #' survives as the obvious, obviously correct formulation that
-#' `tests/test-projection.R` pins against an independent SVD projector; keep
-#' the two in agreement, and do not delete this without relocating that test.
+#' `tests/lower-level-tests/test-projection.R` pins against an independent SVD
+#' projector; keep the two in agreement, and do not delete this without
+#' relocating that test.
 #'
 #' @param M numeric matrix, N x q.
 #' @param V numeric vector or N x d matrix.

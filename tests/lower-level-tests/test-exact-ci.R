@@ -18,10 +18,14 @@
 ## NEWS.md). Section 1's evenly spaced brute force cannot see this: its points
 ## never land on a root.
 ##
-## Reaches internals via ::: -- run against a FRESHLY INSTALLED package.
+## Lower-level test (tests/lower-level-tests/): it exercises the machinery
+## beneath the front ends, mostly through package internals, so it must run
+## against a FRESHLY INSTALLED copy -- mwperm::: resolves against the
+## installed package, never against a source()d working tree.
 library(mwperm)
+source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
+       else file.path("tests", "helpers", "assertions.R"))
 
-ok <- function(...) stopifnot(...)
 
 ## ---- 1. a small dyadic design ---------------------------------------------
 set.seed(4)
@@ -38,14 +42,14 @@ alpha <- 0.25                       # K = 7 => resolution 1/8, so alpha must
 for (nr in c(1L, 3L)) {
   fit <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
                        alpha = alpha, n_reps = nr, seed = 7)
-  ok(identical(fit$ci_method, "exact"))
+  stopifnot(identical(fit$ci_method, "exact"))
   cs <- fit$conf_set
-  ok(is.matrix(cs), ncol(cs) == 2L, nrow(cs) >= 1L)
+  stopifnot(is.matrix(cs), ncol(cs) == 2L, nrow(cs) >= 1L)
   ## components are ordered and disjoint
-  ok(all(cs[, 1L] <= cs[, 2L]))
+  stopifnot(all(cs[, 1L] <= cs[, 2L]))
   if (nrow(cs) > 1L) ok(all(cs[-1L, 1L] > cs[-nrow(cs), 2L]))
   ## conf_int is exactly the hull
-  ok(identical(fit$conf_int, c(min(cs[, 1L]), max(cs[, 2L]))))
+  stopifnot(identical(fit$conf_int, c(min(cs[, 1L]), max(cs[, 2L]))))
 
   ## ---- brute force: pval(b) evaluated directly at each candidate ----------
   ## A coarse check on points that avoid the boundary: away from the roots of
@@ -66,10 +70,10 @@ for (nr in c(1L, 3L)) {
     }, numeric(1))
     stats::median(pv) > alpha
   }, logical(1))
-  ok(identical(inside, accepted))
+  stopifnot(identical(inside, accepted))
 }
 
-## ---- 2. the bisection fallback finds the same set --------------------------
+## ---- 2. the bisection fallback finds the same set -------------------------
 ## Forcing the fallback (budget 0) must reproduce the exact end points to within
 ## the bisection tolerance -- the two routes compute the same object.
 fit_e <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
@@ -78,18 +82,18 @@ old_opt <- options(mwperm.ci_exact_budget = 0)
 fit_b <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
                        alpha = alpha, n_reps = 2L, seed = 7)
 options(old_opt)
-ok(identical(fit_b$ci_method, "bisection"),
-   any(grepl("bracketing and bisection", fit_b$note)),
-   isTRUE(all.equal(fit_e$conf_int, fit_b$conf_int, tolerance = 1e-3)))
+stopifnot(identical(fit_b$ci_method, "bisection"),
+          any(grepl("bracketing and bisection", fit_b$note)),
+          isTRUE(all.equal(fit_e$conf_int, fit_b$conf_int, tolerance = 1e-3)))
 
-## ---- 3. the explicit-grid route agrees to the grid spacing -----------------
+## ---- 3. the explicit-grid route agrees to the grid spacing ----------------
 gr <- seq(fit_e$conf_int[1L] - 0.5, fit_e$conf_int[2L] + 0.5, by = 0.002)
 fit_g <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
                        alpha = alpha, n_reps = 2L, seed = 7, grid = gr)
-ok(identical(fit_g$ci_method, "grid"),
-   max(abs(fit_g$conf_int - fit_e$conf_int)) <= 0.002 + 1e-12)
+stopifnot(identical(fit_g$ci_method, "grid"),
+          max(abs(fit_g$conf_int - fit_e$conf_int)) <= 0.002 + 1e-12)
 
-## ---- 4. test and interval never disagree away from the boundary -------------
+## ---- 4. test and interval never disagree away from the boundary -----------
 ## The whole point of driving both from one rule: a value strictly inside the
 ## set is not rejected, a value outside it is. (Strictly inside: the end points
 ## themselves are the closure and are checked in section 6.)
@@ -97,15 +101,15 @@ for (b in c(fit_e$conf_int[1L] + 1e-6, mean(fit_e$conf_int),
             fit_e$conf_int[2L] - 1e-6)) {
   f <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j, beta_null = b,
                      alpha = alpha, conf_int = FALSE, n_reps = 2L, seed = 7)
-  ok(f$pvalue > alpha)
+  stopifnot(f$pvalue > alpha)
 }
 for (b in c(fit_e$conf_int[1L] - 0.05, fit_e$conf_int[2L] + 0.05)) {
   f <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j, beta_null = b,
                      alpha = alpha, conf_int = FALSE, n_reps = 2L, seed = 7)
-  ok(f$pvalue <= alpha)
+  stopifnot(f$pvalue <= alpha)
 }
 
-## ---- 5. the breakpoint formulas ---------------------------------------------
+## ---- 5. the breakpoint formulas -------------------------------------------
 ## Every root returned must actually solve |v_k - W_k b| = |u_j - M_j b|.
 G <- build_perm_set(n, 7L, seed = 11)
 op <- mwperm:::.build_obs_perms(cbind(g$i, g$j), list(G, G))
@@ -113,15 +117,15 @@ prep <- mwperm:::.ipt_prepare(y, as.matrix(d), cbind(1, x1), op)
 roots <- mwperm:::.ci_breakpoints(list(prep))
 u <- prep$u[1L, ]; M <- prep$M[1L, 1L, ]
 v <- prep$v[1L, ]; W <- prep$W[1L, 1L, ]
-ok(length(roots) > 0L, all(is.finite(roots)), !is.unsorted(roots),
-   !anyDuplicated(roots))
+stopifnot(length(roots) > 0L, all(is.finite(roots)), !is.unsorted(roots),
+          !anyDuplicated(roots))
 hits <- vapply(roots, function(b) {
   a <- abs(u - M * b); bk <- abs(v - W * b)
   min(abs(outer(a, bk, `-`))) <= 1e-8 * max(1, max(a), max(bk))
 }, logical(1))
-ok(all(hits))
+stopifnot(all(hits))
 
-## ---- 6. the boundary: what is reported is the CLOSURE of the set ------------
+## ---- 6. the boundary: what is reported is the CLOSURE of the set ----------
 ## Sections 1 and 4 probe points that are never roots of the step function, so
 ## neither can see the boundary. Here the roots themselves are probed, on the
 ## fit's OWN permutations (rebuilt from the documented seed scheme: rep r uses
@@ -150,11 +154,11 @@ for (nr in c(1L, 3L)) {
     stats::median(vapply(pl, function(pp) mwperm:::.ipt_eval(pp, b)$pvalue,
                          numeric(1)))
   ## the rebuilt permutations ARE the fit's: same p-value at the null
-  ok(identical(pval_at(fit$beta_null), fit$pvalue))
+  stopifnot(identical(pval_at(fit$beta_null), fit$pvalue))
 
   roots <- mwperm:::.ci_breakpoints(pl)
   m <- length(roots)
-  ok(m >= 2L)
+  stopifnot(m >= 2L)
   ## one atom per root, one interior point per cell between roots, one beyond
   ## each end: the p-value is constant on each cell, so these exhaust the line.
   mids  <- (roots[-m] + roots[-1L]) / 2
@@ -165,27 +169,27 @@ for (nr in c(1L, 3L)) {
   cs <- fit$conf_set
   hull <- fit$conf_int
   ## (a) conservative: nothing the test accepts lies outside the reported hull
-  ok(!any(acc & (atoms < hull[1L] | atoms > hull[2L])))
+  stopifnot(!any(acc & (atoms < hull[1L] | atoms > hull[2L])))
 
   for (i in seq_len(nrow(cs))) {
     lo <- cs[i, 1L]; hi <- cs[i, 2L]
     ## (b) every point strictly inside a component is accepted
-    ok(all(acc[atoms > lo & atoms < hi]))
+    stopifnot(all(acc[atoms > lo & atoms < hi]))
     ## (c) each finite end point is a root, and is either accepted itself or is
     ## the infimum / supremum of an accepted open cell (the closure case)
     if (is.finite(lo)) {
-      ok(any(roots == lo))
+      stopifnot(any(roots == lo))
       j <- match(lo, atoms)
       in_lo <- pval_at(lo) > alpha
-      ok(in_lo || (j < length(atoms) && acc[j + 1L]))
+      stopifnot(in_lo || (j < length(atoms) && acc[j + 1L]))
       n_end_examined <- n_end_examined + 1L
       if (!in_lo) n_rejected_end <- n_rejected_end + 1L
     }
     if (is.finite(hi)) {
-      ok(any(roots == hi))
+      stopifnot(any(roots == hi))
       j <- match(hi, atoms)
       in_hi <- pval_at(hi) > alpha
-      ok(in_hi || (j > 1L && acc[j - 1L]))
+      stopifnot(in_hi || (j > 1L && acc[j - 1L]))
       n_end_examined <- n_end_examined + 1L
       if (!in_hi) n_rejected_end <- n_rejected_end + 1L
     }
@@ -195,7 +199,7 @@ for (nr in c(1L, 3L)) {
 ## assertion in section 6 passes for the wrong reason.
 ##
 ## What it does NOT assert is that any end point is REJECTED. An end point is a
-## root of the step function, and at a root |v_k - W_k b| and min_j |u_j - M_j b|
+## root of the step function; at a root |v_k - W_k b| and min_j |u_j - M_j b|
 ## are equal in exact arithmetic -- so which side the evaluation falls on is
 ## settled by the last bits of the root and of the two norms, and that differs
 ## by BLAS. This machine and the Linux runners reject some end points; the macOS
@@ -207,9 +211,9 @@ for (nr in c(1L, 3L)) {
 ## The platform-independent invariant is (c), checked above for EVERY end point:
 ## accepted, or the infimum / supremum of an accepted open cell. That is the
 ## claim the documentation makes, and it is what this section pins.
-ok(n_end_examined > 0L)
+stopifnot(n_end_examined > 0L)
 cat(sprintf(paste0("test-exact-ci.R: %d of %d reported end points are ",
                    "rejected on this platform\n"),
             n_rejected_end, n_end_examined))
 
-cat("test-exact-ci.R: all assertions passed\n")
+passed("test-exact-ci.R")
