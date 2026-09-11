@@ -55,19 +55,26 @@ named after the function it tests.
 | `test-dyadic.R` | `mwperm_dyadic()` — the **two-way** (dyadic) design, condition InvA |
 | `test-threeway.R` | `mwperm_threeway()` — the three-way design, InvA in three dimensions |
 | `test-panel.R` | `mwperm_panel()` — the panel design, condition InvB, including invariance to an arbitrary common time trend |
+| `test-panel-missing.R` | `mwperm_panel_missing()` — incomplete panels; pins that on a complete array it builds permutations *identical* to `mwperm_panel()` |
 | `test-layout.R` | `mwperm_layout()` — replicated two-way layouts, within-cell exchangeability, `L0` balancing |
 | `test-missing.R` | `mwperm_missing()` and `find_bicliques()` — incomplete arrays via fully observed blocks, one-sided permutation |
-| `test-irregular.R` | `mwperm_irregular()` — Section 6.4, irregular within-cell counts |
+| `test-irregular.R` | `mwperm_irregular()` — Section 6.4, irregular within-cell counts; pins on the gather vectors that every group element preserves the `rep` level (the InvB index), that the common level set is chosen from the observation pattern, and that `rep = NULL` reduces to the paper's `1{ell_ij >= L0}` mask |
 | `test-methods.R` | `print` / `summary` / `confint` / `coef` / `nobs` / `plot` / `mwperm_save` — the **output-label contract** and every figure path |
 | `test-validation.R` | the input-validation contract shared by all front ends: bad input fails early naming the argument, degenerate input gets the exact answer, and no confidence set is reported that the design cannot support |
 | `test-equivariance.R` | properties every fit must have: row-order, nuisance (FWL), null-shift and scale/sign equivariance, and **parallel ≡ serial**, bit for bit |
-| `test-golden.R` | the seeded snapshot gate — 22 fits across all six designs compared field by field against `golden/baseline.rds` |
+| `test-readme.R` | the transcripts `README.md` shows are the ones the package prints |
+| `test-golden.R` | the seeded snapshot gate — 26 fits across all seven designs compared field by field against `golden/baseline.rds` |
 | `test-lower-level.R` | the runner for `lower-level-tests/` |
 
 Design-specific arguments are tested in that design's own file (`L0` and `rep`
 in `test-layout.R`, `permute` and `min_block` in `test-missing.R`, `time_fe` in
 `test-panel.R`); everything shared is in `test-validation.R`,
 `test-methods.R` or `test-equivariance.R`.
+
+`test-readme.R` is the one file that reaches outside the package: it locates
+`README.md` by content, because `tests/` has a README of its own. Under
+`R CMD check` the package README is not shipped alongside the tests, so that
+half skips; the half that pins the printed lines always runs.
 
 ### `lower-level-tests/` — the machinery underneath
 

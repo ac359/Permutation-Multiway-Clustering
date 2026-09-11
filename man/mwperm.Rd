@@ -12,8 +12,8 @@ mwperm(
   data = NULL,
   time = NULL,
   rep = NULL,
-  design = c("auto", "dyadic", "threeway", "panel", "layout", "missing",
-    "irregular"),
+  design = c("auto", "dyadic", "threeway", "panel", "panel_missing", "layout",
+    "missing", "irregular"),
   K = NULL,
   alpha = 0.05,
   beta_null = 0,
@@ -92,8 +92,9 @@ repetition axis parallelises well (near-ideal speedup for large
 problems); the per-permutation fallback axis is at best break-even, so
 with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 
-\item{time_fe}{Passed to \code{\link{mwperm_panel}} (panel only;
-supplying it for another design warns and ignores it).}
+\item{time_fe}{Passed to \code{\link{mwperm_panel}} or
+\code{\link{mwperm_panel_missing}} (panel designs only; supplying it for
+another design warns and ignores it).}
 
 \item{L0}{Passed to \code{\link{mwperm_layout}} (layout only).}
 

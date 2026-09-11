@@ -66,4 +66,37 @@ pmin <- min(vapply(seq(-30, 30, by = 0.1),
                    function(b) mwperm:::.ipt_eval(prep, b)$pvalue, numeric(1)))
 stopifnot(identical(pmin, 1 / Kp1))
 
+## ---- 6. a degenerate permutation slice: where Procedure 1 says p = 1 ------
+## If `d` lies in the span of [X | X_k] for one permutation k, that slice's
+## residualized d is exactly zero in exact arithmetic, so a_k = b_k = 0 and
+## Eq. 10 gives p = 1. Numerically the slice is rounding noise, so
+## .ipt_prepare(degenerate = "stop") -- the default the engine uses once it
+## has ruled out the GLOBAL case -- refuses to compute it, while
+## degenerate = "zero" returns the exact-arithmetic answer. Both behaviours
+## and the relative 1e-16 threshold on the squared norm are pinned here; the
+## behaviour is deliberate (see the roxygen on `degenerate`), not an accident.
+## Construction: D is x permuted by group element 2, so for k = 1 the augmented
+## design [1, x, x_g] contains D exactly, while D is not in span(X) globally.
+x2 <- rnorm(N)
+X2 <- cbind(1, x2)
+g2 <- op[[2L]]
+D2 <- matrix(x2[g2], N, 1)
+stopifnot(sum(qr.resid(qr(X2), D2)^2) > 1e-3 * sum(D2^2))  # identified globally
+expect_err(mwperm:::.ipt_prepare(y, D2, X2, op, degenerate = "stop",
+                                 design = "test"),
+           "permutation 1 of the test design")
+pz <- mwperm:::.ipt_prepare(y, D2, X2, op, degenerate = "zero")
+stopifnot(pz$u[1L, 1L] == 0, pz$v[1L, 1L] == 0, pz$M[1L, 1L, 1L] == 0,
+          pz$W[1L, 1L, 1L] == 0,
+          any(pz$M[1L, 1L, -1L] > 0))               # the other slices are live
+for (b in c(-3, 0, 0.7, 5))
+  stopifnot(identical(mwperm:::.ipt_eval(pz, b)$pvalue, 1))
+## the threshold is RELATIVE to ||D||^2: rescaling D changes nothing
+expect_err(mwperm:::.ipt_prepare(y, 1e6 * D2, X2, op, degenerate = "stop"),
+           "No identifying variation")
+expect_err(mwperm:::.ipt_prepare(y, 1e-6 * D2, X2, op, degenerate = "stop"),
+           "No identifying variation")
+## and a slice with real identifying variation never trips it
+stopifnot(all(mwperm:::.ipt_prepare(y, D, X, op, degenerate = "stop")$M > 0))
+
 passed("test-pvalue.R")

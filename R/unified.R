@@ -145,14 +145,24 @@
 #'   name): declares within-cell replication and forces the layout design.
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it).
+#' @param alpha,aggregate The test level and cross-repetition rule the fit
+#'   will use (the defaults of every front end). They decide the resolution
+#'   verdict: the smallest reportable p-value is `1/(K+1)` under `"median"`
+#'   and `2/(K+1)` under `"median2"`, and a `(1 - alpha)` confidence set is
+#'   attainable only when that floor is at most `alpha`. [mwperm()] passes
+#'   its own `alpha` and `aggregate` through, so the diagnosis it prints
+#'   describes the fit it runs.
 #'
 #' @return An object of class `"mwperm_design"`: a list with fields `design`
 #'   (the chosen design), `roles` (which index plays row/col/id1..3/time/rep),
 #'   `dims` (levels per dimension), `n_obs`, `cells` (observed/expected),
-#'   `balance`, `K_default` and `resolution_ok` (whether a 95\% confidence set
-#'   is attainable), `call_str` (the downstream call), `reason` (one-line
-#'   explanation), and `warnings`/`notes` (the assumption-fork notices etc.).
-#'   Its `print` method lays this out as a short human diagnosis.
+#'   `balance`, `K_default`, `alpha`, `aggregate`, `p_floor` (the smallest
+#'   reportable p-value at the default K), `levels_needed` (the smallest
+#'   permuted dimension a `(1 - alpha)` set requires) and `resolution_ok`
+#'   (whether that set is attainable), `call_str` (the downstream call),
+#'   `reason` (one-line explanation), and `warnings`/`notes` (the
+#'   assumption-fork notices etc.). Its `print` method lays this out as a
+#'   short human diagnosis.
 #'
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
@@ -166,8 +176,15 @@
 mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                          time = NULL, rep = NULL,
                          design = c("auto", "dyadic", "threeway", "panel",
-                                    "layout", "missing", "irregular")) {
+                                    "panel_missing", "layout", "missing",
+                                    "irregular"),
+                         alpha = 0.05, aggregate = c("median", "median2")) {
   design <- match.arg(design)
+  aggregate <- match.arg(aggregate)
+  if (!(is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha) &&
+        alpha > 0 && alpha < 1))
+    stop("`alpha` must be a single number strictly between 0 and 1.",
+         call. = FALSE)
   idx <- .resolve_index(index, data)
   N <- length(idx[[1L]])
   if (any(vapply(idx, length, integer(1)) != N))
@@ -282,8 +299,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                    rep = if (!is.null(rep_v)) names(rep_v) else
                      "(within-cell order)")
     reason <<- why
-    ## K is set by the biclique blocks found under the mask 1{ell_ij >= L0},
-    ## which depends on L0 -- not knowable here.
+    ## K is set by the biclique blocks found under the Section 6.4 mask (cell
+    ## observes every one of the L0 retained levels), which depends on L0 --
+    ## not knowable here.
     K_default <<- NA_integer_
     balance <<- sprintf(paste0("irregular (%d cells, %d-%d observations ",
                                "each; L0 sets which cells are usable)"),
@@ -292,8 +310,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     cells_exp <<- prod(dims[1:2])
     notes <<- c(notes, paste0(
       "The permutation-group order for the Section 6.4 design is set by the ",
-      "biclique blocks found under the mask M_ij = 1{cell size >= L0}, so it ",
-      "depends on `L0`; see find_bicliques() and ?mwperm_irregular."))
+      "biclique blocks found under the mask M_ij = 1{cell observes every one ",
+      "of the L0 retained levels}, so it depends on `L0`; see ",
+      "find_bicliques() and ?mwperm_irregular."))
   }
 
   ## Completeness gate shared by every panel path (auto, tagged, forced):
@@ -475,23 +494,23 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       }
     }
   } else {
-    ## C == 3, no tags: complete balanced crossed array required
+    ## C == 3, no tags. A REPEATED cell is still fatal -- with two
+    ## observations in one (i, j, t) neither the complete-array designs nor the
+    ## blockwise one has a well-defined map. An INCOMPLETE array is not: since
+    ## 0.3.0 it routes to mwperm_panel_missing(), which masks to the pairs
+    ## observed in every period and permutes blockwise. The time role is
+    ## decided first because that choice does not depend on completeness, and
+    ## the incomplete design needs it too.
     cells3 <- .cell_code(cbind(dense[[1L]], dense[[2L]], dense[[3L]]))
     cells_obs <- N
     cells_exp <- prod(dims)
-    if (anyDuplicated(cells3) > 0L || N != cells_exp) {
+    if (anyDuplicated(cells3) > 0L)
       stop(sprintf(paste0(
-        "3 index dimensions but not a complete balanced crossed array ",
-        "(%d observations vs %s = %d expected cells%s). mwperm_panel()/",
-        "mwperm_threeway() require completeness. Options: (a) curate a ",
-        "complete balanced subset; (b) if the third index is replication, ",
-        "pass it as `rep =` for a layout design; (c) drop to the 2-index ",
-        "dyadic/missing design by aggregating or selecting one level."),
-        N, paste(sprintf("%s=%d", names(dims), dims), collapse = " x "),
-        cells_exp,
-        if (anyDuplicated(cells3) > 0L) "; some cells repeat" else ""),
-        call. = FALSE)
-    }
+        "3 index dimensions but some (%s) cell repeats, so no crossed design ",
+        "applies: %d observations for %d cells. If the repeats are ",
+        "replication within a cell, pass that index as `rep =`; otherwise ",
+        "aggregate to one observation per cell."),
+        paste(names(dims), collapse = ", "), N, cells_exp), call. = FALSE)
     ## which index is time? tagged > name > class/values > ambiguous
     name_hit <- which(vapply(names(idx), .timelike_name, logical(1)))
     val_hit <- which(vapply(seq_len(3L), function(k)
@@ -543,24 +562,47 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         "time = . If all three dimensions really are exchangeable, force ",
         "design = \"threeway\" to recover power."))
     }
-    chosen <- "panel"
     time_v <- idx[t_k]
     idx <- idx[-t_k]
     dims_cs <- dims[-t_k]
     roles <- list(row = names(idx)[1L], col = names(idx)[2L],
                   time = names(time_v))
     reason <- t_why
-    K_default <- min(dims_cs) - 1L
-    balance <- "complete"
+    if (N == cells_exp) {
+      chosen <- "panel"
+      K_default <- min(dims_cs) - 1L
+      balance <- "complete"
+    } else {
+      ## Incomplete: the group order comes from the biclique blocks, which are
+      ## not searched until fit time, so K is unknown here (as for "missing").
+      chosen <- "panel_missing"
+      K_default <- NA_integer_
+      balance <- "incomplete"
+      reason <- paste0(t_why, "; incomplete array")
+      notes <- c(notes, paste0(
+        "The array is incomplete, so the test restricts to (row, col) pairs ",
+        "observed in EVERY period and to the fully observed blocks the ",
+        "biclique search extracts from them; the group order follows those ",
+        "blocks. See ?mwperm_panel_missing and find_bicliques()."))
+    }
     dims <- c(dims_cs, dims[t_k])
     names(dims) <- c(names(idx), names(time_v))
   }
 
   K_default <- if (is.na(K_default)) NA_integer_ else min(K_default, 199L)
-  res_ok <- if (is.na(K_default)) NA else (K_default + 1L) >= 20L
+  ## The verdict is about the p-value the FIT will report, so it uses the same
+  ## floor .ipt_engine() gates on: 1/(K+1) under "median", 2/(K+1) under
+  ## "median2" (which reports min(1, 2 x median)), compared against the alpha
+  ## the fit will use -- not a hard-coded 0.05.
+  agg_mult <- if (identical(aggregate, "median2")) 2L else 1L
+  need_lvl <- as.integer(ceiling(agg_mult / alpha))
+  p_floor <- if (is.na(K_default)) NA_real_ else
+    min(1, agg_mult / (K_default + 1L))
+  res_ok <- if (is.na(K_default)) NA else p_floor <= alpha
 
   ## the exact downstream call
   fn <- c(dyadic = "mwperm_dyadic", panel = "mwperm_panel",
+          panel_missing = "mwperm_panel_missing",
           threeway = "mwperm_threeway", layout = "mwperm_layout",
           missing = "mwperm_missing",
           irregular = "mwperm_irregular")[[chosen]]
@@ -570,6 +612,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                       roles$col),
     panel = sprintf("row = %s, col = %s, time = %s, time_fe = TRUE",
                     roles$row, roles$col, roles$time),
+    panel_missing = sprintf(paste0("row = %s, col = %s, time = %s, ",
+                                   "min_block = ..., time_fe = TRUE"),
+                            roles$row, roles$col, roles$time),
     threeway = sprintf("id1 = %s, id2 = %s, id3 = %s",
                        roles$id1, roles$id2, roles$id3),
     layout = sprintf("row = %s, col = %s%s", roles$row, roles$col,
@@ -583,7 +628,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   structure(list(
     design = chosen, roles = roles, dims = dims, n_obs = N,
     cells = c(observed = cells_obs, expected = cells_exp),
-    balance = balance, K_default = K_default, resolution_ok = res_ok,
+    balance = balance, K_default = K_default,
+    alpha = alpha, aggregate = aggregate, p_floor = p_floor,
+    levels_needed = need_lvl, resolution_ok = res_ok,
     call_str = call_str, reason = reason,
     warnings = warns, notes = notes,
     time = if (!is.null(time_v)) time_v[[1L]] else NULL,
@@ -619,15 +666,31 @@ print.mwperm_design <- function(x, ...) {
                        "multiples of 1/%d = %s\n"),
                 x$K_default, x$K_default + 1L,
                 .fmt_p(1 / (x$K_default + 1L))))
-    cat("                  ",
-        if (isTRUE(x$resolution_ok))
-          "-> fine enough for a 95% confidence set\n"
-        else paste0("-> TOO COARSE for a 95% confidence set (p cannot reach ",
-                    "0.05).\n                     The p-value is still exact; ",
-                    "a 95% set needs >= 20 levels\n",
-                    "                     in the smallest permuted ",
-                    "dimension.\n"),
-        sep = "")
+    ## Objects from before `alpha`/`aggregate` were fields carry neither; read
+    ## the 0.05 / "median" they were computed under.
+    alpha <- if (is.null(x$alpha)) 0.05 else x$alpha
+    agg <- if (is.null(x$aggregate)) "median" else x$aggregate
+    need <- if (is.null(x$levels_needed)) 20L else x$levels_needed
+    lvl <- sprintf("%.0f%%", 100 * (1 - alpha))
+    art <- if (substr(lvl, 1L, 1L) == "8") "an" else "a"   # "an 80%" set
+    verdict <- if (isTRUE(x$resolution_ok))
+      sprintf("-> fine enough for %s %s confidence set at alpha = %s",
+              art, lvl, format(alpha))
+    else sprintf(paste0("-> TOO COARSE for %s %s confidence set at alpha = ",
+                        "%s (p cannot reach %s). The p-value is still ",
+                        "exact; %s %s set needs >= %d levels in the ",
+                        "smallest permuted dimension."),
+                 art, lvl, format(alpha), format(alpha), art, lvl, need)
+    if (identical(agg, "median2"))
+      verdict <- paste0(verdict, sprintf(paste0(
+        " Under aggregate = \"median2\" the reported p-value is min(1, 2 x ",
+        "median), so its floor is 2/%d = %s."),
+        x$K_default + 1L, .fmt_p(2 / (x$K_default + 1L))))
+    ## Wrapped at the full console width (not the 0.9 the notes use) so the
+    ## verdict's first line -- the one README.md shows -- stays whole.
+    cat(strwrap(verdict, initial = "                  ",
+                prefix = "                     ",
+                width = getOption("width", 80)), sep = "\n")
   }
   cat("Would run       : ", x$call_str, "\n", sep = "")
   for (w in x$warnings)
@@ -672,8 +735,9 @@ print.mwperm_design <- function(x, ...) {
 #' @param K Number of non-identity permutations; the default and the
 #'   admissible range depend on the dispatched design -- see the dispatched
 #'   function.
-#' @param time_fe Passed to [mwperm_panel()] (panel only; supplying it for
-#'   another design warns and ignores it).
+#' @param time_fe Passed to [mwperm_panel()] or [mwperm_panel_missing()]
+#'   (panel designs only; supplying it for another design warns and ignores
+#'   it).
 #' @param L0 Passed to [mwperm_layout()] (layout only).
 #' @param min_block,block_method,permute Passed to [mwperm_missing()] (missing
 #'   only).
@@ -730,8 +794,9 @@ print.mwperm_design <- function(x, ...) {
 #' fit
 #' @export
 mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
-                   design = c("auto", "dyadic", "threeway", "panel", "layout",
-                              "missing", "irregular"),
+                   design = c("auto", "dyadic", "threeway", "panel",
+                              "panel_missing", "layout", "missing",
+                              "irregular"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
                    n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
                    time_fe = TRUE, L0 = NULL, min_block = 3L,
@@ -794,28 +859,32 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   attr(y, "mwperm_name") <- NULL
 
   chk <- mwperm_check(index = index, y = y, d = d, data = data,
-                      time = time, rep = rep, design = design)
+                      time = time, rep = rep, design = design,
+                      alpha = alpha, aggregate = aggregate)
 
   ## design-specific arguments must not be silently accepted for the wrong
   ## design (warn and ignore, mirroring the printed diagnosis)
   supplied <- names(cl)
   check_arg <- function(arg, ok_design) {
+    nd <- length(ok_design)
+    listed <- if (nd <= 2L) paste(ok_design, collapse = " and ") else
+      paste0(paste(ok_design[-nd], collapse = ", "), " and ", ok_design[nd])
     if (arg %in% supplied && !chk$design %in% ok_design)
       warning(sprintf(paste0("`%s` applies to the %s design%s only; it was ",
                              "ignored for '%s'."),
-                      arg, paste(ok_design, collapse = " and "),
-                      if (length(ok_design) > 1L) "s" else "",
+                      arg, listed, if (nd > 1L) "s" else "",
                       chk$design), call. = FALSE)
   }
-  check_arg("time_fe", "panel")
+  check_arg("time_fe", c("panel", "panel_missing"))
   check_arg("L0", c("layout", "irregular"))
-  check_arg("min_block", c("missing", "irregular"))
-  check_arg("block_method", c("missing", "irregular"))
+  check_arg("min_block", c("missing", "irregular", "panel_missing"))
+  check_arg("block_method", c("missing", "irregular", "panel_missing"))
   check_arg("permute", "missing")
   if (chk$design == "irregular" && is.null(L0))
     stop(paste0("The Section 6.4 (irregular) design requires `L0 =`, the ",
-                "cell-size threshold defining the mask ",
-                "M_ij = 1{cell size >= L0}. See ?mwperm_irregular."),
+                "number of within-cell levels retained per cell, which sets ",
+                "the mask M_ij = 1{cell observes every one of the L0 ",
+                "retained levels}. See ?mwperm_irregular."),
          call. = FALSE)
 
   ## Assumption-fork and weak-evidence detection notices are REAL warnings at
@@ -848,6 +917,12 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
     panel = do.call(mwperm_panel,
                     c(common, list(row = ix[[1L]], col = ix[[2L]],
                                    time = chk$time, time_fe = time_fe))),
+    panel_missing = do.call(mwperm_panel_missing,
+                            c(common, list(row = ix[[1L]], col = ix[[2L]],
+                                           time = chk$time,
+                                           min_block = min_block,
+                                           block_method = block_method,
+                                           time_fe = time_fe))),
     threeway = do.call(mwperm_threeway,
                        c(common, list(id1 = ix[[1L]], id2 = ix[[2L]],
                                       id3 = ix[[3L]]))),

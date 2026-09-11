@@ -18,13 +18,18 @@
 #' the confidence set comes from inverting the invariant permutation test
 #' (printed as `"IPT CI"`, or `"IPT region"` for a joint confidence region).
 #'
-#' The `Resolution` line states that the p-value is exact but *discrete*: it
-#' can only take multiples of 1/(K+1), so the smallest value it can ever
-#' attain is 1/(K+1) itself. Reading a p-value without that context is the
-#' most common way to over- or under-state what the test has shown -- a p
-#' equal to 1/(K+1) is the strongest available evidence rather than a precise
-#' number, and a design with 1/(K+1) > alpha cannot reject at alpha however
-#' large the effect.
+#' The `Resolution` line states that the p-value is exact but *discrete*:
+#' each repetition's p-value can only take multiples of 1/(K+1), so the
+#' smallest value a repetition can attain is 1/(K+1) itself, and the line then
+#' names the smallest value the *reported* p-value can take -- the same
+#' 1/(K+1) under the default `aggregate = "median"`, but 2/(K+1) under
+#' `"median2"`, which reports `min(1, 2 * median)`. With an even number of
+#' repetitions the median averages the two central values and can fall
+#' between grid points; the line says so. Reading a p-value without that
+#' context is the most common way to over- or under-state what the test has
+#' shown -- a p equal to the floor is the strongest available evidence rather
+#' than a precise number, and a design whose floor exceeds alpha cannot reject
+#' at alpha however large the effect.
 #'
 #' With several coefficients the `H0` line marks the null as a *joint* test
 #' over all of them, and the printed brackets are the marginal extent of one
@@ -78,16 +83,32 @@ print.mwperm <- function(x, digits = 4L, ...) {
   cat("Permutations : ", sprintf("K = %d  (group order %d, %d rep%s)\n",
                                  x$K, x$n_perm, x$n_reps,
                                  if (x$n_reps == 1L) "" else "s"), sep = "")
-  ## The p-value is exact but DISCRETE -- it can only land on multiples of
-  ## 1/(K+1). Saying so here is what stops the smallest attainable value from
-  ## being read as a coincidence, or a borderline one as refinable by asking
-  ## for more permutations (it is not: K is capped by the design).
-  ## Formatted with .fmt_p, the same way the p-value below is: showing the
-  ## grid step to different precision than the value sitting on it (0.0455 vs
-  ## 0.045) reads as a discrepancy.
+  ## The p-value is exact but DISCRETE -- each rep's p-value can only land on
+  ## multiples of 1/(K+1). Saying so here is what stops the smallest
+  ## attainable value from being read as a coincidence, or a borderline one as
+  ## refinable by asking for more permutations (it is not: K is capped by the
+  ## design). The REPORTED value is the aggregate over reps, and the line must
+  ## describe that one: its floor is `p_floor` (2/(K+1) under "median2", which
+  ## reports min(1, 2 x median)), and with an even n_reps the median of the
+  ## two central reps can fall between grid points. Formatted with .fmt_p, the
+  ## same way the p-value below is: showing the grid step to different
+  ## precision than the value sitting on it (0.0455 vs 0.045) reads as a
+  ## discrepancy.
+  p_floor <- if (is.null(x$p_floor)) x$resolution else x$p_floor
   cat("Resolution   : ",
-      sprintf("p-values are multiples of 1/%d = %s\n", x$n_perm,
-              .fmt_p(x$resolution)), sep = "")
+      sprintf(paste0("p-values are multiples of 1/%d = %s per rep; ",
+                     "reported floor %s\n"),
+              x$n_perm, .fmt_p(x$resolution), .fmt_p(p_floor)), sep = "")
+  if (identical(x$aggregate, "median2") ||
+      (is.null(x$aggregate) && p_floor > x$resolution)) {
+    wrap(paste0("aggregate = \"median2\" reports min(1, 2 x median), so the ",
+                "floor is 2/(K+1)"),
+         initial = "               ", prefix = "               ")
+  } else if (x$n_reps > 1L && x$n_reps %% 2L == 0L) {
+    wrap(sprintf("the median of %d reps can fall between grid points",
+                 x$n_reps),
+         initial = "               ", prefix = "               ")
+  }
   cat("\n")
 
   est <- x$estimate
@@ -98,9 +119,14 @@ print.mwperm <- function(x, digits = 4L, ...) {
     nm <- x$d_names[k]
     line <- sprintf("  %-12s OLS estimate = %s", nm, fmt(est[k]))
     if (k == 1L && !is.null(x$conf_int) && length(x$conf_int) == 2L) {
-      line <- paste0(line, sprintf("   %.0f%% IPT CI [%s, %s]",
-                                   100 * x$conf_level,
-                                   fmt(x$conf_int[1]), fmt(x$conf_int[2])))
+      ## An empty acceptance set is stored as [NA, NA] with a zero-row
+      ## `conf_set`; print it as what it is, not as a pair of missing values.
+      line <- paste0(line, if (all(is.na(x$conf_int)) &&
+                                 !is.null(x$conf_set) &&
+                                 nrow(x$conf_set) == 0L)
+        sprintf("   %.0f%% IPT CI: empty set (see Notes)", 100 * x$conf_level)
+      else sprintf("   %.0f%% IPT CI [%s, %s]", 100 * x$conf_level,
+                   fmt(x$conf_int[1]), fmt(x$conf_int[2])))
     } else if (has_box) {
       line <- paste0(line, sprintf("   %.0f%% IPT region [%s, %s]",
                                    100 * x$conf_level,

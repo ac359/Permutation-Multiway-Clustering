@@ -12,8 +12,11 @@ mwperm_check(
   data = NULL,
   time = NULL,
   rep = NULL,
-  design = c("auto", "dyadic", "threeway", "panel", "layout", "missing",
-    "irregular")
+  design = c("auto", "dyadic", "threeway", "panel", "panel_missing",
+    "layout", "missing",
+    "irregular"),
+  alpha = 0.05,
+  aggregate = c("median", "median2")
 )
 
 \method{print}{mwperm_design}(x, ...)
@@ -40,6 +43,15 @@ name): declares within-cell replication and forces the layout design.}
 \item{design}{Force a design instead of auto-detecting (the structure is
 still validated against it).}
 
+\item{alpha, aggregate}{The test level and cross-repetition rule the fit
+will use (the defaults of every front end). They decide the resolution
+verdict: the smallest reportable p-value is \code{1/(K+1)} under
+\code{"median"} and \code{2/(K+1)} under \code{"median2"}, and a
+\code{(1 - alpha)} confidence set is attainable only when that floor is at
+most \code{alpha}. \code{\link{mwperm}} passes its own \code{alpha} and
+\code{aggregate} through, so the diagnosis it prints describes the fit it
+runs.}
+
 \item{x}{An object of class \code{"mwperm_design"} (print method).}
 
 \item{...}{Ignored.}
@@ -49,11 +61,13 @@ An object of class \code{"mwperm_design"}: a list with fields
   \code{design} (the chosen design), \code{roles} (which index plays
   row/col/id1..3/time/rep), \code{dims} (levels per dimension),
   \code{n_obs}, \code{cells} (observed/expected), \code{balance},
-  \code{K_default} and \code{resolution_ok} (whether a 95\% confidence set
-  is attainable), \code{call_str} (the downstream call), \code{reason}
-  (one-line explanation), and \code{warnings}/\code{notes} (the
-  assumption-fork notices etc.). Its \code{print} method lays this out as
-  a short human diagnosis.
+  \code{K_default}, \code{alpha}, \code{aggregate}, \code{p_floor} (the
+  smallest reportable p-value at the default K), \code{levels_needed} (the
+  smallest permuted dimension a \code{(1 - alpha)} set requires) and
+  \code{resolution_ok} (whether that set is attainable), \code{call_str}
+  (the downstream call), \code{reason} (one-line explanation), and
+  \code{warnings}/\code{notes} (the assumption-fork notices etc.). Its
+  \code{print} method lays this out as a short human diagnosis.
 }
 \description{
 Inspects the clustering structure of a dataset -- number of index

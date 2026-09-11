@@ -23,12 +23,17 @@ The price is resolution, not validity: with `K + 1` permutations the p-value
 can only take values `1/(K+1), 2/(K+1), …, 1`. See
 [Resolution](#resolution-how-many-clusters-do-you-need).
 
-In this package's own Monte Carlo at α = 0.05, empirical size came in at or
-slightly below nominal — the safe direction — across every design tested:
-0.044 dyadic, 0.046 panel, 0.049 three-way, and 0.035 under heavy-tailed
-errors (Monte-Carlo standard errors 0.006–0.009; 500–1000 replications per
-cell). A naive OLS test on the same dyadic design rejected **43.8%** of the
-time at a nominal 5%.
+In this package's own Monte Carlo at α = 0.05, with a single permutation group
+per fit (`n_reps = 1`, the configuration Theorem 1 covers), empirical size came
+in at or slightly below nominal — the safe direction — across every design
+tested: 0.044 dyadic (25 × 25, K = 24, 1000 replications), 0.046 panel
+(25 × 25 × 6, K = 24, 500), 0.049 three-way (21 × 21 × 21, K = 20, 900), and
+0.035 under heavy-tailed errors (25 × 25 dyadic, K = 24, 600); Monte-Carlo
+standard errors 0.006–0.009. A naive OLS test on the same dyadic design
+rejected **43.8%** of the time at a nominal 5%. Other simulations quoted for
+this package (the replication scripts in `inst/replication/`, the software
+paper) use different sizes, error laws and `n_reps`, and report different
+numbers for the same designs; each states its own `n`, `K` and `n_reps`.
 
 ## What it assumes
 
@@ -112,7 +117,7 @@ Design       : dyadic
 Auto-detected: dyadic (2 indices, one observation per cell, complete array)
 Clusters     : row=40, col=40 (1600 observations)
 Permutations : K = 39  (group order 40, 15 reps)
-Resolution   : p-values are multiples of 1/40 = 0.025
+Resolution   : p-values are multiples of 1/40 = 0.025 per rep; reported floor 0.025
 
   log_dist     OLS estimate = -0.8985   95% IPT CI [-1.246, -0.5485]
 
@@ -149,7 +154,7 @@ Roles           : row = importer, col = exporter
 Dimensions      : importer (40) x exporter (40) | 1600 observations
 Balance         : complete
 Resolution      : default K = 39, so p-values are multiples of 1/40 = 0.025
-                  -> fine enough for a 95% confidence set
+                  -> fine enough for a 95% confidence set at alpha = 0.05
 Would run       : mwperm_dyadic(y, d, x, row = importer, col = exporter)
 ```
 
@@ -189,6 +194,7 @@ in the third is one you are willing to assume.
 | Two dimensions observed **over time** | `mwperm_panel()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary** | rows and columns — the *same* relabelling in every period; $t$ is never moved |
 | Repeated **independent** observations per cell | `mwperm_layout()` | $\varepsilon_{ijl} = \eta_{ij} + u_{ijl}$, with $\eta_{ij}$ **arbitrary** | the replicates $l$ inside each cell, drawn independently per cell |
 | Repeated observations per cell, but they are **time periods**, or `d` is constant within a cell | `mwperm_irregular()` | $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$, with $\zeta_l$ **arbitrary**, and which cells clear $L_0$ not depending on $y$ | whole cells, across rows and columns; the within-cell slot $l$ is never moved |
+| Two dimensions over time, but the array has **holes** | `mwperm_panel_missing()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary**, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns within each fully observed block, the same relabelling in every period; $t$ is never moved |
 | Two dimensions with **missing cells** | `mwperm_missing()` | $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns *within* each fully observed block |
 | Not sure | `mwperm()` or `mwperm_check()` | — | detects the structure and tells you |
 
@@ -203,7 +209,7 @@ invariance below, which each of them implies.
 
 ### The invariance each design needs
 
-All six designs test the same null in the same regression (Guo et al., 2026,
+All seven designs test the same null in the same regression (Guo et al., 2026,
 Eq. 12)
 
 $$y_{ijl} = x_{ijl}^{\top}\gamma + d_{ijl}^{\top}\beta + \varepsilon_{ijl},
@@ -260,19 +266,42 @@ effect $\zeta_l$ falls outside this argument, because the independent per-cell
 permutations change its alignment across cells. Use `mwperm_irregular()`.
 
 **`mwperm_irregular()` — §6.4.** Condition InvB applied blockwise, with the
-within-cell slot playing time's role. Form the mask
-$M_{ij} = \mathbf{1}(\ell_{ij} \ge L_0)$, find disjoint fully observed
-blocks under it, trim every retained cell to exactly $L_0$ observations, then
-require, within each block $I_q \times J_q$ and with the same $(\pi, \sigma)$
-in every slot,
+within-cell level $l$ (the `rep` argument: a period, a wave) playing time's
+role. Choose, from the observation pattern alone, a common set $S$ of $L_0$
+levels — the $L_0$ levels jointly observed by the most cells — form the mask
+$M_{ij} = \mathbf{1}(\text{cell } (i,j) \text{ observes every } l \in S)$,
+find disjoint fully observed blocks under it, keep in every retained cell
+exactly the observations at the levels in $S$, then require, within each block
+$I_q \times J_q$ and with the same $(\pi, \sigma)$ at every level,
 
 $$(\varepsilon_{ijl})_{i \in I_q, j \in J_q} \overset{d}{=}
 (\varepsilon_{\pi(i)\sigma(j)l})_{i \in I_q, j \in J_q}
 \mid \mathbf{X}, \mathbf{D}.$$
 
-An arbitrary slot effect shared across cells is permitted, which is the whole
-point. It also needs the mask condition below: which cells clear $L_0$ must not
-depend on the outcomes.
+An arbitrary level effect shared across cells is permitted, which is the whole
+point: the permutation never moves an observation to a different $l$. (The
+paper's printed step (i) masks on the cell count and drops observations at
+random, which does not keep $l$ aligned across cells; see `?mwperm_irregular`.)
+It also needs the mask condition below: which cells observe $S$ must not depend
+on the outcomes.
+
+**`mwperm_panel_missing()` — §6.2 blockwise, under §5.** An incomplete panel:
+the mask keeps the pairs observed in *every* period,
+$M_{ij} = \mathbf{1}(\text{pair } (i,j) \text{ observed in all } T)$, the
+biclique search cuts it into disjoint fully observed blocks, and within each
+block $I_q \times J_q$ condition InvB is required with the same
+$(\pi, \sigma)$ in every period:
+
+$$(\varepsilon_{ijt})_{i \in I_q, j \in J_q} \overset{d}{=}
+(\varepsilon_{\pi(i)\sigma(j)t})_{i \in I_q, j \in J_q}
+\mid \mathbf{X}, \mathbf{D}.$$
+
+Plus Assumption 4 on the mask, below. Nothing is assumed across $t$, so the
+trend and any serial correlation are free, exactly as in `mwperm_panel()`. On a
+complete array the mask is all ones and the construction *is* `mwperm_panel()`'s:
+given the same row and column groups the two build identical permutations,
+which the test suite checks directly. (They draw those groups at different
+sub-seed offsets, so the same `seed` gives different, equally valid, draws.)
 
 **`mwperm_missing()` — §5.** Cell $(i, j)$ is observed iff $M_{ij} = 1$, and
 Assumption 4 requires
@@ -287,15 +316,18 @@ the blocks are discarded, and the fit reports how many.
 ### Still unsure? Four questions
 
 1. **Is one of your indices time, or otherwise ordered?** Then it must never be
-   permuted. One observation per $(i, j, t)$ → `mwperm_panel()`; several
-   observations per $(i, j)$ that are really periods → `mwperm_irregular()`.
+   permuted. One observation per $(i, j, t)$ and a complete array →
+   `mwperm_panel()`; the same with holes in it → `mwperm_panel_missing()`;
+   several observations per $(i, j)$ that are really periods →
+   `mwperm_irregular()`.
 2. **Do you have more than one observation per $(i, j)$ cell?**
    `mwperm_layout()` if they are exchangeable replicates;
    `mwperm_irregular()` if they are periods, or if `d` is constant within a
    cell — within-cell permutation then has *no power*, because residualizing
    removes all of `d`'s variation.
-3. **Are cells missing?** `mwperm_missing()`. It is not an error path; it is a
-   different, valid procedure that trades discarded cells for exactness.
+3. **Are cells missing?** `mwperm_missing()` without a time dimension,
+   `mwperm_panel_missing()` with one. Neither is an error path; both are
+   different, valid procedures that trade discarded cells for exactness.
 4. **Otherwise:** `mwperm_dyadic()` for two indices, `mwperm_threeway()` for
    three genuinely exchangeable ones.
 
@@ -319,6 +351,7 @@ diagnosis and the attainable resolution, and computes nothing.
 | Two-way / dyadic clustering | `mwperm_dyadic()` |
 | Three-way clustering | `mwperm_threeway()` |
 | Panel (two-way + arbitrary time trend) | `mwperm_panel()` |
+| Incomplete or unbalanced panel | `mwperm_panel_missing()` |
 | Replicated two-way layout (`L0=` to balance) | `mwperm_layout()` |
 | Irregular layout: repeats are periods, or `d` is cell-level | `mwperm_irregular()` |
 | Incomplete array (missing cells) | `mwperm_missing()` |
@@ -538,7 +571,8 @@ Detected design: panel ('year' identified as time by name)
   -> running mwperm_panel(y, d, x, row = importer, col = exporter, time = year, time_fe = TRUE)
 ...
 Permutations : K = 21  (group order 22, 10 reps)
-Resolution   : p-values are multiples of 1/22 = 0.045
+Resolution   : p-values are multiples of 1/22 = 0.045 per rep; reported floor 0.045
+               the median of 10 reps can fall between grid points
 
   fta          OLS estimate = 0.6774   95% IPT CI [0.442, 0.8803]
 
@@ -554,17 +588,30 @@ $\ell_{ij}\ge L_0$ and uniformly downsamples each to exactly $L_0$ replicates
 Section 6.4 of the paper, not Section 6.3; `mwperm_layout()` uses it to balance
 the array and then runs the Section 6.3 within-cell test.
 
-**Irregular layouts** (`mwperm_irregular()`) are the actual Section 6.4
-procedure, and cover the two cases where within-cell permutation fails: the
-replication index is really *time* (so within-cell permutation is **invalid**),
-or $d_{ijl}$ is constant within each cell (so it has **no power**). It forms
-the mask $M_{ij} = 1\lbrace \ell_{ij} \ge L_0 \rbrace$, runs the biclique
-search on $M$, reduces each retained cell to exactly $L_0$ observations at
-random, and then applies Procedure 2 *across* cells with the within-cell slot
-held fixed — cell $(i,j)$ slot $l$ maps to cell $(\pi(i),\sigma(j))$ slot $l$,
-the same device the panel test uses for time. It therefore needs
-exchangeability across $(i,j)$ within each slot, not within-cell
-exchangeability.
+**Incomplete panels** (`mwperm_panel_missing()`) combine the two: the mask
+keeps the (i, j) pairs observed in every period, the biclique search cuts it
+into disjoint fully observed blocks, and Procedure 2 runs inside each with the
+period held fixed. `mwperm_panel()` refuses an incomplete array outright, and
+its error now says so. What it costs is cells: a pair observed in five of six
+years is dropped whole, and a block has to be complete in both margins, so
+thinning a handful of pairs can cost a large share of the array — the fit
+reports exactly how much. Dropping the sparsest *periods* before calling is
+often the better trade.
+
+**Irregular layouts** (`mwperm_irregular()`) are the Section 6.4 procedure,
+and cover the two cases where within-cell permutation fails: the replication
+index is really *time* (so within-cell permutation is **invalid**), or
+$d_{ijl}$ is constant within each cell (so it has **no power**). It chooses a
+common set $S$ of $L_0$ within-cell levels from the observation pattern, forms
+the mask $M_{ij} = 1\lbrace \text{cell } (i,j) \text{ observes every level in }
+S \rbrace$, runs the biclique search on $M$, keeps in each retained cell
+exactly the observations at the levels in $S$, and then applies Procedure 2
+*across* cells with the level held fixed — cell $(i,j)$ level $l$ maps to cell
+$(\pi(i),\sigma(j))$ level $l$, the same device the panel test uses for time.
+It therefore needs exchangeability across $(i,j)$ within each level, not
+within-cell exchangeability. With `rep = NULL` the levels are the order of
+appearance within the cell and the mask is the paper's
+$1\lbrace \ell_{ij} \ge L_0 \rbrace$.
 
 ## Missing cells
 

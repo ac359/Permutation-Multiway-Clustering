@@ -37,16 +37,18 @@ intercept is always added internally. May be \code{NULL}.}
 
 \item{row, col}{Cell identifiers along the two layout dimensions.}
 
-\item{rep}{Optional within-cell index (the replication or period
-identifier). It fixes which slot each observation occupies, and hence
-which observations are aligned across cells; when \code{NULL}, order of
-appearance within the cell is used. Supply it when the within-cell index
-means something -- a period, a wave -- so that slot l is the same period in
-every cell.}
+\item{rep}{Optional within-cell index (the period or wave identifier). It
+is the index the permutation holds fixed: cell (i, j) level s maps to
+cell (pi(i), sigma(j)) level s, and a cell is retained only if it
+observes every level in the common set S, which is what makes level s
+the same period in every cell. It must be unique within a cell. When
+\code{NULL}, order of appearance within the cell is used, and the mask reduces
+to the printed 1\{ell_ij >= L0\}.}
 
-\item{L0}{Integer threshold, at least 2: cells with fewer than \code{L0}
-observations are masked out, and every retained cell is reduced to exactly
-\code{L0}. Required.}
+\item{L0}{Integer, at least 2: the number of \code{rep} levels retained per
+cell. A common set S of L0 levels is chosen from the observation pattern,
+cells that do not observe every level in S are masked out, and every
+retained cell is cut to exactly those L0 observations. Required.}
 
 \item{K}{Number of non-identity permutations; defaults to the smallest block
 side over the selected blocks -- that is, the smallest of |I_q| and |J_q|
@@ -131,7 +133,8 @@ with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 }
 \value{
 An object of class \code{"mwperm"}, with the extra fields
-  \code{n_blocks}, \code{cells_used}, \code{cells_total} and \code{L0}.
+  \code{n_blocks}, \code{cells_used}, \code{cells_total}, \code{L0} and
+  \code{rep_levels} (the labels of the L0 retained levels).
   \code{estimate}/\code{se_naive} are the OLS estimate and naive SE on the
   retained data, \code{conf_int}/\code{conf_set} (or
   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
@@ -161,21 +164,44 @@ In both cases the fix is to permute the \emph{cells}, across i and j,
 exactly as \code{\link{mwperm_dyadic}} does -- which needs equal cell sizes
 and a complete array, neither of which an irregular layout has. Section 6.4
 obtains both by combining the missing-data machinery of Procedure 2 with the
-panel construction:
+panel construction of Case (B):
 \enumerate{
-  \item form the cell sizes ell_ij and, for a threshold L0, the mask
-    M_ij = 1 if ell_ij >= L0, and 0 otherwise;
+  \item record, for every cell, the set of \code{rep} levels it observes (its
+    order of appearance when \code{rep} is \code{NULL}), and choose from that
+    pattern alone a common set S of L0 levels -- the L0 levels jointly
+    observed by the most cells, built up greedily with ties going to the
+    lower level. The mask is M_ij = 1 if cell (i, j) observes every level in
+    S, and 0 otherwise;
   \item run the biclique search (\code{\link{find_bicliques}}, Algorithm 2)
     on that mask to obtain disjoint fully observed blocks I_q by J_q;
-  \item inside each selected block, discard ell_ij - L0 observations from
-    each cell uniformly at random, leaving exactly L0 everywhere;
+  \item inside each selected block, keep exactly the observations at the
+    levels in S, so every retained cell holds the same L0 levels and nothing
+    else;
   \item apply Procedure 2 to what remains: a row group on I_q and a column
-    group on J_q per block, of common order K + 1, applied identically across
-    the L0 within-cell slots, so cell (i, j) slot l maps to cell
-    (pi(i), sigma(j)) slot l.
+    group on J_q per block, of common order K + 1, applied identically at
+    every level, so cell (i, j) level s maps to cell (pi(i), sigma(j))
+    level s.
 }
-Holding the slot fixed is the same device \code{\link{mwperm_panel}} uses
-for time, and it is what makes the test valid when l indexes periods.
+Holding the level fixed is the same device \code{\link{mwperm_panel}} uses
+for time, and it is what makes the test valid when the within-cell index is
+a period.
+}
+\section{Departure from the printed step (i)}{
+
+Section 6.4 as printed masks on the cell \emph{count}, M_ij = 1 if
+ell_ij >= L0, and then drops ell_ij - L0 observations from each retained
+cell at random. That leaves every cell with L0 observations but says nothing
+about \emph{which} L0: after independent per-cell draws, the l-th survivor is
+one period in one cell and a different period in the next, and the index the
+permutation then holds fixed is no longer the t of condition InvB. With a
+covariate that varies within cells and any common period effect in the
+errors, that test is not valid (empirical size near 1 at nominal 0.05 in this
+package's own simulations). Section 6.4 is defined as Section 5 combined with
+Case (B), whose invariance carries the \emph{same} t on both sides, so this
+function retains a common level set instead. When every cell observes the
+levels 1..ell_ij in order -- \code{rep = NULL} -- the common set is
+\code{{1, ..., L0}} and the mask reduces exactly to the printed
+1\{ell_ij >= L0\}, with the first L0 observations of each cell kept.
 }
 \section{Assumptions}{
 
@@ -188,11 +214,14 @@ for every slot l, the errors in a block satisfy
 
 with the \emph{same} (pi, sigma) used in every slot -- invariance (InvB) of
 Section 6.2, applied blockwise. That is required together with Assumption 4
-on the mask: the missingness pattern (here, which cells clear the L0
-threshold) is independent of the errors given the covariates. Under those two
-conditions the p-value is exact in finite samples by the argument of Theorem
-4. Arbitrary slot effects shared across cells -- an arbitrary common time
-trend -- are permitted, which is the whole point.
+on the mask: the missingness pattern (here, which cells observe the common
+level set S) is independent of the errors given the covariates. Under those
+two conditions the p-value is exact in finite samples by the argument of
+Theorem 4. Arbitrary slot effects shared across cells -- an arbitrary common
+time trend -- are permitted, which is the whole point: every retained
+observation keeps its \code{rep} level under every permutation, so a level
+effect zeta_l is carried along unchanged, exactly as the period effect is in
+\code{\link{mwperm_panel}}.
 }
 
 \section{Choosing L0}{
@@ -202,19 +231,22 @@ mask (so larger blocks, larger K, finer p-value resolution) but throws away
 more observations per cell; a large L0 keeps deeper cells but fewer of
 them. The paper recommends tuning it by grid
 search to minimise the loss of observations. There is no free lunch in
-choosing it from the data on the \emph{outcome}; select it from the cell
-sizes alone, which are ancillary under Assumption 4. The \code{note} field of
-the fitted object reports how many cells and observations survived.
+choosing it from the data on the \emph{outcome}; select it from the
+observation pattern alone, which is ancillary under Assumption 4. The common
+level set S is chosen the same way, from the pattern of which cell observes
+which level and nothing else; which levels it picks affects power, never
+validity. To dictate the levels yourself, subset the data to the levels you
+want and set \code{L0} to their number: S is then exactly that set. The
+\code{note} field and the \code{rep_levels} field of the fitted object report
+which levels, cells and observations survived.
 }
 
 \section{Reproducibility}{
 
-Step (iii) deletes observations at random. That draw is taken \strong{once},
-from \code{seed}, before the permutation loop, so the \code{n_reps}
-repetitions average over the permutation-group draw but not over the
-subsample. To average over the subsample as well -- as Section B of the paper
-does -- run the test under several seeds and take the median p-value across
-those runs.
+The retained observations are a deterministic function of the observation
+pattern and \code{L0}; nothing is subsampled at random. The only randomness
+is the permutation group, so \code{seed} governs the fit exactly as it does
+in \code{\link{mwperm_missing}}.
 }
 
 \examples{

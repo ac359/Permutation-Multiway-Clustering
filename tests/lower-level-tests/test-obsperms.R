@@ -103,4 +103,68 @@ msg <- tryCatch({
 }, error = function(e) conditionMessage(e))
 stopifnot(!is.na(msg), grepl("unobserved", msg))
 
+## ---- 7. the position-table and match() branches are the same map ---------
+## Both builders translate permuted cell codes back to observation indices
+## either through a position table over the whole mixed-radix index space
+## (fast, but that space can be enormous for sparse ids) or through match().
+## The branch is chosen by size alone and must never change a gather vector;
+## `pos_table` forces each branch so the equivalence is asserted, not assumed.
+## Dyadic, dense ids: both branches, and the automatic choice, agree.
+grp <- list(build_perm_set(6, K, seed = 1), build_perm_set(6, K, seed = 2))
+stopifnot(identical(bop(co, grp, pos_table = TRUE),
+                    bop(co, grp, pos_table = FALSE)),
+          identical(bop(co, grp), Od))
+## Panel keying (a held-fixed third digit) through both branches too.
+gp <- expand.grid(i = 1:5, j = 1:5, t = 1:3)
+cop <- cbind(gp$i, gp$j, gp$t)
+gsp <- list(build_perm_set(5, K, seed = 3), build_perm_set(5, K, seed = 4),
+            NULL)
+stopifnot(identical(bop(cop, gsp, pos_table = TRUE),
+                    bop(cop, gsp, pos_table = FALSE)),
+          identical(bop(cop, gsp), bop(cop, gsp, pos_table = TRUE)))
+## The gate itself: a complete array always has n_cells == N, so the table is
+## taken unless the array has more than 2^24 cells; a block design over sparse
+## global ids can have an index space far larger than the retained data, and
+## then match() is used.
+upt <- mwperm:::.use_pos_table
+stopifnot(upt(1600, 1600), upt(2^24, 2^24), !upt(2^24 + 1, 2^24 + 1),
+          upt(64 * 100, 100), !upt(64 * 100 + 1, 100))
+## The block builder: same contract, both branches forced.
+stopifnot(identical(mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks, ri = ri_k, ci = ci_k, blk = blk_k,
+                      lrow = lrow_k, lcol = lcol_k, pos_table = TRUE),
+                    mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks, ri = ri_k, ci = ci_k, blk = blk_k,
+                      lrow = lrow_k, lcol = lcol_k, pos_table = FALSE)),
+          identical(mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks, ri = ri_k, ci = ci_k, blk = blk_k,
+                      lrow = lrow_k, lcol = lcol_k), Om))
+## and with a slot (the irregular / incomplete-panel keying)
+sl <- rep(1:2, each = nrow(gg))
+stopifnot(identical(mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks, ri = rep(ri_k, 2), ci = rep(ci_k, 2),
+                      blk = rep(blk_k, 2), lrow = rep(lrow_k, 2),
+                      lcol = rep(lcol_k, 2), slot = sl, pos_table = TRUE),
+                    mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks, ri = rep(ri_k, 2), ci = rep(ci_k, 2),
+                      blk = rep(blk_k, 2), lrow = rep(lrow_k, 2),
+                      lcol = rep(lcol_k, 2), slot = sl, pos_table = FALSE)))
+## Sparse global ids: the same two 4 x 4 blocks placed at ids near 1 and near
+## 5000, so the index space is 25 million cells for 32 observations. The
+## automatic choice must be match(), and its output must equal the forced
+## table branch on the DENSE relabelling of the same design (the block-local
+## structure, and hence the gather vectors, are identical by construction).
+big <- c(1:4, 4997:5000)
+blocks_sp <- list(list(rows = big[1:4], cols = big[1:4]),
+                  list(rows = big[5:8], cols = big[5:8]))
+O_sp <- mwperm:::.build_obs_perms_blocks(1L, K, blocks_sp, ri = big[ri_k],
+                                         ci = big[ci_k], blk = blk_k,
+                                         lrow = lrow_k, lcol = lcol_k)
+stopifnot(!upt(5000 * 5000, nrow(gg)),
+          identical(O_sp, mwperm:::.build_obs_perms_blocks(
+                      1L, K, blocks_sp, ri = big[ri_k], ci = big[ci_k],
+                      blk = blk_k, lrow = lrow_k, lcol = lcol_k,
+                      pos_table = FALSE)),
+          identical(O_sp, Om))
+
 passed("test-obsperms.R")

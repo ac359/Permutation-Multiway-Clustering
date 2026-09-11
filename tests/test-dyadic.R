@@ -108,6 +108,23 @@ stopifnot(grepl("mwperm_layout",
                 msg_of(mwperm_dyadic(c(y6, y6), c(d6, d6), row = c(g6$i, g6$i),
                                      col = c(g6$j, g6$j)))))
 
+## An INCOMPLETE array is refused up front, from the cell count, before any
+## permutation is drawn. Catching it inside the gather-vector builder (when a
+## draw happens to reach an unobserved cell) is in principle draw-dependent: a
+## group that mapped the observed set onto itself would slip through and run on
+## a non-rectangular design with K set from the full id range.
+g_inc <- g6[g6$i != g6$j, ]                        # diagonal deleted
+for (sd in 1:5) {
+  m_inc <- msg_of(mwperm_dyadic(y6[g6$i != g6$j], d6[g6$i != g6$j],
+                                row = g_inc$i, col = g_inc$j, seed = sd,
+                                n_reps = 1, conf_int = FALSE))
+  stopifnot(!is.na(m_inc), grepl("complete", m_inc, fixed = TRUE),
+            grepl("expected 36", m_inc, fixed = TRUE),
+            grepl("found 30", m_inc, fixed = TRUE),
+            grepl("mwperm_missing()", m_inc, fixed = TRUE),
+            !grepl("Permutation maps", m_inc, fixed = TRUE))
+}
+
 ## ---- 5. the coefficient name follows the supplied column ------------------
 stopifnot(identical(fit$d_names, "log_dist"))
 f_nm <- mwperm_dyadic(y6, cbind(treat = d6), row = g6$i, col = g6$j, seed = 1,
