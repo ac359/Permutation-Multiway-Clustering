@@ -19,6 +19,7 @@ mwperm_panel(
   seed = NULL,
   grid = NULL,
   time_fe = TRUE,
+  aggregate = c("median", "median2"),
   n_cores = 1L
 )
 }
@@ -26,10 +27,10 @@ mwperm_panel(
 \item{y}{Numeric outcome vector, one entry per observed cell.}
 
 \item{d}{Numeric vector or matrix of the covariate(s) of interest
-\eqn{d_{ijt}} (may be time-varying). With a single covariate a confidence
+d_ijt (may be time-varying). With a single covariate a confidence
 interval is produced; with several, a joint confidence region.}
 
-\item{x}{Optional nuisance covariates \eqn{x_{ijt}}; intercept added
+\item{x}{Optional nuisance covariates x_ijt; intercept added
 internally. May be \code{NULL}.}
 
 \item{row, col}{Row- and column-cluster identifiers (length = number of
@@ -43,7 +44,7 @@ observations).}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -61,7 +62,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -71,9 +72,35 @@ one numeric vector per covariate defining the region search grid.}
 \item{time_fe}{Logical; if \code{TRUE} (the default) time fixed effects are
 added to the nuisance design. Under condition InvB this is valid (the time
 dummies are invariant to the within-period permutation) and it removes the
-time trend \eqn{\zeta_t} from the residuals, which de-biases the reported
+time trend zeta_t from the residuals, which de-biases the reported
 point estimate and sharpens the test when treatment timing is correlated
 with the period.}
+
+\item{aggregate}{
+How the \code{n_reps} per-repetition p-values are combined into the reported
+p-value, and into the confidence set that inverts it. \code{"median"} (the
+default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
+(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+
+The choice decides what "exact" covers. Theorem 1 gives finite-sample
+validity for a single random permutation group, so at \code{n_reps = 1} the
+p-value is exact as stated. The median of several dependent randomised
+p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+behaved in practice, but not itself guaranteed valid at level \code{alpha}.
+Twice the median is guaranteed, under arbitrary dependence across
+repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+
+So use \code{"median2"} when the guarantee must hold as stated with
+\code{n_reps > 1}. It is conservative: it never rejects where
+\code{"median"} would not, and its confidence set is never narrower. The
+default is unchanged, so existing numbers stand.
+
+The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
+so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
+and rejecting at level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at
+\code{alpha = 0.05} that is 40 levels in the smallest permuted dimension,
+twice what \code{"median"} needs. Below that the p-value is still exact but
+cannot reach \code{alpha}, and the fit says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -94,34 +121,45 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} in the panel model
-\deqn{y_{ijt} = x_{ijt}^\top \gamma + d_{ijt}^\top \beta +
-  \varepsilon_{ijt},}
-where \eqn{i, j} index two cross-sectional clustering dimensions (e.g.
-importer and exporter countries) and \eqn{t} indexes time. Full three-way
+Finite-sample valid test of H0: beta = b in the panel model
+
+\preformatted{  y_ijt = x_ijt' gamma + d_ijt' beta + eps_ijt}
+
+where i, j index two cross-sectional clustering dimensions (e.g.
+importer and exporter countries) and t indexes time. Full three-way
 exchangeability is implausible because errors are typically autocorrelated
 over time. Instead this test only assumes exchangeability across the first
 two dimensions \emph{within} each time period (condition InvB of Guo, Toulis
 and Wang, 2026),
-\deqn{(\varepsilon_{ijt})_{i,j} \;{\buildrel d \over =}\;
-       (\varepsilon_{\pi(i)\sigma(j)t})_{i,j} \mid X, D,}
-which holds, for instance, under \eqn{\varepsilon_{ijt} = \eta_i + \xi_j +
-\zeta_t + u_{ijt}} with an \emph{arbitrary} time trend \eqn{\zeta_t}. The
+
+\preformatted{  (eps_ijt) has the same distribution as
+    (eps_pi(i),sigma(j),t), for every row permutation pi and column
+    permutation sigma, conditional on X and D, with t held fixed}
+
+which holds, for instance, under eps_ijt = eta_i + xi_j + zeta_t + u_ijt with an \emph{arbitrary} time trend zeta_t. The
 same row/column permutation is applied in every period, so any unknown time
 effect is held fixed and partialled out. This is, to the authors' knowledge,
-the first finite-sample valid test for \eqn{\beta = 0} under exchangeable
+the first finite-sample valid test for beta = 0 under exchangeable
 errors in such panel models.
 }
 \details{
-The data must form a complete balanced array: every \eqn{(i, j, t)} cell
+The data must form a complete balanced array: every (i, j, t) cell
 present exactly once.
 
 A feasibility note for long panels: the engine requires \code{N > 2p}
-(with \eqn{p} the number of nuisance columns including the intercept and,
+(with p the number of nuisance columns including the intercept and,
 with \code{time_fe = TRUE}, the time dummies). This matches the premise of
-the validity theorem and is slightly conservative here -- because time is
-held fixed, the time dummies are duplicated between the design and its
-permuted copy, so the stacked projection's true rank is below \eqn{2p}.
+the validity theorem and is conservative here. The projection is onto the
+orthogonal complement of the column space of \code{[X | X_k]}, where
+\code{X_k} is the permuted copy of \code{X}, so its dimension is
+\code{N - rank([X | X_k])}, not the \code{N - 2p} of the paper's
+full-rank statement: the intercept is
+permutation-invariant in every design, and here the time dummies are too
+(time is held fixed), so the stack is rank-deficient by construction and the
+projection retains \emph{more} dimensions than \code{N - 2p}. That is the
+correct reading -- \code{N - 2p} is not well defined when the stack is rank
+deficient -- and it is why \code{time_fe = TRUE} costs far less than its
+column count suggests.
 }
 \examples{
 data(trade_panel)

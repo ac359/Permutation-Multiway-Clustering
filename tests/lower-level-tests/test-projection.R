@@ -8,7 +8,14 @@
 ## the residualized quantities lose relative precision as the angle closes, so
 ## any tolerance-based assertion would be a test of the fixture rather than of
 ## the code. The exactly-degenerate case IS covered, in test-edgecases.R.
+##
+## Lower-level test (tests/lower-level-tests/): it exercises the machinery
+## beneath the front ends, mostly through package internals, so it must run
+## against a FRESHLY INSTALLED copy -- mwperm::: resolves against the
+## installed package, never against a source()d working tree.
 library(mwperm)
+source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
+       else file.path("tests", "helpers", "assertions.R"))
 
 ## --- independent references (no shared code with R/'s statistic path) --------
 ## orthonormal complement of col(M) from a rank-revealing QR (V' M = 0)
@@ -46,7 +53,7 @@ dyadic_perms <- function(n, K, s) mwperm:::.build_obs_perms(
   as.matrix(expand.grid(i = seq_len(n), j = seq_len(n))),
   list(build_perm_set(n, K, seed = s), build_perm_set(n, K, seed = s + 100L)))
 
-## ---- 1. Eq. (3): V_k' X = 0 and V_k' X_k = 0 (FWL orthogonality) ------------
+## ---- 1. Eq. (3): V_k' X = 0 and V_k' X_k = 0 (FWL orthogonality) ----------
 ## The package residualizes via qr.resid(qr([X|X_g]), .); the residuals must be
 ## orthogonal to BOTH X and the permuted X_g, for y, permuted y, D and permuted
 ## D.
@@ -70,8 +77,7 @@ for (k in seq_len(K)) {
   }
 }
 
-## ---- 2. rank-deficient [X|X_g] handled exactly (duplicated intercept etc.)
-## ---
+## ---- 2. rank-deficient [X|X_g] handled exactly ----------------------------
 ## The stacked design ALWAYS duplicates the intercept, and panel time dummies
 ## are
 ## permutation-invariant too. The pivoted qr.resid must give the SAME residuals
@@ -97,7 +103,7 @@ for (d in 1:2) {
   }
 }
 
-## ---- 4. oracle equivalence over many random designs (fast subset) -----------
+## ---- 4. oracle equivalence over many random designs (fast subset) ---------
 ## A fast subset sized to run under R CMD check. The same comparison has been
 ## run over 200 random designs off-line; nothing here depends on that, and
 ## widening `ncheck` below reproduces it at proportionate cost.
@@ -126,4 +132,4 @@ for (t in 1:20) {
 }
 stopifnot(ncheck == 40L)
 
-cat("test-projection.R: all assertions passed\n")
+passed("test-projection.R")

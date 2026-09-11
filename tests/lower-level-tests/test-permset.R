@@ -1,9 +1,14 @@
 ## build_perm_set() is Algorithm 1 (GTW 2026): a random block-cyclic
 ## permutation group. These are EXACT invariants (machine precision /
 ## identical) -- the class of bug Monte Carlo will not reliably surface.
-## Base-R stopifnot so it
-## ships and runs under R CMD check without a testthat dependency.
+##
+## Lower-level test (tests/lower-level-tests/): it exercises the machinery
+## beneath the front ends, mostly through package internals, so it must run
+## against a FRESHLY INSTALLED copy -- mwperm::: resolves against the
+## installed package, never against a source()d working tree.
 library(mwperm)
+source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
+       else file.path("tests", "helpers", "assertions.R"))
 
 ## composition of image vectors: (a o b)(i) = a[b[i]]
 compose <- function(a, b) a[b]
@@ -12,7 +17,7 @@ compose <- function(a, b) a[b]
 cfg_nK <- function(cfg)
   list(n = as.integer(cfg[["n"]]), K = as.integer(cfg[["K"]]))
 
-## ---- 1. each element is a bijection of 1:n; element 1 is the identity -------
+## ---- 1. each element is a bijection of 1:n; element 1 is the identity -----
 for (cfg in list(list(n = 12, K = 3), list(n = 8, K = 7), list(n = 25,
                                                                K = 4))) {
   p <- cfg_nK(cfg)
@@ -25,7 +30,7 @@ for (cfg in list(list(n = 12, K = 3), list(n = 8, K = 7), list(n = 25,
   stopifnot(identical(attr(G, "block_size"), K + 1L))
 }
 
-## ---- 2. closure: the WHOLE point (Proposition 2 / brief H4) -----------------
+## ---- 2. closure: the WHOLE point (Proposition 2 / brief H4) ---------------
 ## Build the full (K+1)x(K+1) composition table; every composite must be the
 ## group element indexed by (r + s) mod (K+1). Equivalently g_k = g_1^k (cyclic,
 ## one generator) -- the property Theorem 1's proof relies on.
@@ -46,8 +51,7 @@ for (cfg in list(list(n = 12, K = 3), list(n = 20, K = 4), list(n = 9,
   }
 }
 
-## ---- 3. remainder handling (brief H4): leftover tail is fixed, no interior FP
-## -
+## ---- 3. remainder handling: the leftover tail is fixed --------------------
 ## When n %% (K+1) != 0 the leftover indices cannot be cyclically shifted within
 ## a
 ## short block without breaking closure, so they MUST be fixed points; every
@@ -66,17 +70,12 @@ for (cfg in list(list(n = 10, K = 3), list(n = 7, K = 3), list(n = 25, K = 4),
   stopifnot(length(unique(fp_sets)) == 1L)          # identical fixed set
 }
 
-## ---- 4. input validation: K+1 <= n, K >= 1, n >= 2 --------------------------
-err <- function(e)
-  tryCatch({
-    e
-    NA_character_
-  }, error = function(x) conditionMessage(x))
-stopifnot(!is.na(err(build_perm_set(5, 5))))     # K + 1 = 6 > n = 5
-stopifnot(!is.na(err(build_perm_set(5, 0))))     # K < 1
-stopifnot(!is.na(err(build_perm_set(1, 1))))     # n < 2
+## ---- 4. input validation: K+1 <= n, K >= 1, n >= 2 ------------------------
+stopifnot(!is.na(msg_of(build_perm_set(5, 5))))     # K + 1 = 6 > n = 5
+stopifnot(!is.na(msg_of(build_perm_set(5, 0))))     # K < 1
+stopifnot(!is.na(msg_of(build_perm_set(1, 1))))     # n < 2
 
-## ---- 5. RNG hygiene: a seeded call leaves .Random.seed byte-identical -------
+## ---- 5. RNG hygiene: a seeded call leaves .Random.seed byte-identical -----
 ## (brief 2.1) test under both RNG kinds, and the case where .Random.seed does
 ## not yet exist.
 for (kind in c("Mersenne-Twister", "L'Ecuyer-CMRG")) {
@@ -93,10 +92,10 @@ if (exists(".Random.seed", envir = .GlobalEnv)) rm(".Random.seed",
 invisible(build_perm_set(30, 5, seed = 1))
 stopifnot(!exists(".Random.seed", envir = .GlobalEnv))
 
-## ---- 6. determinism: same seed -> same group; distinct seeds -> distinct ----
+## ---- 6. determinism: same seed -> same group; distinct seeds -> distinct --
 stopifnot(identical(build_perm_set(40, 6, seed = 2), build_perm_set(40, 6,
                                                                     seed = 2)))
 stopifnot(!identical(build_perm_set(40, 6, seed = 2), build_perm_set(40, 6,
                                                                      seed = 3)))
 
-cat("test-permset.R: all assertions passed\n")
+passed("test-permset.R")

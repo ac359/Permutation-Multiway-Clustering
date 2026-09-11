@@ -4,16 +4,16 @@
 ## joint-region path, plus the new grid-edge guard, disconnected flag, and
 ## NA / grid-hygiene handling. See NEWS 0.2.0 "Bug fix (changes reported
 ## intervals)". Base-R stopifnot style; fast (T8 is opt-in, see below).
+##
+## Lower-level test (tests/lower-level-tests/): it exercises the machinery
+## beneath the front ends, mostly through package internals, so it must run
+## against a FRESHLY INSTALLED copy -- mwperm::: resolves against the
+## installed package, never against a source()d working tree.
 library(mwperm)
+source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
+       else file.path("tests", "helpers", "assertions.R"))
 
-## ---- helpers ----------------------------------------------------------------
-msg_of <- function(expr)
-  tryCatch({ expr; NA_character_ },
-           error = function(e) conditionMessage(e))
-expect_err <- function(expr, pattern) {
-  m <- msg_of(expr)
-  stopifnot(!is.na(m), grepl(pattern, m, fixed = TRUE))
-}
+## ---- helpers --------------------------------------------------------------
 
 ## Build a faithful per-rep prep_list exactly as mwperm_dyadic would (same
 ## seed scheme: rep r uses seed + r - 1, dims use .sub_seed(., 1:2)), so the
@@ -35,7 +35,7 @@ med_p <- function(pl, b)
   stats::median(vapply(pl, function(pp) mwperm:::.ipt_eval(pp, b)$pvalue,
                        numeric(1)))
 
-## ---- Fixture A: a borderline dyadic design ----------------------------------
+## ---- Fixture A: a borderline dyadic design --------------------------------
 ## The effect is tuned so H0: beta = 0 sits right on the rejection boundary:
 ## a majority of reps reject 0 (median p <= alpha) yet a minority accept it,
 ## the exact regime where the union interval and the reported decision can
@@ -54,7 +54,7 @@ alpha <- 0.05
 grid <- seq(-3, 3, by = 0.01)         # fine grid, 0.01 spacing, contains 0
 plA <- build_prep_list(yA, DA, XA, coordsA, nA, nA, KA, seed = 1L, R = 9L)
 
-## ---- T1: deterministic dominance of the aggregation rules -------------------
+## ---- T1: deterministic dominance of the aggregation rules -----------------
 ## median is the tightest de-randomisation; union (= max over reps, the old
 ## behaviour) and median2 (= min(1, 2*median), valid under arbitrary rep
 ## dependence) are both no narrower. Guaranteed because acceptance is monotone
@@ -70,7 +70,7 @@ stopifnot(w_med <= w_un + 1e-9,        # the fix never widens vs the old union
           w_med <= w_m2 + 1e-9)        # median is the tightest of the three
 stopifnot(w_un < w_m2)                 # on this design median2 is the widest
 
-## ---- T2: test / CI coherence (the regression test that matters) -------------
+## ---- T2: test / CI coherence (the regression test that matters) -----------
 ## Reported decision must agree with CI membership: p <= alpha  iff  beta_null
 ## is outside the interval. True under the median (both invert the SAME median
 ## p-value); the old union interval breaks it by inverting the maximum.
@@ -88,10 +88,10 @@ stopifnot(coherent(fitA$conf_int))                 # median: decision == CI
 ## same permutations, union aggregation: 0 lies INSIDE the union interval even
 ## though the reported (median) decision rejects it -> incoherent by design.
 ci_union <- ci_of(plA, grid, alpha, "union")
-stopifnot(ci_union[1] <= 0, ci_union[2] >= 0)      # union keeps 0 (contradiction)
+stopifnot(ci_union[1] <= 0, ci_union[2] >= 0)   # union keeps 0: a contradiction
 stopifnot(!coherent(ci_union))                     # union: decision != CI
 
-## ---- T3: characterise the old pathology (union grows with n_reps) -----------
+## ---- T3: characterise the old pathology (union grows with n_reps) ---------
 ## Under the nested seed scheme reps accumulate, so the union of per-rep
 ## acceptance sets can only grow: union width is monotone non-decreasing in
 ## n_reps (here strictly). The median has no such obligation. Uses the shipped
@@ -116,9 +116,9 @@ stopifnot(wu9 > wu1)                               # strictly, on this data
 ## the median interval does not inflate with n_reps
 wm1 <- width(ci_of(pl1, gridT, 0.05, "median"))
 wm9 <- width(ci_of(pl9, gridT, 0.05, "median"))
-stopifnot(wm9 <= wu9)                              # median never wider than union
+stopifnot(wm9 <= wu9)                        # median never wider than union
 
-## ---- T4: grid-median agrees with default bracketing -------------------------
+## ---- T4: grid-median agrees with default bracketing -----------------------
 ## The two median paths (hull of {b : median_r p_r(b) > alpha} vs median of
 ## per-rep bracketed end points) coincide when each rep's acceptance set is a
 ## single interval; assert agreement to within two grid steps.
@@ -132,7 +132,7 @@ if (!isTRUE(attr(ci_grid_med, "disconnected"))) {
               2 * step + 1e-9)
 }
 
-## ---- T5: grid-edge guard (never a silently finite truncated limit) ----------
+## ---- T5: grid-edge guard (never a silently finite truncated limit) --------
 ## A grid too narrow on the upper side: the acceptance region runs off the top
 ## edge, so the upper limit must be reported as +Inf (the grid does not certify
 ## a finite bound), the lower limit stays finite, and the truncation is flagged.
@@ -143,7 +143,8 @@ stopifnot(is.finite(ci_n[1]), ci_n[1] > 0,         # lower end is interior
 tr <- attr(ci_n, "truncated")
 stopifnot(identical(tr, c(FALSE, TRUE)))
 gl <- attr(ci_n, "grid_limit")
-stopifnot(is.finite(gl[2]), abs(gl[2] - max(narrow)) < 1e-9)   # finite fallback kept
+stopifnot(is.finite(gl[2]),
+          abs(gl[2] - max(narrow)) < 1e-9)       # finite fallback kept
 ## the engine surfaces this as a note on the fitted object
 fit_n <- mwperm_dyadic(yA, dA, row = gA$i, col = gA$j, seed = 1, n_reps = 9L,
                        alpha = alpha, grid = narrow)
@@ -151,9 +152,10 @@ stopifnot(any(grepl("reaches the", fit_n$note)),
           any(grepl("grid", fit_n$note)),
           is.infinite(fit_n$conf_int[2]))
 
-## ---- T6: NA safety (a degenerate rep must not corrupt the interval) ---------
+## ---- T6: NA safety (a degenerate rep must not corrupt the interval) -------
 K6 <- 24L; Kp1 <- 25L
-good6 <- build_prep_list(yA, DA, XA, coordsA, nA, nA, KA, seed = 1L, R = 1L)[[1]]
+good6 <- build_prep_list(yA, DA, XA, coordsA, nA, nA, KA, seed = 1L,
+                         R = 1L)[[1]]
 ## all-NaN prep (fully degenerate): p is NA at every b.
 bad_all <- list(u = matrix(NaN, 1, K6), v = matrix(0, 1, K6),
                 M = array(NaN, c(1, 1, K6)), W = array(0, c(1, 1, K6)),
@@ -172,9 +174,9 @@ stopifnot(is.na(mwperm:::.ipt_eval(bad_iso, 0)$pvalue),
 ci_bad2 <- ci_of(list(good6, bad_iso), grid, alpha, "median")
 stopifnot(!anyNA(ci_bad2))                          # no NA endpoint, no error
 
-## ---- T7: grid hygiene (sort / unique / drop non-finite; length-1 errors) ----
+## ---- T7: grid hygiene (sort / unique / drop non-finite; length-1 errors) --
 clean  <- seq(-1, 1, by = 0.05)
-messy  <- c(Inf, sample(c(clean, clean, -Inf, NaN)))   # unsorted + dup + non-finite
+messy  <- c(Inf, sample(c(clean, clean, -Inf, NaN)))   # unsorted, dup, NaN
 stopifnot(identical(as.numeric(ci_of(plA, clean, alpha, "median")),
                     as.numeric(ci_of(plA, messy, alpha, "median"))))
 expect_err(ci_of(plA, c(0.5), alpha, "median"),
@@ -182,7 +184,7 @@ expect_err(ci_of(plA, c(0.5), alpha, "median"),
 expect_err(ci_of(plA, c(0.5, 0.5, Inf), alpha, "median"),
            "at least two distinct finite values")
 
-## ---- T8: slow coverage simulation (opt-in) ----------------------------------
+## ---- T8: slow coverage simulation (opt-in) --------------------------------
 ## Set MWPERM_SLOW_TESTS=true to run. 500 null replications at nominal 95%:
 ## the median-aggregated grid interval covers >= 0.94, and is narrower on
 ## average than the old union interval.
@@ -208,12 +210,13 @@ if (identical(Sys.getenv("MWPERM_SLOW_TESTS"), "true")) {
     cov_med <- cov_med + in_ci(cm); cov_un <- cov_un + in_ci(cu)
     w_med_s <- w_med_s + width(cm); w_un_s <- w_un_s + width(cu)
   }
-  message(sprintf("T8: coverage median=%.3f union=%.3f ; mean width median=%.3f union=%.3f",
+  message(sprintf(paste("T8: coverage median=%.3f union=%.3f ;",
+                        "mean width median=%.3f union=%.3f"),
                   cov_med / B, cov_un / B, w_med_s / B, w_un_s / B))
-  stopifnot(cov_med / B >= 0.94)              # median interval covers at nominal
+  stopifnot(cov_med / B >= 0.94)             # covers at the nominal level
   stopifnot(w_med_s < w_un_s)                 # and is tighter than the union
 } else {
   message("T8 skipped (set MWPERM_SLOW_TESTS=true to run the coverage sim).")
 }
 
-cat("test-invert-ci-grid.R: all assertions passed\n")
+passed("test-invert-ci-grid.R")

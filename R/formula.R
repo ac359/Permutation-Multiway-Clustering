@@ -5,33 +5,34 @@
 
 #' Formula interface to the invariant permutation test
 #'
-#' Fits \code{\link{mwperm}} from a formula \code{y ~ d | x} (the nuisance
-#' part is optional: \code{y ~ d}): the part between \code{~} and \code{|}
-#' gives the covariate(s) of interest, the part after \code{|} the nuisance
-#' covariates. Both parts are standard formula algebra evaluated by
-#' \code{\link[stats]{model.matrix}} in \code{data}, so transformed terms
-#' (\code{log(z)}, \code{I(z^2)}, factors) work; intercept columns are
-#' stripped (the engine always adds its own). The result is
-#' \emph{identical} to calling \code{\link{mwperm}} -- or the dispatched
-#' design-specific function -- with the same inputs and seed; this wrapper
-#' only assembles the arguments.
+#' Fits [mwperm()] from a formula `y ~ d | x` (the nuisance part is optional:
+#' `y ~ d`): the part between `~` and `|` gives the covariate(s) of interest,
+#' the part after `|` the nuisance covariates. Both parts are standard formula
+#' algebra evaluated by `[stats::model.matrix()]` in `data`, so transformed
+#' terms (`log(z)`, `I(z^2)`, factors) work; intercept columns are stripped
+#' (the engine always adds its own). The result is *identical* to calling
+#' [mwperm()] -- or the dispatched design-specific function -- with the same
+#' inputs and seed; this wrapper only assembles the arguments.
 #'
-#' @param formula A two-sided formula, \code{y ~ d} or \code{y ~ d | x}.
+#' No `na.action` is applied: a missing or non-finite value in any term of
+#' the formula is an error naming the term, never a silently dropped row --
+#' dropping a row would turn a complete array into an incomplete one without
+#' notice. Subset `data` to complete cases first.
+#'
+#' @param formula A two-sided formula, `y ~ d` or `y ~ d | x`.
 #' @param data A data frame in which the formula (and character
-#'   \code{index}/\code{time}/\code{rep}) are evaluated.
+#'   `index`/`time`/`rep`) are evaluated.
 #' @param index The clustering dimensions (2 or 3): a character vector of
-#'   column names in \code{data}, or a data frame / named list of vectors.
-#' @param time,rep Optional role tags (a column name in \code{data}, or a
-#'   vector); see \code{\link{mwperm_check}}.
-#' @param ... Passed on to \code{\link{mwperm}} (\code{design}, \code{K},
-#'   \code{alpha}, \code{beta_null}, \code{conf_int}, \code{n_reps},
-#'   \code{seed}, \code{verbose}, ...).
-#' @return The \code{"mwperm"} object of the dispatched test; see
-#'   \code{\link{mwperm}} for the fields and their provenance.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{mwperm}}; \code{\link{coef.mwperm}} /
-#'   \code{\link{nobs.mwperm}} for accessors.
+#'   column names in `data`, or a data frame / named list of vectors.
+#' @param time,rep Optional role tags (a column name in `data`, or a vector);
+#'   see [mwperm_check()].
+#' @param ... Passed on to [mwperm()] (`design`, `K`, `alpha`, `beta_null`,
+#'   `conf_int`, `n_reps`, `seed`, `verbose`, ...).
+#' @return The `"mwperm"` object of the dispatched test; see [mwperm()] for
+#'   the fields and their provenance.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [mwperm()]; [coef.mwperm()] / [nobs.mwperm()] for accessors.
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
@@ -53,14 +54,43 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
     d_part <- rhs
     x_part <- NULL
   }
+  ## Every row is kept on the way to the engine. model.matrix() would apply
+  ## getOption("na.action") -- na.omit by default -- and drop incomplete rows
+  ## silently, which the package never does: a dropped row turns a complete
+  ## array into an incomplete one with no message, and the outcome (evaluated
+  ## below with no na.action at all) would then be a different length. So the
+  ## model frame is built with na.pass, and missingness is refused here by the
+  ## name of the term that carries it, before any argument name the caller
+  ## never used ("`x`") can appear in a message.
   mm <- function(part) {
     f <- stats::as.formula(call("~", part), env = environment(formula))
-    m <- stats::model.matrix(f, data = data)
+    mf <- stats::model.frame(f, data = data, na.action = stats::na.pass)
+    m <- stats::model.matrix(f, mf)
     m[, colnames(m) != "(Intercept)", drop = FALSE]
   }
   y <- eval(formula[[2L]], data, environment(formula))
   d <- mm(d_part)
   x <- if (is.null(x_part)) NULL else mm(x_part)
+  refuse_na <- function(v, what) {
+    v <- as.matrix(v)
+    bad <- which(!is.finite(v), arr.ind = TRUE)
+    if (!nrow(bad)) return(invisible(NULL))
+    cols <- if (is.null(colnames(v))) what else
+      paste0("`", unique(colnames(v)[bad[, 2L]]), "`", collapse = ", ")
+    rows <- sort(unique(bad[, 1L]))
+    stop(sprintf(paste0("%s contains missing or non-finite values (NA/NaN/",
+                        "Inf) in %d row%s (first: %s); mwperm requires ",
+                        "complete data and never drops rows silently. ",
+                        "Subset `data` to complete cases of the variables ",
+                        "in the formula first."),
+                 cols, length(rows), if (length(rows) == 1L) "" else "s",
+                 paste(rows[seq_len(min(5L, length(rows)))],
+                       collapse = ", ")),
+         call. = FALSE)
+  }
+  refuse_na(y, paste0("`", deparse(formula[[2L]]), "`"))
+  refuse_na(d, "the covariate(s) of interest")
+  if (!is.null(x)) refuse_na(x, "the nuisance covariate(s)")
   idx <- if (is.character(index)) data[index] else as.data.frame(index)
   tv  <- if (is.character(time) && length(time) == 1L) data[[time]] else time
   rv  <- if (is.character(rep)  && length(rep)  == 1L) data[[rep]]  else rep
@@ -69,19 +99,18 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
 
 #' Accessors for mwperm fits
 #'
-#' \code{coef()} returns the \emph{OLS} point estimate(s), named by
-#' coefficient -- the same provenance as the printed \code{"OLS estimate"};
-#' the inferential quantity is the IPT confidence set, see
-#' \code{\link{confint.mwperm}}. \code{nobs()} returns the number of
-#' observations the fit used (for \code{\link{mwperm_missing}}, the cells
+#' `coef()` returns the *OLS* point estimate(s), named by coefficient -- the
+#' same provenance as the printed `"OLS estimate"`; the inferential quantity
+#' is the IPT confidence set, see [confint.mwperm()]. `nobs()` returns the
+#' number of observations the fit used (for [mwperm_missing()], the cells
 #' inside the selected blocks).
 #'
-#' @param object An object of class \code{"mwperm"}.
+#' @param object An object of class `"mwperm"`.
 #' @param ... Ignored.
-#' @return \code{coef()}: a named numeric vector; \code{nobs()}: an integer.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data. arXiv:2601.08610.
-#' @seealso \code{\link{confint.mwperm}}, \code{\link{summary.mwperm}}.
+#' @return `coef()`: a named numeric vector; `nobs()`: an integer.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. arXiv:2601.08610.
+#' @seealso [confint.mwperm()], [summary.mwperm()].
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,

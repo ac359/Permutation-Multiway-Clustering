@@ -17,7 +17,7 @@
 ## verdicts printed by each script should agree).
 
 scripts <- c("01_size.R", "02_power.R", "03_ci_coverage.R",
-             "04_negative_control.R", "05_permute.R")
+             "04_negative_control.R", "05_permute.R", "06_size_by_design.R")
 rscript <- file.path(R.home("bin"), "Rscript")
 dir.create("out", showWarnings = FALSE)
 
