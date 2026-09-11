@@ -22,7 +22,9 @@ object is the block-cyclic permutation group built by
 use -- are \code{\link{mwperm_dyadic}} (two-way / dyadic clustering),
 \code{\link{mwperm_threeway}} (three-way clustering),
 \code{\link{mwperm_panel}} (panels with an arbitrary time effect),
-\code{\link{mwperm_layout}} (replicated two-way layouts) and
+\code{\link{mwperm_layout}} (replicated two-way layouts),
+\code{\link{mwperm_irregular}} (irregular layouts, Section 6.4: repeats
+that are time periods, or a covariate constant within cells) and
 \code{\link{mwperm_missing}} (incomplete arrays, via fully observed
 bicliques). All return an object of class \code{"mwperm"} with
 \code{\link{print.mwperm}}, \code{\link{summary.mwperm}},
@@ -40,7 +42,7 @@ interval endpoints bit for bit. Under a \emph{different} BLAS the
 underlying matrix products are blocked and reassociated differently, so
 endpoints may differ in their final decimals. The p-value is unaffected in
 any practical sense: it lives on the grid
-\eqn{\{1, \dots, K+1\}/(K+1)}, whose resolution \eqn{1/(K+1)} is coarser
+\{1, ..., K+1\}/(K+1), whose resolution 1/(K+1) is coarser
 than such perturbations by many orders of magnitude.
 }
 \references{

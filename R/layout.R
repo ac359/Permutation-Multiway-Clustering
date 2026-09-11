@@ -1,77 +1,108 @@
 #' Invariant permutation test for two-way layouts (within-cell replication)
 #'
-#' Finite-sample valid test of \eqn{H_0: \beta = b} for a two-way layout
-#' \deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta + \varepsilon_{ijl}}
-#' in which each \eqn{(i, j)} cell contains \eqn{\ell_{ij}} replicate
-#' observations and the cell sizes may be \emph{unequal}. Permutations are
-#' applied only within cells, over the replication index \eqn{l}, drawn
-#' \emph{independently} for each cell. This is valid under the relaxed
-#' condition that errors are exchangeable with respect to \eqn{l} within each
-#' cell (condition InvA restricted to \eqn{l}), e.g.
-#' \eqn{\varepsilon_{ijl} = \eta_{ij} + u_{ijl}} with arbitrary cell effects
-#' \eqn{\eta_{ij}} and \eqn{u_{ijl}} i.i.d. within each cell. Note that a
-#' replicate effect \eqn{\zeta_l} \emph{shared across cells} (the same draw
-#' entering every cell's \eqn{l}-th replicate) is not covered by the
-#' within-cell invariance argument, because the independent per-cell
-#' permutations change the cross-cell alignment of \eqn{\zeta}; simulations
-#' found no measurable size effect from such a component, but validity is
-#' only guaranteed when the within-cell exchangeability holds cell by cell.
-#' The test is appropriate when \eqn{l} indexes independent replications
-#' (two-way layouts in randomised experiments). See Guo, Toulis and Wang
-#' (2026), Section 6.3.
+#' Finite-sample valid test of H0: beta = b for a two-way layout
+#' \preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
 #'
-#' Note: the covariate of interest must vary within cells. If \eqn{d_{ijl}} is
-#' constant within every \eqn{(i, j)} cell (a cell-level covariate), within-cell
+#' in which each (i, j) cell contains ell_ij replicate observations and the
+#' cell sizes may be *unequal*. Permutations are applied only within cells,
+#' over the replication index l, drawn *independently* for each cell. This is
+#' valid under the relaxed condition that errors are exchangeable with respect
+#' to l within each cell (condition InvA restricted to l), e.g. eps_ijl =
+#' eta_ij + u_ijl with arbitrary cell effects eta_ij and u_ijl i.i.d. within
+#' each cell. Note that a replicate effect zeta_l *shared across cells* (the
+#' same draw entering every cell's l-th replicate) is not covered by the
+#' within-cell invariance argument, because the independent per-cell
+#' permutations change the cross-cell alignment of zeta; simulations found no
+#' measurable size effect from such a component, but validity is only
+#' guaranteed when the within-cell exchangeability holds cell by cell. The
+#' test is appropriate when l indexes independent replications (two-way
+#' layouts in randomised experiments). See Guo, Toulis and Wang (2026),
+#' Section 6.3.
+#'
+#' Note: the covariate of interest must vary within cells. If d_ijl is
+#' constant within every (i, j) cell (a cell-level covariate), within-cell
 #' permutation yields a trivial test with no power; a warning is issued.
 #'
-#' Supplying \code{L0} balances an unbalanced layout to exactly \code{L0}
-#' replicates per cell (cells with fewer are dropped, denser cells are
-#' uniformly downsampled). A uniform random subset of exchangeable replicates
-#' is itself exchangeable, so validity is preserved while the
-#' permutation-group order becomes the same (\code{L0}) in every cell.
+#' Supplying `L0` balances an unbalanced layout to exactly `L0` replicates per
+#' cell (cells with fewer are dropped, denser cells are uniformly
+#' downsampled). A uniform random subset of exchangeable replicates is itself
+#' exchangeable, so validity is preserved while the permutation-group order
+#' becomes the same (`L0`) in every cell.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest. Must
 #'   vary within cells (see Details). With a single covariate a confidence
 #'   interval is produced; with several, a joint confidence region.
 #' @param x Optional numeric matrix or data frame of nuisance covariates; an
-#'   intercept is always added internally. May be \code{NULL}.
+#'   intercept is always added internally. May be `NULL`.
 #' @param row,col Cell identifiers along the two layout dimensions.
-#' @param rep Optional replication identifier within each cell; if \code{NULL},
-#'   the order of appearance within a cell is used.
+#' @param rep Optional replication identifier within each cell; if `NULL`, the
+#'   order of appearance within a cell is used.
 #' @param L0 Optional integer capacity threshold for balancing an unbalanced
-#'   layout. When supplied, cells with fewer than \code{L0} replicates are
-#'   dropped and each remaining cell is uniformly downsampled to exactly
-#'   \code{L0} replicates, giving a balanced array before testing. The
-#'   downsampling is reproducible through \code{seed}. When \code{NULL} (the
-#'   default) all replicates are used with their (possibly unequal) cell sizes.
+#'   layout. When supplied, cells with fewer than `L0` replicates are dropped
+#'   and each remaining cell is uniformly downsampled to exactly `L0`
+#'   replicates, giving a balanced array before testing. The downsampling is
+#'   reproducible through `seed`. When `NULL` (the default) all replicates are
+#'   used with their (possibly unequal) cell sizes.
 #'
-#'   The \code{L0} threshold comes from Section 6.4 (\emph{irregular designs})
-#'   of Guo, Toulis and Wang (2026), not Section 6.3. Note what is and is not
-#'   implemented: Section 6.4 defines the mask \eqn{M_{ij} = 1\{\ell_{ij} \ge
-#'   L_0\}}, runs the biclique search on \eqn{M}, deletes down to exactly
-#'   \code{L0} per retained cell, and then applies \strong{Procedure 2}. This
-#'   function implements the balancing step only, and then applies the
-#'   \emph{within-cell} test of Section 6.3 to the balanced array. That is
-#'   valid -- a uniform random subset of exchangeable replicates is itself
-#'   exchangeable -- but it does not deliver what Section 6.4 exists for: a
-#'   covariate that is constant within cells still yields a powerless test
-#'   (see the warning in Details), and replicates that are really time periods
-#'   are still not permutable. For those cases the Section 6.4 route is not
-#'   currently available in this package.
-#' @param K Number of non-identity permutations; defaults to
-#'   \code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).
-#'   Must satisfy \code{K + 1 <= min(cell size)}.
+#' The `L0` threshold comes from **Section 6.4** (*irregular designs*) of Guo,
+#' Toulis and Wang (2026), not Section 6.3. What this function does with it is
+#' a deliberate hybrid, so be clear on which procedure you are running.
+#' Section 6.4 defines a mask that keeps cell `(i, j)` when its size is at
+#' least `L0`, runs the biclique search on that mask, deletes down to exactly
+#' `L0` per retained cell, and then applies **Procedure 2** -- permuting the
+#' cells across rows and columns.
 #'
-#' @return An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
-#'   are the OLS estimate and naive SE, \code{conf_int} (or
-#'   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
-#'   inverted-test confidence set, and \code{pvalue} the IPT permutation
-#'   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
-#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
-#'   inference under multi-way clustering and missing data, Section 6.3.
-#'   arXiv:2601.08610.
-#' @seealso \code{\link{mwperm_dyadic}}, \code{\link{mwperm_missing}}.
+#'
+#' `mwperm_layout()` borrows only the balancing step, and then applies the
+#' *within-cell* test of **Section 6.3** to the balanced array.
+#'
+#' That combination is valid (a uniform random subset of exchangeable
+#' replicates is itself exchangeable) and raising `L0` is a legitimate power
+#' lever -- dropping thin cells raises the attainable `K` and so the p-value
+#' resolution -- but it is a different procedure from Section 6.4, and it does
+#' not cover what Section 6.4 exists for: a covariate constant within cells
+#' still gives a powerless test (see the warning in Details), and replicates
+#' that are really time periods are still not exchangeable within a cell. For
+#' those cases use [mwperm_irregular()], which is the Section 6.4 procedure.
+#' @param K Number of non-identity permutations; defaults to `min(cell size) -
+#'   1` capped at 199 (with `L0`, to `L0 - 1`). Must satisfy `K + 1 <=
+#'   min(cell size)`.
+#'
+#' @param aggregate How the `n_reps` per-repetition p-values are combined into
+#'   the reported p-value, and into the confidence set that inverts it.
+#'   `"median"` (the default) is the median, as recommended in Remark 1 of
+#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
+#'
+#' The choice decides what "exact" covers. Theorem 1 gives finite-sample
+#' validity for a single random permutation group, so at `n_reps = 1` the
+#' p-value is exact as stated. The median of several dependent randomised
+#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+#' behaved in practice, but not itself guaranteed valid at level `alpha`.
+#' Twice the median is guaranteed, under arbitrary dependence across
+#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#'
+#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
+#' 1`. It is conservative: it never rejects where `"median"` would not, and
+#' its confidence set is never narrower. The default is unchanged, so existing
+#' numbers stand.
+#'
+#' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
+#' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
+#' level `alpha` needs `K + 1 >= 2/alpha` -- at `alpha = 0.05` that is 40
+#' levels in the smallest permuted dimension, twice what `"median"` needs.
+#' Below that the p-value is still exact but cannot reach `alpha`, and the fit
+#' says so in a note.
+#' @return An object of class `"mwperm"`: `estimate`/`se_naive` are the OLS
+#'   estimate and naive SE, `conf_int` (or `conf_region`/`conf_box` for
+#'   several coefficients) the IPT inverted-test confidence set, and `pvalue`
+#'   the IPT permutation p-value; see [mwperm_dyadic()] for the field
+#'   provenance in full.
+#' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
+#'   under multi-way clustering and missing data. The within-cell test is
+#'   Section 6.3; the `L0` threshold is from Section 6.4. arXiv:2601.08610.
+#' @seealso [mwperm_irregular()] for the Section 6.4 procedure itself,
+#'   [mwperm_dyadic()], [mwperm_missing()].
 #' @examples
 #' ## 6 x 6 cells, 6 within-cell replicates, treatment varies within cell
 #' set.seed(1)
@@ -90,8 +121,10 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                           K = NULL, alpha = 0.05, beta_null = 0,
                           conf_int = TRUE,
                           n_reps = 10L, seed = NULL, grid = NULL,
+                          aggregate = c("median", "median2"),
                           n_cores = 1L) {
   cl <- match.call()
+  aggregate <- match.arg(aggregate)
   y <- .check_y(y)
   N <- length(y)
   D <- as.matrix(d)
@@ -109,7 +142,10 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   ell <- tabulate(cell,
                   nbins = ncell) # replicate count per cell (the cell sizes)
 
-  ## optional balancing: keep dense cells, downsample each to exactly L0 (5.3)
+  ## Optional balancing: keep dense cells, downsample each to exactly L0. The
+  ## threshold is Section 6.4's; the test applied afterwards is Section 6.3's.
+  ## See the L0 paragraph in the roxygen block above, and mwperm_irregular()
+  ## for the actual Section 6.4 procedure.
   balance_note <- character(0)
   if (!is.null(L0)) {
     L0 <- as.integer(L0)
@@ -141,16 +177,10 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
 
   ## Dense 1-based replication index l within each cell. The permutation acts on
   ## this index, so it must run 1..ell[c] inside every cell; ties in the
-  ## ordering
-  ## key are broken deterministically.
-  widx <- integer(N)
-  ## within-cell ordering key
-  ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))
-  ## rank(ties.method = "first") within cell == position after one stable
-  ## (cell, key) sort: O(N log N) total instead of an O(ncell * N) scan
-  ## (identical output).
-  o <- order(cell, ord_key)
-  widx[o] <- sequence(tabulate(cell, nbins = ncell))
+  ## ordering key are broken deterministically. Shared with
+  ## mwperm_irregular(), which needs the same slot index for a different
+  ## permutation structure.
+  widx <- .within_cell_slot(cell, rep, ncell)
 
   ## Warn if d does not vary within any cell: within-cell permutation then
   ## leaves
@@ -158,18 +188,27 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   within_var <- tapply(seq_len(N), cell, function(ii)
     any(apply(D[ii, , drop = FALSE], 2L, function(v) diff(range(v)) > 0)))
   if (!any(unlist(within_var)))
-    warning("`d` is constant within every cell; the within-cell test has ",
-            "no power. ",
-            "Did you mean mwperm_dyadic() or mwperm_panel()?", call. = FALSE)
+    warning("`d` is constant within every cell, so the within-cell test of ",
+            "Section 6.3 has no power: permuting inside a cell cannot move a ",
+            "covariate that is constant there. Use mwperm_irregular() (the ",
+            "Section 6.4 procedure, which permutes the cells themselves), or ",
+            "mwperm_dyadic()/mwperm_panel() if the design is complete.",
+            call. = FALSE)
 
   min_cell <- min(ell)
   K <- .default_K(K, min_cell)
 
+  ## One cell per sub-seed offset, so a layout with >= 1000 occupied cells
+  ## needs a wider stride than the historical 1000 or two reps would share a
+  ## relabelling (see .sub_seed). Layouts below that keep their old seeds
+  ## exactly.
+  seed_stride <- max(1000, ncell + 1)
   perm_builder <- function(rep_seed) {
     cell_groups <- vector("list", ncell)
     for (c in seq_len(ncell))
-      cell_groups[[c]] <- build_perm_set(ell[c], K, seed = .sub_seed(rep_seed,
-                                                                     c))
+      cell_groups[[c]] <- build_perm_set(ell[c], K,
+                                         seed = .sub_seed(rep_seed, c,
+                                                          seed_stride))
     .build_obs_perms_layout(cell, widx, cell_groups)
   }
 
@@ -180,16 +219,16 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                      d_names = d_names,
                      n_clusters = c(ncell = ncell,
                                     min_cell = min_cell), call = cl,
-                     n_cores = n_cores)
+                     n_cores = n_cores, ci_agg = aggregate)
   if (length(balance_note)) res$note <- c(balance_note, res$note)
   res
 }
 
 #' Choose row indices balancing every dense cell to exactly L0 replicates.
 #'
-#' Keeps cells with at least \code{L0} observations and, within each, draws a
-#' uniform random subset of size \code{L0}. Reproducible via \code{seed} with
-#' the usual RNG-state hygiene (the global stream is left untouched).
+#' Keeps cells with at least `L0` observations and, within each, draws a
+#' uniform random subset of size `L0`. Reproducible via `seed` with the usual
+#' RNG-state hygiene (the global stream is left untouched).
 #' @keywords internal
 #' @noRd
 .downsample_to_L0 <- function(cell, ell, L0, seed = NULL) {
@@ -235,5 +274,6 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
     img <- Pk[base + widx]                       # permuted within-cell indices
     obs_perms[[k]] <- pos_flat[base + img]  # back to global obs indices
   }
+  .assert_bijection(obs_perms, N, "two-way layout (within-cell)")
   obs_perms
 }

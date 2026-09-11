@@ -18,6 +18,7 @@ mwperm_threeway(
   n_reps = 10L,
   seed = NULL,
   grid = NULL,
+  aggregate = c("median", "median2"),
   n_cores = 1L
 )
 }
@@ -25,11 +26,11 @@ mwperm_threeway(
 \item{y}{Numeric outcome vector, one entry per observed cell.}
 
 \item{d}{Numeric vector or matrix of the covariate(s) of interest
-(\eqn{d_{ij}}). With a single covariate a confidence interval is produced;
+(d_ij). With a single covariate a confidence interval is produced;
 with several, a joint confidence region (see \code{conf_int}).}
 
 \item{x}{Optional numeric matrix or data frame of nuisance covariates
-(\eqn{x_{ij}}); an intercept is always added internally. May be
+(x_ij); an intercept is always added internally. May be
 \code{NULL}.}
 
 \item{id1, id2, id3}{Cluster identifiers for the three dimensions.}
@@ -40,7 +41,7 @@ with several, a joint confidence region (see \code{conf_int}).}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -58,12 +59,38 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
 grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
+
+\item{aggregate}{
+How the \code{n_reps} per-repetition p-values are combined into the reported
+p-value, and into the confidence set that inverts it. \code{"median"} (the
+default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
+(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+
+The choice decides what "exact" covers. Theorem 1 gives finite-sample
+validity for a single random permutation group, so at \code{n_reps = 1} the
+p-value is exact as stated. The median of several dependent randomised
+p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+behaved in practice, but not itself guaranteed valid at level \code{alpha}.
+Twice the median is guaranteed, under arbitrary dependence across
+repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+
+So use \code{"median2"} when the guarantee must hold as stated with
+\code{n_reps > 1}. It is conservative: it never rejects where
+\code{"median"} would not, and its confidence set is never narrower. The
+default is unchanged, so existing numbers stand.
+
+The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
+so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
+and rejecting at level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at
+\code{alpha = 0.05} that is 40 levels in the smallest permuted dimension,
+twice what \code{"median"} needs. Below that the p-value is still exact but
+cannot reach \code{alpha}, and the fit says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -84,16 +111,19 @@ An object of class \code{"mwperm"}: \code{estimate}/\code{se_naive}
   p-value; see \code{\link{mwperm_dyadic}} for the field provenance in full.
 }
 \description{
-Finite-sample valid test of \eqn{H_0: \beta = b} in the three-way model
-\deqn{y_{ijl} = x_{ijl}^\top \gamma + d_{ijl}^\top \beta +
-  \varepsilon_{ijl},}
-\eqn{i \in [m], j \in [n], l \in [\ell]}, under full three-way
+Finite-sample valid test of H0: beta = b in the three-way model
+
+\preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
+
+with i in [m], j in [n] and l in [ell], under full three-way
 exchangeability of the errors (condition InvA of Guo, Toulis and Wang,
 2026),
-\deqn{(\varepsilon_{ijl}) \;{\buildrel d \over =}\;
-       (\varepsilon_{\pi(i)\sigma(j)\psi(l)}) \mid X, D,}
-which holds, e.g., for the random-effects structure \eqn{\varepsilon_{ijl} =
-\eta_i + \xi_j + \zeta_l + u_{ijl}} with all components i.i.d. within family.
+
+\preformatted{  (eps_ijl) has the same distribution as
+    (eps_pi(i),sigma(j),psi(l)), for every permutation pi of the rows,
+    sigma of the columns and psi of the third dimension, given X and D}
+
+which holds, e.g., for the random-effects structure eps_ijl = eta_i + xi_j + zeta_l + u_ijl with all components i.i.d. within family.
 A permutation is drawn independently for each of the three dimensions and
 applied jointly.
 }

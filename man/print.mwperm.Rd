@@ -29,13 +29,17 @@ permutation test (printed as \code{"IPT CI"}, or \code{"IPT region"} for a
 joint confidence region).
 
 The \code{Resolution} line states that the p-value is exact but
-\emph{discrete}: it can only take multiples of \eqn{1/(K+1)}, so the
-smallest value it can ever attain is \eqn{1/(K+1)} itself. Reading a
-p-value without that context is the most common way to over- or
-under-state what the test has shown -- a p equal to \eqn{1/(K+1)} is the
-strongest available evidence rather than a precise number, and a design
-with \eqn{1/(K+1) > \alpha} cannot reject at \eqn{\alpha} however large
-the effect.
+\emph{discrete}: each repetition's p-value can only take multiples of
+1/(K+1), so the smallest value a repetition can attain is 1/(K+1) itself,
+and the line then names the smallest value the \emph{reported} p-value can
+take -- the same 1/(K+1) under the default \code{aggregate = "median"}, but
+2/(K+1) under \code{"median2"}, which reports \code{min(1, 2 * median)}. With
+an even number of repetitions the median averages the two central values and
+can fall between grid points; the line says so. Reading a p-value without
+that context is the most common way to over- or under-state what the test
+has shown -- a p equal to the floor is the strongest available evidence
+rather than a precise number, and a design whose floor exceeds alpha cannot
+reject at alpha however large the effect.
 
 With several coefficients the \code{H0} line marks the null as a
 \emph{joint} test over all of them, and the printed brackets are the

@@ -12,7 +12,8 @@ mwperm(
   data = NULL,
   time = NULL,
   rep = NULL,
-  design = c("auto", "dyadic", "threeway", "panel", "layout", "missing"),
+  design = c("auto", "dyadic", "threeway", "panel", "panel_missing", "layout",
+    "missing", "irregular"),
   K = NULL,
   alpha = 0.05,
   beta_null = 0,
@@ -26,6 +27,7 @@ mwperm(
   min_block = 3L,
   block_method = c("greedy", "exact"),
   permute = c("both", "rows", "cols"),
+  aggregate = c("median", "median2"),
   verbose = TRUE
 )
 }
@@ -54,7 +56,7 @@ function.}
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
 
-\item{beta_null}{Null value \eqn{b} to test. Scalar (recycled if \code{d}
+\item{beta_null}{Null value b to test. Scalar (recycled if \code{d}
 has several columns).}
 
 \item{conf_int}{Logical; if \code{TRUE} a confidence set is computed by test
@@ -72,7 +74,7 @@ before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
 
-\item{grid}{Optional candidate \eqn{\beta} values for the confidence set. For
+\item{grid}{Optional candidate beta values for the confidence set. For
 a single covariate, a numeric vector: the interval becomes the hull of the
 grid points not rejected by the median-aggregated test (the same
 de-randomisation as the reported p-value; an acceptance region reaching a
@@ -90,13 +92,40 @@ repetition axis parallelises well (near-ideal speedup for large
 problems); the per-permutation fallback axis is at best break-even, so
 with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 
-\item{time_fe}{Passed to \code{\link{mwperm_panel}} (panel only;
-supplying it for another design warns and ignores it).}
+\item{time_fe}{Passed to \code{\link{mwperm_panel}} or
+\code{\link{mwperm_panel_missing}} (panel designs only; supplying it for
+another design warns and ignores it).}
 
 \item{L0}{Passed to \code{\link{mwperm_layout}} (layout only).}
 
 \item{min_block, block_method, permute}{Passed to
 \code{\link{mwperm_missing}} (missing only).}
+
+\item{aggregate}{
+How the \code{n_reps} per-repetition p-values are combined into the reported
+p-value, and into the confidence set that inverts it. \code{"median"} (the
+default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
+(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+
+The choice decides what "exact" covers. Theorem 1 gives finite-sample
+validity for a single random permutation group, so at \code{n_reps = 1} the
+p-value is exact as stated. The median of several dependent randomised
+p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
+behaved in practice, but not itself guaranteed valid at level \code{alpha}.
+Twice the median is guaranteed, under arbitrary dependence across
+repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+
+So use \code{"median2"} when the guarantee must hold as stated with
+\code{n_reps > 1}. It is conservative: it never rejects where
+\code{"median"} would not, and its confidence set is never narrower. The
+default is unchanged, so existing numbers stand.
+
+The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
+so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
+and rejecting at level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at
+\code{alpha = 0.05} that is 40 levels in the smallest permuted dimension,
+twice what \code{"median"} needs. Below that the p-value is still exact but
+cannot reach \code{alpha}, and the fit says so in a note.}
 
 \item{verbose}{If \code{TRUE} (default) print one line stating the
 detected design and the dispatched call.}
@@ -147,5 +176,6 @@ Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 \code{\link{mwperm_check}} for the diagnosis without any
   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
-  \code{\link{mwperm_missing}} for the underlying tests.
+  \code{\link{mwperm_irregular}}, \code{\link{mwperm_missing}} for the
+  underlying tests.
 }
