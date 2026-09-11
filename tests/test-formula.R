@@ -82,4 +82,38 @@ expect_err(mwperm_formula(~log_dist, data = trade_dyadic,
                           index = c("importer", "exporter")),
            "two-sided")
 
+## ---- 5. missing values are refused by name, never dropped silently -------
+## model.matrix() applies getOption("na.action") and drops incomplete rows on
+## its own, while the outcome keeps every row; the mismatch used to surface as
+## "`x` must have the same number of rows as `y`", naming an argument the
+## caller never passed. The package contract is that incomplete data is an
+## error naming what is missing, and that a row is never dropped silently --
+## a dropped row makes a complete array incomplete without anyone noticing.
+td_na <- trade_dyadic
+td_na$log_gdp_i[3L] <- NA
+m_x <- msg_of(mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
+                             data = td_na, index = c("importer", "exporter"),
+                             n_reps = 1, seed = 1, verbose = FALSE))
+stopifnot(!is.na(m_x), grepl("log_gdp_i", m_x, fixed = TRUE),
+          grepl("missing", m_x, fixed = TRUE),
+          !grepl("same number of rows", m_x, fixed = TRUE))
+td_na <- trade_dyadic
+td_na$log_dist[c(2L, 5L)] <- NA
+m_d <- msg_of(mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
+                             data = td_na, index = c("importer", "exporter"),
+                             n_reps = 1, seed = 1, verbose = FALSE))
+stopifnot(!is.na(m_d), grepl("log_dist", m_d, fixed = TRUE),
+          grepl("2 row", m_d, fixed = TRUE))
+td_na <- trade_dyadic
+td_na$log_trade[7L] <- NA
+m_y <- msg_of(mwperm_formula(log_trade ~ log_dist, data = td_na,
+                             index = c("importer", "exporter"),
+                             n_reps = 1, seed = 1, verbose = FALSE))
+stopifnot(!is.na(m_y), grepl("log_trade", m_y, fixed = TRUE))
+## the same data with the NA row removed by the caller runs, on 1599 rows
+f_ok <- mwperm_formula(log_trade ~ log_dist, data = td_na[-7L, ],
+                       index = c("importer", "exporter"), design = "missing",
+                       n_reps = 1, seed = 1, conf_int = FALSE, verbose = FALSE)
+stopifnot(nobs(f_ok) <= 1599L)
+
 passed("test-formula.R")

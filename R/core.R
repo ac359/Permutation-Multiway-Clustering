@@ -89,16 +89,16 @@
 #' The cell-code machinery keys an observation by its cluster coordinates, and
 #' those coordinates identify an observation uniquely only when each cell
 #' holds one observation. Designs with replication inside a cell (two-way
-#' layouts, and the irregular designs of Section 6.4) therefore need a third
-#' coordinate: the slot l = 1..ell_ij that an observation occupies inside its
-#' cell. Held fixed by the permutation, it plays exactly the role the time
-#' index plays in mwperm_panel(): cell (i, j) slot l maps to cell (pi(i),
-#' sigma(j)) slot l.
+#' layouts) therefore need a third coordinate: the slot l = 1..ell_ij that an
+#' observation occupies inside its cell. `mwperm_layout()` permutes within a
+#' cell, so its slot is a within-cell RANK; `mwperm_irregular()` holds the
+#' slot fixed across cells, so its slot must be the `rep` LEVEL itself (the
+#' same period in every cell -- see `.irregular_design()`), and it calls this
+#' function only for the `rep = NULL` case, where the rank is the level.
 #'
-#' The ordering is the one `mwperm_layout()` has always used, extracted here
-#' so every design that needs a slot index derives it identically: by `rep`
-#' where supplied (as a factor, so labels of any type order consistently), by
-#' order of appearance otherwise, with ties broken by position. Equivalent to
+#' The ordering is the one `mwperm_layout()` has always used: by `rep` where
+#' supplied (as a factor, so labels of any type order consistently), by order
+#' of appearance otherwise, with ties broken by position. Equivalent to
 #' `rank(ties.method = "first")` within each cell, computed as one stable
 #' sort.
 #'
@@ -157,7 +157,11 @@
 #'   (a_k = b_k = 0, hence p = 1 through the minorization) and is used by the
 #'   engine when it has ALREADY established that beta is unidentified -- `d`
 #'   constant or collinear with `x` -- and warned about it. In that case p = 1
-#'   is the correct answer, not a failure.
+#'   is the correct answer, not a failure. (Procedure 1 defines the
+#'   per-permutation case the same way -- a_k = b_k = 0, hence p = 1 -- so
+#'   stopping is a deliberate refusal to report a value that floating point
+#'   cannot certify, not a gap in the arithmetic; both branches and the
+#'   relative threshold are pinned by `tests/lower-level-tests/test-pvalue.R`.)
 #' @param design short label for the calling design, used in that error.
 #' @return a list (the "prep" object) consumed by `.ipt_eval()`.
 #' @keywords internal
@@ -356,6 +360,26 @@
   .ipt_eval(prep, rep(0, prep$d))
 }
 
+#' Is a position table over the whole cell index space worth allocating?
+#'
+#' The two gather-vector builders translate a permuted cell code back to an
+#' observation index either through an integer table indexed by the code --
+#' one O(N) gather per group element -- or through `match()`. The table is
+#' faster but its size is the whole mixed-radix index space, which for sparse
+#' ids can dwarf the data: 300 x 300 x 700 levels is 63 million cells. It
+#' used to be allocated up to 2^26 entries (268 MB) regardless of N. Two caps
+#' now apply: at most 2^24 entries (64 MB), and at most 64 entries per
+#' observation, so the table is never more than a small multiple of the data
+#' it indexes. The output is identical on either branch (asserted by
+#' `tests/lower-level-tests/test-obsperms.R`, which forces both).
+#'
+#' @param n_cells size of the index space (product of the radices).
+#' @param N number of observations.
+#' @keywords internal
+#' @noRd
+.use_pos_table <- function(n_cells, N)
+  n_cells <= 2^24 && n_cells <= 64 * as.double(N)
+
 #' Build observation-level permutations from per-dimension permutation groups
 #'
 #' Given the integer cluster id of every observation along each clustering
@@ -377,12 +401,18 @@
 #' @param design short label for the calling design, used in error messages.
 #' @param front_end the front end a user should reach for instead, named in
 #'   the duplicate-cell error.
+#' @param pos_table `NULL` (the default) lets `.use_pos_table()` decide from
+#'   the size of the index space whether permuted cell codes are translated
+#'   back through a position table or through `match()`; `TRUE`/`FALSE`
+#'   forces one branch. Both give identical gather vectors -- the tests force
+#'   each and compare -- so this exists only to make that assertion possible.
 #' @return list of length K+1 of integer gather-vectors over observations.
 #' @keywords internal
 #' @noRd
 .build_obs_perms <- function(coords, groups, design = "this design",
                              front_end = paste("mwperm_layout() or",
-                                               "mwperm_missing()")) {
+                                               "mwperm_missing()"),
+                             pos_table = NULL) {
   coords <- as.matrix(coords)
   C <- ncol(coords)                    # number of clustering dimensions
   ## Mixed-radix bases, computed ONCE for all K+1 elements. Each image vector
@@ -426,7 +456,8 @@
   ## the index space is cheap to allocate; huge sparse spaces keep match().
   n_cells <- prod(radix)
   pos <- NULL
-  if (n_cells <= 2^26) {
+  if (if (is.null(pos_table)) .use_pos_table(n_cells, nrow(coords))
+      else isTRUE(pos_table)) {
     pos <- integer(n_cells)            # 0 = unobserved cell
     pos[orig_code + 1] <- seq_len(nrow(coords))
   }

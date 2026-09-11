@@ -53,6 +53,37 @@ plot(fitj)                          # errored pre-fix (barplot names.arg bug)
 fmt_p <- internal(".fmt_p")
 stopifnot(fmt_p(NA) == "NA", fmt_p(1e-5) == "< 0.001")
 
+## The Resolution line must state what the REPORTED p-value can be, not only
+## the per-rep grid. Under aggregate = "median2" the report is min(1, 2 x
+## median), so its floor is 2/(K+1); with an even n_reps the median of the two
+## central reps can fall between grid points. Both cases are said on the line.
+## res_block(): the Resolution line and the indented caveat line under it.
+res_block <- function(f) {
+  o <- capture.output(print(f))
+  i <- grep("^Resolution", o)
+  paste(o[i:(i + 1L)], collapse = " ")
+}
+fit_m2 <- mwperm_dyadic(y1, d1, row = g$i, col = g$j, seed = 3, n_reps = 7,
+                        conf_int = FALSE, aggregate = "median2")
+stopifnot(fit_m2$p_floor == 2 / (fit_m2$K + 1L),
+          identical(fit_m2$aggregate, "median2"),
+          grepl(sprintf("multiples of 1/%d = %s per rep", fit_m2$n_perm,
+                        fmt_p(fit_m2$resolution)), res_block(fit_m2),
+                fixed = TRUE),
+          grepl(paste0("reported floor ", fmt_p(fit_m2$p_floor)),
+                res_block(fit_m2), fixed = TRUE),
+          grepl("median2", res_block(fit_m2), fixed = TRUE))
+## default aggregation, odd n_reps: the floor IS the grid step, and no caveat
+stopifnot(identical(fit1$aggregate, "median"),
+          grepl(paste0("reported floor ", fmt_p(fit1$p_floor)),
+                res_block(fit1), fixed = TRUE),
+          !grepl("between", res_block(fit1)),
+          !grepl("median2", res_block(fit1)))
+## even n_reps: the between-grid-points caveat appears
+fit_ev <- mwperm_dyadic(y1, d1, row = g$i, col = g$j, seed = 3, n_reps = 2,
+                        conf_int = FALSE)
+stopifnot(grepl("between grid points", res_block(fit_ev), fixed = TRUE))
+
 ## ---- 2. summary(): a tidy data frame with provenance-prefixed columns -----
 o <- capture.output(s1 <- summary(fit1))
 stopifnot(is.data.frame(s1), nrow(s1) == 1L,

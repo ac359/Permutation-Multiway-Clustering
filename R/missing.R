@@ -179,22 +179,23 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   K_was_null <- is.null(K)
   K <- .default_K(K, min_side)
 
-  ## The SMALLEST selected block is the binding constraint on resolution
-  ## under the default K = min_side - 1, a small block caps the
-  ## attainable p-value at 1/min_side even though it adds information. Say so
-  ## explicitly when the cap makes rejection at this alpha impossible; the
-  ## generic engine note states the arithmetic, this one names the cause and
-  ## the remedy.
+  ## The SMALLEST selected block is the binding constraint on resolution:
+  ## under the default K = min_side - 1 a small block caps the attainable
+  ## p-value at 1/min_side even though it adds information. Two notes reach
+  ## the user when the cap binds, and they must not say the same thing twice
+  ## (they did until 0.3.0). The division of labour: THIS note names the cause
+  ## and the lever -- which block, and what to change -- while the engine's
+  ## note does the arithmetic, the consequence for alpha and the confidence
+  ## set. Keep it that way when editing either.
   res_note <- character(0)
   if (K_was_null && is.numeric(alpha) && length(alpha) == 1L &&
       is.finite(alpha) && alpha > 0 && alpha < 1 && 1 / (K + 1) > alpha) {
     res_note <- sprintf(paste0(
-      "The smallest selected block (permuted side %d) caps the group order: ",
-      "K = %d, so no rejection is attainable at alpha = %.3g (smallest ",
-      "p-value 1/%d = %.3g). Testing at this level needs a fully observed ",
-      "block whose permuted side is >= %d; raise `min_block` to stop small ",
-      "blocks from setting K."),
-      min_side, K, alpha, K + 1L, 1 / (K + 1), ceiling(1 / alpha))
+      "Resolution here is set by the smallest selected block: its permuted ",
+      "side is %d, so K = %d. Raise `min_block` so that small blocks cannot ",
+      "set K -- a higher floor discards more cells but lifts the attainable ",
+      "resolution."),
+      min_side, K)
   }
 
   ## --- restrict data to cells inside the selected blocks ---------------------
@@ -290,20 +291,27 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   `rows`/`cols` vectors.
 #' @param permute `"both"` (Procedure 2), `"rows"` or `"cols"`
 #'   (one-dimensional subgroup; the other dimension is held fixed).
-#' @param slot optional within-cell slot index (see `.within_cell_slot()`),
-#'   one entry per retained observation. NULL (the default) is the
-#'   one-observation-per-cell case: cells are keyed by (row, col) and the code
-#'   below is exactly what it always was. When supplied, cells are keyed by
-#'   (row, col, slot) and the slot is HELD FIXED, so cell (i, j) slot l maps
-#'   to cell (pi(i), sigma(j)) slot l -- the structure mwperm_panel() uses for
-#'   time, and what Section 6.4 needs once each retained cell has been reduced
-#'   to exactly L0 observations. Used by mwperm_irregular().
+#' @param slot optional within-cell slot index, a dense 1..L integer unique
+#'   within each cell, one entry per retained observation. NULL (the default)
+#'   is the one-observation-per-cell case: cells are keyed by (row, col) and
+#'   the code below is exactly what it always was. When supplied, cells are
+#'   keyed by (row, col, slot) and the slot is HELD FIXED, so cell (i, j) slot
+#'   l maps to cell (pi(i), sigma(j)) slot l -- the structure mwperm_panel()
+#'   uses for time. The caller decides what the slot MEANS, and that decides
+#'   validity: mwperm_panel_missing() passes the period, and
+#'   mwperm_irregular() passes the `rep` level re-indexed over the common
+#'   level set (see `.irregular_design()`), so that slot l is the same period
+#'   in every cell. A within-cell rank would not be.
+#' @param pos_table `NULL` (default) lets `.use_pos_table()` choose between
+#'   the position-table and `match()` translations from the size of the index
+#'   space; `TRUE`/`FALSE` forces one. Identical output either way (the tests
+#'   force both and compare).
 #' @return list of K+1 integer gather-vectors over the retained cells.
 #' @keywords internal
 #' @noRd
 .build_obs_perms_blocks <- function(rep_seed, K, blocks, ri, ci, blk,
                                     lrow, lcol, permute = "both",
-                                    slot = NULL) {
+                                    slot = NULL, pos_table = NULL) {
   do_rows <- permute %in% c("both", "rows")
   do_cols <- permute %in% c("both", "cols")
   ## Cells must be unique, for the same reason as in .build_obs_perms(): the
@@ -328,7 +336,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
     else
       sprintf(paste0("Internal error: (row, col, slot) key (%s, %s, %s) ",
                      "appears more than once (observation %d); the slot ",
-                     "index must be a dense 1..L rank within each cell."),
+                     "index must be unique within each cell."),
               ri[dup], ci[dup], slot[dup], dup),
       call. = FALSE)
   ## Per block, a row group and a col group of common order K+1. The 4*q
@@ -374,8 +382,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   scode <- if (is.null(slot)) 0
            else as.double(n_row_max) * n_col_max * (slot - 1L)
   pos <- NULL
-  if (as.double(n_row_max) * n_col_max * n_slot <= 2^26) {
-    pos <- integer(n_row_max * n_col_max * n_slot)   # 0 = cell not retained
+  n_cells <- as.double(n_row_max) * n_col_max * n_slot
+  if (if (is.null(pos_table)) .use_pos_table(n_cells, length(ri))
+      else isTRUE(pos_table)) {
+    pos <- integer(n_cells)                          # 0 = cell not retained
     pos[code + 1L] <- seq_along(code)
   }
   ops <- vector("list",
@@ -738,10 +748,29 @@ find_bicliques <- function(row, col, min_block = 2L,
 #' Finds the row set R maximising `|R| * |cols(R)|`, where `cols(R)` is the
 #' set of columns observed for every row in R (so the selected submatrix is
 #' all ones by construction). Rows are processed in decreasing support order
-#' and the branch is pruned whenever the optimistic bound `(rows so far + rows
-#' remaining) * current common columns` cannot beat the incumbent. A node
-#' budget bounds the work; if exhausted the best block found so far is
+#' and a branch is pruned whenever no completion of it can beat the incumbent.
+#' A node budget bounds the work; if exhausted the best block found so far is
 #' returned with `exact = FALSE`.
+#'
+#' Two bounds are used, cheapest first. The loose one is `(rows so far + rows
+#' remaining) * current common columns`: correct, because adding rows can only
+#' shrink the common columns, but weak, because it assumes every remaining row
+#' can be added without losing a single column. When it fails to prune, the
+#' tight one is computed. Let `s_(1) >= s_(2) >= ...` be the sizes of the
+#' remaining rows' supports intersected with the current common columns. Any
+#' completion that adds exactly `i` rows keeps at most `s_(i)` columns -- the
+#' smallest intersection among any `i` rows is at most the `i`-th largest --
+#' so its area is at most `(rows so far + i) * s_(i)`, and the bound is the
+#' maximum of that over `i` (including `i = 0`, which is the incumbent block
+#' itself).
+#'
+#' The tight bound is a strict refinement, so it CANNOT change the block
+#' returned. It prunes only subtrees whose every block has area at most the
+#' incumbent's, and the incumbent is replaced only on a STRICTLY greater area,
+#' so nothing pruned could have replaced it. What it changes is how often the
+#' node budget is reached: on masks where the search previously exhausted the
+#' budget and fell back to the greedy block, it can now finish and return the
+#' true maximum. Those are the only cases whose output moves.
 #'
 #' @param A logical matrix.
 #' @param retry_peels Number of extra attempts, under `method = "greedy"`
@@ -790,10 +819,23 @@ find_bicliques <- function(row, col, min_block = 2L,
       area <- length(chosen) * ncols
       if (area > best$area) best <<- list(rows = chosen, cols = curcols,
                                           area = area)
-      ## Optimistic bound: even adding every remaining row keeps <= ncols
-      ## columns,
-      ## so if that cannot beat the incumbent, prune this branch.
+      ## Loose bound first, because it costs nothing: even adding every
+      ## remaining row keeps <= ncols columns.
       if ((length(chosen) + rem) * ncols <= best$area) return(invisible(NULL))
+      ## Tight bound, only when the loose one failed to prune. Adding exactly i
+      ## rows leaves at most s_(i) columns, so the best area over all
+      ## completions is max_i (|chosen| + i) * s_(i). See the block comment
+      ## above: this cannot change the answer, only the node count.
+      ## The gate keeps its cost off the nodes where it cannot pay: if the
+      ## loose bound is more than twice the incumbent, no realistic tightening
+      ## prunes here, and near the root that is most nodes.
+      if (rem > 0L && (length(chosen) + rem) * ncols <= 2 * best$area) {
+        s <- sort(rowSums(A[ord[pos:length(ord)], curcols, drop = FALSE]),
+                  decreasing = TRUE)
+        if (max(length(chosen) * ncols,
+                (length(chosen) + seq_along(s)) * s) <= best$area)
+          return(invisible(NULL))
+      }
     }
     if (pos > length(ord)) return(invisible(NULL))
     r <- ord[pos]

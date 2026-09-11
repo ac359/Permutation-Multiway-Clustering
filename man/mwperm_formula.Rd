@@ -37,6 +37,11 @@ stripped (the engine always adds its own). The result is
 \emph{identical} to calling \code{\link{mwperm}} -- or the dispatched
 design-specific function -- with the same inputs and seed; this wrapper
 only assembles the arguments.
+
+No \code{na.action} is applied: a missing or non-finite value in any term of
+the formula is an error naming the term, never a silently dropped row --
+dropping a row would turn a complete array into an incomplete one without
+notice. Subset \code{data} to complete cases first.
 }
 \examples{
 data(trade_dyadic)

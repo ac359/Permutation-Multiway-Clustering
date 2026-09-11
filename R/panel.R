@@ -131,7 +131,10 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
 
   coords <- cbind(ri, ci, ti)
   .require_complete_array(coords, c(row = n_row, col = n_col, time = n_t), N,
-                          what = "Panel")
+                          what = "Panel",
+                          remedy = paste0("mwperm_panel_missing(), which masks ",
+                                          "to the pairs observed in every ",
+                                          "period and permutes blockwise"))
 
   K <- .default_K(K, c(n_row, n_col))
 

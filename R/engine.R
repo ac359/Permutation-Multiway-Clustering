@@ -100,7 +100,7 @@
 #' Given the data and a design-specific permutation builder, this runs the
 #' test for `n_reps` independent random permutation groups, aggregates the
 #' per-rep p-values by `ci_agg` (`.agg_pvals()`), and (optionally) inverts the
-#' test to a confidence set. All six front ends differ only in how they build
+#' test to a confidence set. All seven front ends differ only in how they build
 #' their permutations and validate their inputs; everything downstream of that
 #' is handled here.
 #'
@@ -168,9 +168,14 @@
                     all(is.finite(g)),
                   logical(1))))
     stop("`grid` must contain only finite numeric values.", call. = FALSE)
-  n_cores <- suppressWarnings(as.integer(n_cores))
-  if (length(n_cores) != 1L || is.na(n_cores))
+  ## The documented contract is "a single integer >= 1"; 0, a negative and a
+  ## fraction used to be clamped silently to 1 in .plapply(), so a typo ran
+  ## serially and unremarked. Refuse them here, where the message names the
+  ## argument, exactly as alpha and n_reps are refused.
+  if (!(is.numeric(n_cores) && length(n_cores) == 1L && is.finite(n_cores) &&
+        n_cores >= 1 && n_cores == trunc(n_cores)))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
+  n_cores <- as.integer(n_cores)
   nc_max <- .n_cores_max()
   if (n_cores > nc_max) {
     warning(sprintf(paste0("`n_cores` = %d exceeds the %d available cores ",
@@ -314,6 +319,25 @@
                        y = y, D = D, grid = grid, agg = ci_agg)
       conf_set <- attr(ci, "conf_set")
       ci_method <- attr(ci, "ci_method")
+      ## An EMPTY set is a real outcome -- the aggregated p-value never exceeds
+      ## alpha at any candidate -- and it must not print as a bare [NA, NA]
+      ## that reads like "not computed". Name the cause for the path taken.
+      if (!is.null(conf_set) && nrow(conf_set) == 0L)
+        note <- c(note, if (identical(ci_method, "grid")) sprintf(paste0(
+          "The %.0f%% confidence set is EMPTY on the supplied `grid`: no ",
+          "grid point had an aggregated p-value above alpha = %.3g, so ",
+          "`conf_int` is NA. The acceptance set, if any, lies off the grid ",
+          "(the OLS estimate is %s); widen or shift `grid`, or drop it to ",
+          "compute the set exactly."),
+          100 * conf_level, alpha, format(ref$estimate, digits = 4))
+        else sprintf(paste0(
+          "The %.0f%% confidence set is EMPTY: the aggregated p-value is at ",
+          "or below alpha = %.3g at every value of beta, so no null value is ",
+          "retained and `conf_int` is NA. With a single repetition this ",
+          "cannot happen (the per-permutation estimates are always ",
+          "accepted); across repetitions the median can reject everywhere. ",
+          "Inspect `pvalues_rep`, or refit with n_reps = 1."),
+          100 * conf_level, alpha))
       if (identical(ci_method, "bisection"))
         note <- c(note, paste0(
           "Confidence interval by outward bracketing and bisection, not the ",
@@ -398,6 +422,7 @@
       K           = Kp1 - 1L,      # number of non-identity permutations
       n_perm      = Kp1,           # group order (K + 1)
       n_reps      = n_reps,        # independent repetitions aggregated
+      aggregate   = ci_agg,        # the cross-rep rule those went through
       type        = type,          # design label, e.g. "dyadic"
       d_names     = d_names,       # coefficient name(s)
       n_obs       = N,             # observations actually used
@@ -1208,9 +1233,11 @@
 #'   the dimensions in the error messages.
 #' @param N the number of observations.
 #' @param what a short noun phrase naming the design (for the message).
+#' @param remedy the front end that handles the incomplete case, appended to
+#'   the message as ", or use ..."; `NULL` when there is none.
 #' @keywords internal
 #' @noRd
-.require_complete_array <- function(coords, sizes, N, what) {
+.require_complete_array <- function(coords, sizes, N, what, remedy = NULL) {
   dims <- paste(names(sizes), collapse = ", ")
   if (anyDuplicated(coords))
     stop(sprintf("Each (%s) cell must appear at most once.", dims),
@@ -1219,9 +1246,11 @@
   if (N != expected)
     stop(sprintf(paste0("%s must be a complete balanced array: expected %d ",
                         "cells (%s) but found %d. Fill or drop cells so the ",
-                        "array is complete."),
+                        "array is complete%s."),
                  what, expected,
                  paste(sprintf("%s=%d", names(sizes), sizes), collapse = " x "),
-                 N), call. = FALSE)
+                 N,
+                 if (is.null(remedy)) "" else paste0(", or use ", remedy)),
+         call. = FALSE)
   invisible(NULL)
 }

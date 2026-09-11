@@ -46,6 +46,29 @@ stopifnot(grepl("!", out_w, fixed = TRUE))
 chk_fm <- mwperm_check(index = list(i = gm$i, j = gm$j), design = "missing")
 stopifnot(identical(chk_fm$design, "missing"), is.na(chk_fm$K_default))
 
+## The resolution verdict is about the alpha and aggregation the fit will use,
+## not a hard-coded 0.05 under the default rule. K = 5 here: the floor 1/6 is
+## too coarse at 0.05 but fine at 0.2 -- and under "median2", whose floor is
+## 2/6, too coarse at 0.2 as well. The printed line names the alpha.
+chk_a <- mwperm_check(index = list(i = g2$i, j = g2$j), alpha = 0.2)
+chk_m <- mwperm_check(index = list(i = g2$i, j = g2$j), alpha = 0.2,
+                      aggregate = "median2")
+stopifnot(identical(chk$resolution_ok, FALSE), identical(chk$alpha, 0.05),
+          identical(chk_a$resolution_ok, TRUE), identical(chk_a$alpha, 0.2),
+          identical(chk_m$resolution_ok, FALSE),
+          identical(chk$p_floor, 1 / 6), identical(chk_m$p_floor, 2 / 6),
+          chk$levels_needed == 20L, chk_a$levels_needed == 5L,
+          chk_m$levels_needed == 10L)
+out_a <- paste(capture.output(print(chk_a)), collapse = "\n")
+out_m2 <- paste(capture.output(print(chk_m)), collapse = "\n")
+stopifnot(grepl("alpha = 0.2", out_a, fixed = TRUE),
+          grepl("80% confidence set", out_a, fixed = TRUE),
+          !grepl("TOO COARSE", out_a),
+          grepl("TOO COARSE", out_m2), grepl("median2", out_m2, fixed = TRUE),
+          grepl("alpha = 0.05", out_d, fixed = TRUE))
+expect_err(mwperm_check(index = list(i = g2$i, j = g2$j), alpha = 1),
+           "`alpha`")
+
 ## ---- 2. index resolution and forced-design validation ---------------------
 ## Forcing a design that the data cannot support must fail with a message about
 ## the DATA's shape, not a downstream indexing error.
@@ -240,5 +263,9 @@ expect_warn(mwperm(y = y2, d = d2, index = list(i = g2$i, j = g2$j),
                    permute = "rows", seed = 1, n_reps = 1, conf_int = FALSE,
                    verbose = FALSE),
             "`permute` applies to the missing design only")
+## a list of several designs reads as English, not "A and B and C"
+expect_warn(mwperm(y = y2, d = d2, index = list(i = g2$i, j = g2$j),
+                   min_block = 3, seed = 1, conf_int = FALSE, verbose = FALSE),
+            "applies to the missing, irregular and panel_missing designs only")
 
 passed("test-main.R")

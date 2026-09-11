@@ -70,6 +70,14 @@ irr <- do.call(rbind, lapply(seq_len(8L), function(i)
   }))))
 irr$y <- 0.5 * irr$d + irr$eta + rnorm(nrow(irr))
 
+## Incomplete panel for the blockwise-InvB design: 20 country pairs are
+## observed in the first year only, so they fail the "present in every period"
+## mask and are dropped whole.
+set.seed(23)
+pp <- paste(tp$importer, tp$exporter)
+thin_pairs <- sample(unique(pp), 20L)
+ipn <- tp[!(pp %in% thin_pairs & tp$year > min(tp$year)), ]
+
 B <- list()
 run <- function(nm, expr) {
   B[[nm]] <<- tryCatch(withCallingHandlers(expr,
@@ -93,6 +101,11 @@ run("layout_default", with(lay, mwperm_layout(
 run("missing_default", with(inc, mwperm_missing(
   y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
   row = importer, col = exporter, min_block = 3L, seed = 1)))
+run("panel_missing_default", with(ipn, mwperm_panel_missing(
+  y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j),
+  row = importer, col = exporter, time = year, min_block = 5L, seed = 1)))
+run("irregular_default", with(irr, mwperm_irregular(
+  y = y, d = d, row = i, col = j, rep = l, L0 = 4L, min_block = 2L, seed = 1)))
 run("unified_dyadic", mwperm(
   y = "log_trade", d = "log_dist", x = c("log_gdp_i", "log_gdp_j"),
   index = c("importer", "exporter"), data = td, seed = 1, verbose = FALSE))
@@ -129,6 +142,25 @@ run("missing_nondefault", with(inc, mwperm_missing(
   y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
   row = importer, col = exporter, min_block = 3L, beta_null = -1,
   n_reps = 9L, conf_int = TRUE, seed = 1)))
+run("panel_missing_nondefault", with(ipn, mwperm_panel_missing(
+  y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j),
+  row = importer, col = exporter, time = year, min_block = 5L,
+  beta_null = 0.5, n_reps = 9L, conf_int = TRUE, time_fe = FALSE, seed = 1)))
+## Irregular design with a covariate that VARIES within cells and cells whose
+## level sets differ (rows 1-20 hold periods 1-2, rows 21-40 periods 2-3): the
+## case in which the slot the permutation holds fixed must be the `rep` level.
+## 20 retained rows give K = 19, so the confidence set is attainable.
+set.seed(3)
+irr2 <- do.call(rbind, lapply(seq_len(40L), function(i)
+  do.call(rbind, lapply(seq_len(20L), function(j)
+    data.frame(i = i, j = j, t = if (i <= 20L) 1:2 else 2:3)))))
+irr2$d <- as.numeric(irr2$t >= matrix(sample(1:4, 800L, TRUE), 40L,
+                                      20L)[cbind(irr2$i, irr2$j)])
+irr2$y <- 0.4 * irr2$d + rnorm(40L)[irr2$i] + rnorm(20L)[irr2$j] +
+  c(0, 0, 5)[irr2$t] + rnorm(nrow(irr2))
+run("irregular_nondefault", with(irr2, mwperm_irregular(
+  y = y, d = d, row = i, col = j, rep = t, L0 = 2L, min_block = 2L,
+  beta_null = 0.4, n_reps = 9L, conf_int = TRUE, seed = 1)))
 run("layout_L0", with(irr, mwperm_layout(
   y = y, d = d, row = i, col = j, rep = l, L0 = 4L, n_reps = 9L,
   conf_int = TRUE, seed = 1)))

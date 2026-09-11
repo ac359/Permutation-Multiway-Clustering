@@ -14,6 +14,11 @@
 #' [mwperm()] -- or the dispatched design-specific function -- with the same
 #' inputs and seed; this wrapper only assembles the arguments.
 #'
+#' No `na.action` is applied: a missing or non-finite value in any term of
+#' the formula is an error naming the term, never a silently dropped row --
+#' dropping a row would turn a complete array into an incomplete one without
+#' notice. Subset `data` to complete cases first.
+#'
 #' @param formula A two-sided formula, `y ~ d` or `y ~ d | x`.
 #' @param data A data frame in which the formula (and character
 #'   `index`/`time`/`rep`) are evaluated.
@@ -49,14 +54,43 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
     d_part <- rhs
     x_part <- NULL
   }
+  ## Every row is kept on the way to the engine. model.matrix() would apply
+  ## getOption("na.action") -- na.omit by default -- and drop incomplete rows
+  ## silently, which the package never does: a dropped row turns a complete
+  ## array into an incomplete one with no message, and the outcome (evaluated
+  ## below with no na.action at all) would then be a different length. So the
+  ## model frame is built with na.pass, and missingness is refused here by the
+  ## name of the term that carries it, before any argument name the caller
+  ## never used ("`x`") can appear in a message.
   mm <- function(part) {
     f <- stats::as.formula(call("~", part), env = environment(formula))
-    m <- stats::model.matrix(f, data = data)
+    mf <- stats::model.frame(f, data = data, na.action = stats::na.pass)
+    m <- stats::model.matrix(f, mf)
     m[, colnames(m) != "(Intercept)", drop = FALSE]
   }
   y <- eval(formula[[2L]], data, environment(formula))
   d <- mm(d_part)
   x <- if (is.null(x_part)) NULL else mm(x_part)
+  refuse_na <- function(v, what) {
+    v <- as.matrix(v)
+    bad <- which(!is.finite(v), arr.ind = TRUE)
+    if (!nrow(bad)) return(invisible(NULL))
+    cols <- if (is.null(colnames(v))) what else
+      paste0("`", unique(colnames(v)[bad[, 2L]]), "`", collapse = ", ")
+    rows <- sort(unique(bad[, 1L]))
+    stop(sprintf(paste0("%s contains missing or non-finite values (NA/NaN/",
+                        "Inf) in %d row%s (first: %s); mwperm requires ",
+                        "complete data and never drops rows silently. ",
+                        "Subset `data` to complete cases of the variables ",
+                        "in the formula first."),
+                 cols, length(rows), if (length(rows) == 1L) "" else "s",
+                 paste(rows[seq_len(min(5L, length(rows)))],
+                       collapse = ", ")),
+         call. = FALSE)
+  }
+  refuse_na(y, paste0("`", deparse(formula[[2L]]), "`"))
+  refuse_na(d, "the covariate(s) of interest")
+  if (!is.null(x)) refuse_na(x, "the nuisance covariate(s)")
   idx <- if (is.character(index)) data[index] else as.data.frame(index)
   tv  <- if (is.character(time) && length(time) == 1L) data[[time]] else time
   rv  <- if (is.character(rep)  && length(rep)  == 1L) data[[rep]]  else rep

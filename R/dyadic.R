@@ -198,10 +198,21 @@ mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
     stop("Dyadic regression expects one observation per (row, col) cell. ",
          "For repeated observations use mwperm_layout() or mwperm_panel().",
          call. = FALSE)
+  coords <- cbind(ri, ci)              # per-observation (row, col) coordinates
+  ## Completeness is decided here, from the cell count, and not left to the
+  ## gather-vector builder: that check fires only when a drawn permutation
+  ## reaches an unobserved cell, so a group that happens to map the observed
+  ## set onto itself (seen on a 6 x 6 array with its diagonal deleted) would
+  ## run the test on a non-rectangular design with K set from the full id
+  ## range, and error on the next seed.
+  .require_complete_array(coords, c(row = n_row, col = n_col), N,
+                          what = "Dyadic regression",
+                          remedy = paste0("mwperm_missing(), which restricts ",
+                                          "to fully observed blocks and ",
+                                          "permutes within them"))
 
   K <- .default_K(K, c(n_row,
                        n_col))  # group order capped by the smaller dimension
-  coords <- cbind(ri, ci)              # per-observation (row, col) coordinates
 
   ## Per-rep permutations: draw an independent row group and column group and
   ## combine them into observation gather-vectors. Distinct sub-seeds (1, 2)

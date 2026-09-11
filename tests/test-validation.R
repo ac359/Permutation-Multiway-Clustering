@@ -192,4 +192,34 @@ stopifnot(identical(f_m1$resolution, f_m2$resolution),
           !is.null(f_m1$conf_int), is.null(f_m2$conf_int),
           any(grepl("1/(K+1)", f_m2$note, fixed = TRUE)))
 
+## ---- 6. an EMPTY acceptance set is reported as such, never as [NA, NA] ---
+## A grid that misses the acceptance set entirely (here 50..60, far from an
+## estimate near 0.4) retains nothing. The interval is then NA and the set has
+## no components -- a meaningful, alarming outcome -- and the fit must say so
+## in a note that names `grid`, rather than print "[NA, NA]" with no comment.
+set.seed(5)
+g21 <- expand.grid(i = 1:21, j = 1:21)
+d21 <- rnorm(21)[g21$i] + rnorm(nrow(g21))
+y21 <- rnorm(21)[g21$i] + rnorm(21)[g21$j] + 0.4 * d21 + rnorm(nrow(g21))
+f_empty <- mwperm_dyadic(y21, d21, row = g21$i, col = g21$j, seed = 1,
+                         n_reps = 2, grid = seq(50, 60, by = 0.5))
+stopifnot(all(is.na(f_empty$conf_int)), nrow(f_empty$conf_set) == 0L,
+          identical(f_empty$ci_method, "grid"),
+          any(grepl("EMPTY", f_empty$note, fixed = TRUE) &
+              grepl("`grid`", f_empty$note, fixed = TRUE)))
+## and print() says so next to the interval instead of showing [NA, NA]
+o_empty <- capture.output(print(f_empty))
+stopifnot(any(grepl("IPT CI: empty set", o_empty, fixed = TRUE)),
+          !any(grepl("[NA, NA]", o_empty, fixed = TRUE)))
+
+## ---- 7. n_cores is validated like every other scalar argument ------------
+## 0, a negative, and a fraction used to run silently (and serially): a typo
+## passed unremarked, against the documented "single integer >= 1".
+for (nc in list(0L, -1L, 1.5, c(1L, 2L), "2", Inf))
+  expect_err(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_cores = nc,
+                           conf_int = FALSE, seed = 1),
+             "`n_cores`")
+stopifnot(inherits(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_cores = 1,
+                                 conf_int = FALSE, seed = 1), "mwperm"))
+
 passed("test-validation.R")
