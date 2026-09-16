@@ -9,17 +9,38 @@
 #' The recommended entry points are [mwperm()], which detects the clustering
 #' design of the data and dispatches to the matching test, and
 #' [mwperm_check()], which prints the diagnosis (detected design, roles,
-#' balance, attainable resolution) without running anything. The key object is
-#' the block-cyclic permutation group built by [build_perm_set()]. The
+#' balance, attainable resolution) without running anything. The
 #' design-specific tests -- which [mwperm()] calls and which remain fully
 #' supported for direct use -- are [mwperm_dyadic()] (two-way / dyadic
 #' clustering), [mwperm_threeway()] (three-way clustering), [mwperm_panel()]
 #' (panels with an arbitrary time effect), [mwperm_layout()] (replicated
 #' two-way layouts), [mwperm_irregular()] (irregular layouts, Section 6.4:
-#' repeats that are time periods, or a covariate constant within cells) and
-#' [mwperm_missing()] (incomplete arrays, via fully observed bicliques). All
+#' repeats that are time periods, or a covariate constant within cells),
+#' [mwperm_missing()] (incomplete arrays, via fully observed bicliques) and
+#' [mwperm_dyadic_het()] (dyadic clustering under heteroskedasticity). All
 #' return an object of class `"mwperm"` with [print.mwperm()],
 #' [summary.mwperm()], [confint.mwperm()] and [plot.mwperm()] methods.
+#'
+#' Every test is the same procedure -- partial out the nuisance design
+#' against its transformed copy, minorize, count -- run under a group of
+#' transformations the errors are assumed invariant to, and the package has
+#' two group constructions with two different assumptions:
+#' - **Permutations** ([build_perm_set()], the block-cyclic group of
+#'   Algorithm 1): the error array must be *exchangeable* under relabelling
+#'   of the clusters, conditional on the covariates (Assumption 1). Used by
+#'   every test except the last. Tolerates any error distribution and any
+#'   dependence that is symmetric in the cluster labels; does not tolerate
+#'   an error variance that depends on the cluster identity or the
+#'   covariates.
+#' - **Sign flips** ([build_flip_set()], the group of joint row-and-column
+#'   sign changes, order `2^(n_flip - 1)`): the errors must be *symmetric
+#'   about zero* under those sign changes. Used by [mwperm_dyadic_het()].
+#'   Tolerates arbitrary heteroskedasticity; does not tolerate skewness.
+#'
+#' Neither assumption implies the other, and the sign-flip test is less
+#' powerful when exchangeability does hold, so the choice is a judgement
+#' about the errors that the data cannot make for you: [mwperm()] never
+#' selects the sign-flip test automatically.
 #'
 #' Two synthetic data sets, [trade_dyadic] and [trade_panel], illustrate the
 #' dyadic and panel work flows.
@@ -37,8 +58,9 @@
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
 #'
-#' @seealso [mwperm()], [mwperm_check()], [mwperm_dyadic()], [mwperm_panel()],
-#'   [build_perm_set()].
+#' @seealso [mwperm()], [mwperm_check()], [mwperm_dyadic()],
+#'   [mwperm_dyadic_het()], [mwperm_panel()], [build_perm_set()],
+#'   [build_flip_set()].
 #'
 #' @importFrom stats median lm.fit model.matrix sd setNames coef nobs
 #' @importFrom graphics arrows axis hist legend mtext par plot.new plot.window

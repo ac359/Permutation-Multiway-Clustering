@@ -157,7 +157,12 @@ Invariant Permutation Test (IPT, Procedure 1) of Guo, Toulis and Wang
 Unlike multi-way cluster-robust standard errors or the wild cluster
 bootstrap, the test makes no assumption on the covariate distribution
 (covariates may be irregular or heavy-tailed) and is valid for a finite
-number of clusters.
+number of clusters. What it does assume is exchangeability of the errors
+\emph{given} the covariates, which rules out an error variance that depends
+on the cluster identity or on the covariates; for that case see
+\code{\link{mwperm_dyadic_het}}, the same test under a sign-flip group,
+which tolerates arbitrary heteroskedasticity at the price of assuming the
+errors symmetric about zero. Neither assumption implies the other.
 
 \strong{Aggregation over repetitions, and what "exact" covers.} Theorem 1
 establishes finite-sample validity for a single random permutation group, so
@@ -222,6 +227,8 @@ Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
   inference under multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
-\code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
+\code{\link{mwperm_dyadic_het}} for the same design under sign symmetry
+  instead of exchangeability (robust to heteroskedasticity, needs symmetric
+  errors); \code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
   \code{\link{mwperm_layout}}, \code{\link{mwperm_missing}}.
 }

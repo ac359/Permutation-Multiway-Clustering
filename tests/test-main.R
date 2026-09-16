@@ -100,8 +100,43 @@ expect_err(mwperm_check(index = list(i = g3$i, j = g3$j, t = g3$year),
                         time = g3$year), "Too many clustering dimensions")
 expect_err(mwperm_check(index = list(i = g3$i, j = g3$j, t = g3$year),
                         rep = g3$year), "Too many clustering dimensions")
-expect_err(mwperm_check(index = list(i = gm$i, j = gm$j),
-                        time = rep(1, nrow(gm))), "complete")
+## An incomplete array with a tagged `time =` is an incomplete PANEL: it routes
+## to mwperm_panel_missing(), exactly as three untagged indices already do,
+## and forcing design = "panel_missing" -- with the time role tagged or taken
+## from the third index -- lands in the same place with the roles filled in.
+## Before 0.4.0's dispatcher caught up, the tagged path errored and the forced
+## path returned a diagnosis with no roles and an empty "Would run" line.
+chk_t <- mwperm_check(index = list(i = gm3$i, j = gm3$j), time = gm3$year)
+chk_f <- mwperm_check(index = list(i = gm3$i, j = gm3$j, year = gm3$year),
+                      design = "panel_missing")
+chk_ft <- mwperm_check(index = list(i = gm3$i, j = gm3$j), time = gm3$year,
+                       design = "panel_missing")
+for (ck in list(chk_t, chk_f, chk_ft))
+  stopifnot(identical(ck$design, "panel_missing"),
+            identical(names(ck$roles), c("row", "col", "time")),
+            identical(ck$roles$row, "i"), identical(ck$roles$col, "j"),
+            is.na(ck$K_default), identical(ck$balance, "incomplete"),
+            grepl("^mwperm_panel_missing\\(y, d, x, row = i, col = j, time = ",
+                  ck$call_str))
+stopifnot(identical(chk_t$roles$time, "time"),
+          identical(chk_f$roles$time, "year"),
+          grepl("incomplete array", chk_t$reason, fixed = TRUE),
+          any(grepl("observed in EVERY period", chk_t$notes, fixed = TRUE)))
+out_ft <- paste(capture.output(print(chk_ft)), collapse = "\n")
+stopifnot(grepl("Roles           : row = i, col = j, time = time", out_ft,
+                fixed = TRUE),
+          grepl("Would run       : mwperm_panel_missing(y, d, x, row = i, ",
+                out_ft, fixed = TRUE))
+## forcing the complete-array panel on an incomplete array names the way out
+expect_err(mwperm_check(index = list(i = gm3$i, j = gm3$j), time = gm3$year,
+                        design = "panel"), "panel_missing")
+## the incomplete panel still needs a time role to hold fixed
+expect_err(mwperm_check(index = list(i = g2$i, j = g2$j),
+                        design = "panel_missing"), "time dimension")
+## a repeated (row, col, time) cell is fatal under a tagged time, as before
+dup3 <- rbind(g3, g3[1L, ])
+expect_err(mwperm_check(index = list(i = dup3$i, j = dup3$j),
+                        time = dup3$year), "repeat")
 
 ## ---- 3. detection safety: every uncertain fork is announced ---------------
 ## A complete balanced 6 x 6 x 4 array can be read as three-way (permute all
@@ -239,6 +274,36 @@ mi_dir <- mwperm_missing(ymm, dmm, row = gmm$i, col = gmm$j, min_block = 3,
 mi_dis <- mwperm(y = ymm, d = dmm, index = list(row = gmm$i, col = gmm$j),
                  design = "missing", min_block = 3, seed = 7, verbose = FALSE)
 stopifnot(isTRUE(same_fit(mi_dir, mi_dis, skip = c("call", "auto"))))
+
+## Incomplete panel, reached three ways: auto-detected from a tagged `time =`,
+## auto-detected from three untagged indices, and forced. All must be the
+## direct mwperm_panel_missing() call. The auto routes add the detector's note
+## to `note`; the forced route adds nothing, so it is compared in full.
+gpm <- gp[-c(3L, 40L), ]                            # 6 x 6 x 4 minus 2 cells
+set.seed(6)
+dpm <- rnorm(nrow(gpm))
+ypm <- rnorm(6)[gpm$i] + rnorm(6)[gpm$j] + cumsum(rnorm(4))[gpm$t] +
+  0.3 * dpm + rnorm(nrow(gpm))
+pm_dir <- mwperm_panel_missing(ypm, dpm, row = gpm$i, col = gpm$j,
+                               time = gpm$t, min_block = 3, seed = 8)
+pm_tag <- mwperm(y = ypm, d = dpm, index = list(row = gpm$i, col = gpm$j),
+                 time = gpm$t, min_block = 3, seed = 8, verbose = FALSE)
+pm_3 <- suppressWarnings(
+  mwperm(y = ypm, d = dpm, index = list(row = gpm$i, col = gpm$j, t = gpm$t),
+         min_block = 3, seed = 8, verbose = FALSE))
+pm_frc <- mwperm(y = ypm, d = dpm, index = list(row = gpm$i, col = gpm$j),
+                 time = gpm$t, design = "panel_missing", min_block = 3,
+                 seed = 8, verbose = FALSE)
+stopifnot(isTRUE(same_fit(pm_dir, pm_tag, skip = c("call", "auto", "note"))),
+          isTRUE(same_fit(pm_dir, pm_3, skip = c("call", "auto", "note"))),
+          isTRUE(same_fit(pm_dir, pm_frc, skip = c("call", "auto"))),
+          identical(pm_tag$auto$design, "panel_missing"),
+          identical(pm_3$auto$design, "panel_missing"),
+          identical(pm_frc$auto$design, "panel_missing"),
+          identical(pm_frc$auto$roles,
+                    list(row = "row", col = "col", time = "time")),
+          any(grepl("observed in EVERY period", pm_tag$note, fixed = TRUE)),
+          all(pm_dir$note %in% pm_tag$note))
 
 ## ---- 5. data = : columns are resolved by name -----------------------------
 f_nm <- mwperm(y = "yy", d = c("dd", "xx"), index = c("i", "j"), data = df2,

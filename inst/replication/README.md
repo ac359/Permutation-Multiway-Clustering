@@ -24,6 +24,7 @@ and run the scripts from a writable copy of that directory (they read
 | `03_ci_coverage.R` | The inverted-test confidence interval covers the truth at least at its nominal level (coverage is inherited from test validity). |
 | `04_negative_control.R` | On a *trending* panel the three-way test (which permutes time) over-rejects badly while the panel test (which holds time fixed) stays valid — the reason `mwperm()` defaults to panel for 3-index arrays. |
 | `05_permute.R` | The one-sided `permute = "rows"` option is valid and powerful on a design (a single fully observed column) the two-sided test cannot handle at all. |
+| `07_size_signflip.R` | The sign-flip test (`mwperm_dyadic_het()`, IPT-Het) against the permutation test on the same heteroskedastic gravity draws (0.4.0): the permutation test's size rises with the strength of the heteroskedasticity while the sign-flip test's stays at or below nominal, and under homoskedastic errors the sign-flip test is the *less* powerful of the two -- the trade-off the man page states. |
 | `06_size_by_design.R` | Type-I error for the four designs `01_size.R` omits — replicated layouts, irregular layouts, incomplete arrays and incomplete panels — at `n_reps = 1`, with `K` printed beside every rate and a check that rejection at `alpha` is attainable before a rate is quoted. The irregular design is run with a cell-constant covariate *and* with one that varies within cells under a common period effect: the second arm is valid only because `mwperm_irregular()` holds the `rep` level fixed across cells (0.4.0), and is the arm a random per-cell trim fails. |
 
 ## Running
@@ -31,7 +32,7 @@ and run the scripts from a writable copy of that directory (they read
 With `mwperm` installed, from within a writable copy of this directory:
 
 ```sh
-Rscript make.R                 # runs 01–06 in order, ~15–20 min total
+Rscript make.R                 # runs 01–07 in order, ~25 min total
 MC_N=10000 Rscript make.R      # tighter Monte-Carlo error (much longer)
 ```
 
@@ -58,7 +59,8 @@ different parameters.
 
 `expected/` holds the tables this suite produces at the default sim counts
 (2000 per size/permute cell, 1500 per power cell, 600 per coverage cell, 1000
-per negative-control cell, 1000 per size-by-design cell), together with the
+per negative-control cell, 1000 per size-by-design cell, 500 per sign-flip
+cell), together with the
 `sessionInfo()` behind them.
 Compare your
 `out/` against `expected/` to confirm a faithful reproduction. Small

@@ -11,25 +11,27 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     regression coefficients under multi-way (e.g. dyadic) clustering, including
     panel and missing-data designs. The methods implement the invariant
     permutation test of Guo, W., Toulis, P. and Wang, Y. (2026)
-    <doi:10.48550/arXiv.2601.08610>. Validity requires only that the errors be
-    separately exchangeable across clustering dimensions, conditional on the
-    covariates; in particular the covariate distribution is unrestricted, so
-    the tests remain exact in finite samples even with few clusters or
-    heavy-tailed regressors, where multi-way cluster-robust standard errors and
-    the wild cluster bootstrap can be badly miscalibrated. A block-cyclic
-    permutation group is constructed for each clustering dimension, nuisance
+    <doi:10.48550/arXiv.2601.08610>. Validity requires only an invariance of
+    the errors conditional on the covariates: separate exchangeability across
+    the clustering dimensions for the permutation tests, or symmetry under
+    row-and-column sign changes for the heteroskedasticity-robust sign-flip
+    variant. The covariate distribution is unrestricted, so the tests remain
+    exact in finite samples even with few clusters or heavy-tailed regressors,
+    where multi-way cluster-robust standard errors and the wild cluster
+    bootstrap can be badly miscalibrated. A block-cyclic permutation group (or
+    a sign-flip group) is constructed for the clustering dimensions, nuisance
     covariates are partialled out by the Frisch-Waugh-Lovell projection, and
     confidence intervals are obtained by test inversion. Specialised routines
     cover two-way (dyadic) designs, three-way clustering, panels with arbitrary
     time effects, incomplete and unbalanced panels, replicated two-way layouts,
     irregular layouts in which the repeats are time periods or the covariate
-    is constant within cells, and incomplete arrays via fully observed
-    bicliques.
+    is constant within cells, incomplete arrays via fully observed bicliques,
+    and dyadic designs with arbitrary heteroskedasticity.
 License: MIT + file LICENSE
 URL: https://github.com/ac359/Permutation-Multiway-Clustering
 BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
 Language: en-US
-Date: 2026-09-11
+Date: 2026-09-16
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
