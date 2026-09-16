@@ -4,8 +4,8 @@
 ## Runs every exported mwperm_* front end plus mwperm() on the shipped data at
 ## default arguments with seed = 1, plus one non-default configuration per
 ## design (non-zero beta_null, n_reps = 9, conf_int = TRUE), plus
-## find_bicliques() on the diagonal-deleted dyadic design, and saves the full
-## result objects.
+## find_bicliques() on the diagonal-deleted dyadic design and the two group
+## constructors, and saves the full result objects.
 ##
 ##   Rscript tests/golden/make_baseline.R          # write baseline.rds
 ##   Rscript tests/golden/make_baseline.R --check  # compare, field by field
@@ -106,6 +106,9 @@ run("panel_missing_default", with(ipn, mwperm_panel_missing(
   row = importer, col = exporter, time = year, min_block = 5L, seed = 1)))
 run("irregular_default", with(irr, mwperm_irregular(
   y = y, d = d, row = i, col = j, rep = l, L0 = 4L, min_block = 2L, seed = 1)))
+run("dyadic_het_default", with(td, mwperm_dyadic_het(
+  y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
+  row = importer, col = exporter, seed = 1)))
 run("unified_dyadic", mwperm(
   y = "log_trade", d = "log_dist", x = c("log_gdp_i", "log_gdp_j"),
   index = c("importer", "exporter"), data = td, seed = 1, verbose = FALSE))
@@ -161,6 +164,10 @@ irr2$y <- 0.4 * irr2$d + rnorm(40L)[irr2$i] + rnorm(20L)[irr2$j] +
 run("irregular_nondefault", with(irr2, mwperm_irregular(
   y = y, d = d, row = i, col = j, rep = t, L0 = 2L, min_block = 2L,
   beta_null = 0.4, n_reps = 9L, conf_int = TRUE, seed = 1)))
+run("dyadic_het_nondefault", with(td, mwperm_dyadic_het(
+  y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
+  row = importer, col = exporter, n_flip = 6L, beta_null = -1, n_reps = 9L,
+  conf_int = TRUE, seed = 1)))
 run("layout_L0", with(irr, mwperm_layout(
   y = y, d = d, row = i, col = j, rep = l, L0 = 4L, n_reps = 9L,
   conf_int = TRUE, seed = 1)))
@@ -184,6 +191,7 @@ run("bicliques_inc_greedy", with(inc, find_bicliques(
 run("bicliques_inc_min2", with(inc, find_bicliques(
   row = importer, col = exporter, min_block = 2L, method = "greedy")))
 run("permset", build_perm_set(n = 20, K = 5, seed = 1))
+run("flipset", build_flip_set(n_row = 20, n_col = 15, n_flip = 5, seed = 1))
 
 ## ---- write or check -------------------------------------------------------
 ## Fields added by later work (conf_set, aggregate, ...) are not in the

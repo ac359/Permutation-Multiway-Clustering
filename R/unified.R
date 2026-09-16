@@ -1,5 +1,5 @@
 ## Unified entry point: automatic design detection (mwperm_check) and
-## dispatch (mwperm). A thin, additive layer over the five mwperm_* front
+## dispatch (mwperm). A thin, additive layer over the eight mwperm_* front
 ## ends -- it changes nothing about how any test is computed.
 ##
 ## Detection policy. Forks that are visible in the data's *structure*
@@ -20,6 +20,11 @@
 ##   * 2 indices with repeated cells: layout vs a panel whose time index was
 ##     not passed. Layout assumes the within-cell replicates are exchangeable;
 ##     if they are a time series that is false. Default layout + warning.
+##   * Heteroskedasticity is a third such assumption, and it has NO
+##     structural signature at all, so the sign-flip test (mwperm_dyadic_het,
+##     design = "dyadic_het") is never detected -- only offered, in one line
+##     of the printed diagnosis on a complete dyadic array. That line lives in
+##     `alternatives`, not `notes`, so it never reaches a fitted object.
 
 ## ---- small helpers ----------------------------------------------------------
 
@@ -103,11 +108,11 @@
 #' anything. [mwperm()] uses it for automatic dispatch; call it directly to
 #' see the diagnosis.
 #'
-#' Structural forks (dyadic vs missing vs layout-by-replication) are resolved
-#' silently from the data. Two forks depend on an *exchangeability assumption
-#' the data cannot reveal* and are therefore announced with override
-#' instructions, defaulting to the choice that remains valid under the widest
-#' set of error processes:
+#' Structural forks (dyadic vs missing, panel vs incomplete panel, and
+#' layout-by-replication) are resolved silently from the data. Two forks
+#' depend on an *exchangeability assumption the data cannot reveal* and are
+#' therefore announced with override instructions, defaulting to the choice
+#' that remains valid under the widest set of error processes:
 #' - **panel vs three-way** (complete balanced 3-index arrays): running
 #'   [mwperm_threeway()] on a panel whose errors are dependent over time is
 #'   *invalid* (size distortion), while running [mwperm_panel()] on genuinely
@@ -130,6 +135,15 @@
 #'   series, pass the time variable via `time =` to get the panel test
 #'   instead. A notice is attached.
 #'
+#' A third assumption the data cannot reveal is *heteroskedasticity*: every
+#' permutation design needs the errors exchangeable *given* the covariates,
+#' which an error variance that depends on the covariates violates. Nothing
+#' in the clustering structure shows this, so the diagnosis never selects
+#' the sign-flip test ([mwperm_dyadic_het()], valid under arbitrary
+#' heteroskedasticity but needing symmetric errors); on a complete dyadic
+#' array it prints one line offering `design = "dyadic_het"`, and the choice
+#' is yours.
+#'
 #' @param index The clustering dimensions (2 or 3): a data frame, a named list
 #'   of vectors, or a character vector of column names resolved against
 #'   `data`.
@@ -140,11 +154,16 @@
 #'   `rep` entries are resolved.
 #' @param time Optional explicit time dimension: a vector, or the name of a
 #'   column of `data` (or of one of the `index` columns). Forces the panel
-#'   interpretation of that dimension.
+#'   interpretation of that dimension: a complete `(row, col, time)` array
+#'   runs [mwperm_panel()], an incomplete one [mwperm_panel_missing()].
 #' @param rep Optional explicit replication identifier (vector or column
 #'   name): declares within-cell replication and forces the layout design.
 #' @param design Force a design instead of auto-detecting (the structure is
-#'   still validated against it).
+#'   still validated against it). `"dyadic_het"` -- the sign-flip test of
+#'   [mwperm_dyadic_het()] -- is *opt-in only*: it is never detected, because
+#'   heteroskedasticity leaves no trace in the clustering structure, and it
+#'   is validated exactly as `"dyadic"` (two indices, one observation per
+#'   cell, complete array).
 #' @param alpha,aggregate The test level and cross-repetition rule the fit
 #'   will use (the defaults of every front end). They decide the resolution
 #'   verdict: the smallest reportable p-value is `1/(K+1)` under `"median"`
@@ -160,9 +179,14 @@
 #'   reportable p-value at the default K), `levels_needed` (the smallest
 #'   permuted dimension a `(1 - alpha)` set requires) and `resolution_ok`
 #'   (whether that set is attainable), `call_str` (the downstream call),
-#'   `reason` (one-line explanation), and `warnings`/`notes` (the
-#'   assumption-fork notices etc.). Its `print` method lays this out as a
-#'   short human diagnosis.
+#'   `reason` (one-line explanation), `warnings`/`notes` (the
+#'   assumption-fork notices etc.) and `alternatives` (one-line pointers to
+#'   designs the data cannot select for you -- on a complete dyadic array,
+#'   `design = "dyadic_het"`). For `design = "dyadic_het"` the group order
+#'   is `2^(n_flip - 1)`, so `K_default` is `NA`, the extra field
+#'   `n_flip_default` carries the fit's default `n_flip`, and
+#'   `levels_needed` is the `n_flip` a `(1 - alpha)` set requires. Its
+#'   `print` method lays this out as a short human diagnosis.
 #'
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
@@ -177,7 +201,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                          time = NULL, rep = NULL,
                          design = c("auto", "dyadic", "threeway", "panel",
                                     "panel_missing", "layout", "missing",
-                                    "irregular"),
+                                    "irregular", "dyadic_het"),
                          alpha = 0.05, aggregate = c("median", "median2")) {
   design <- match.arg(design)
   aggregate <- match.arg(aggregate)
@@ -252,6 +276,11 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   balance <- NA_character_
   cells_obs <- NA_integer_
   cells_exp <- NA_integer_
+  ## Sign-flip design only: the default n_flip the fit would use (its group
+  ## order is 2^(n_flip - 1), so K_default is not the right number to show).
+  n_flip_default <- NULL
+  ## One-line pointers to a design the data cannot select for the user.
+  alternatives <- character(0)
 
   finish_layout <- function(why, warn_txt = NULL) {
     cell <- .dense_id(interaction(dense[[1L]], dense[[2L]], drop = TRUE))
@@ -315,27 +344,65 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       "find_bicliques() and ?mwperm_irregular."))
   }
 
-  ## Completeness gate shared by every panel path (auto, tagged, forced):
-  ## mwperm_panel hard-requires a complete balanced (row, col, time) array,
-  ## so fail here with the actionable message rather than deep in the engine.
-  require_complete_panel <- function() {
+  ## Structural gate shared by every panel path (auto, tagged, forced). A
+  ## REPEATED (row, col, time) cell is always fatal: two observations would
+  ## claim one slot of the "same (pi, sigma) in every period" map, and no
+  ## panel design is defined. An INCOMPLETE array is not fatal -- since 0.4.0
+  ## it is the incomplete-panel design, mwperm_panel_missing() -- so this only
+  ## reports completeness and leaves the caller to route (auto) or refuse
+  ## (a forced design = "panel").
+  panel_cells <- function() {
     nT <- length(unique(time_v[[1L]]))
     tri <- .cell_code(cbind(dense[[1L]], dense[[2L]],
                             .dense_id(time_v[[1L]], names(time_v))))
     exp3 <- prod(dims[1:2]) * nT
-    if (anyDuplicated(tri) > 0L || N != exp3)
+    if (anyDuplicated(tri) > 0L)
       stop(sprintf(paste0(
-        "A panel needs a complete balanced (row, col, time) array: %d ",
-        "observations vs %s=%d x %s=%d x %s=%d = %d expected cells%s. ",
-        "Options: (a) curate a complete balanced subset; (b) if the repeats ",
-        "are exchangeable replication rather than time, pass them as `rep =` ",
-        "for a layout design; (c) select one period and use the 2-index ",
-        "dyadic/missing design."),
-        N, names(idx)[1L], dims[1L], names(idx)[2L], dims[2L],
-        names(time_v), nT, exp3,
-        if (anyDuplicated(tri) > 0L) "; some cells repeat" else ""),
-        call. = FALSE)
-    exp3
+        "A panel needs one observation per (row, col, time) cell, but some ",
+        "(%s, %s, %s) cell repeats: %d observations for %s=%d x %s=%d x ",
+        "%s=%d = %d cells. If the repeats are exchangeable replication ",
+        "rather than time, pass them as `rep =` for a layout design; ",
+        "otherwise aggregate to one observation per cell."),
+        names(idx)[1L], names(idx)[2L], names(time_v), N,
+        names(idx)[1L], dims[1L], names(idx)[2L], dims[2L],
+        names(time_v), nT, exp3), call. = FALSE)
+    list(expected = exp3, complete = N == exp3,
+         dims_str = sprintf("%s=%d x %s=%d x %s=%d", names(idx)[1L], dims[1L],
+                            names(idx)[2L], dims[2L], names(time_v), nT))
+  }
+
+  ## With no `time =` tag, a forced panel design takes the third index as time
+  ## (the caller has already required C == 3).
+  third_index_as_time <- function() {
+    if (!is.null(time_v)) return(invisible())
+    time_v <<- idx[3L]
+    idx <<- idx[1:2]
+    dims <<- dims[1:2]
+    dense <<- dense[1:2]
+  }
+
+  ## The incomplete-panel design, mwperm_panel_missing(): reached by
+  ## auto-detection (three untagged indices, or a tagged `time =`, on an
+  ## incomplete array) and by forcing it. `announce` attaches the routing
+  ## note on the auto routes only -- a forced choice needs no explanation,
+  ## and the fit's own note already reports what the mask kept.
+  finish_panel_missing <- function(why, complete, expected, announce) {
+    chosen <<- "panel_missing"
+    roles <<- list(row = names(idx)[1L], col = names(idx)[2L],
+                   time = names(time_v))
+    reason <<- why
+    ## The group order comes from the biclique blocks, which are not searched
+    ## until fit time, so K is unknown here (as for "missing").
+    K_default <<- NA_integer_
+    balance <<- if (complete) "complete" else "incomplete"
+    cells_obs <<- N
+    cells_exp <<- expected
+    if (announce)
+      notes <<- c(notes, paste0(
+        "The array is incomplete, so the test restricts to (row, col) pairs ",
+        "observed in EVERY period and to the fully observed blocks the ",
+        "biclique search extracts from them; the group order follows those ",
+        "blocks. See ?mwperm_panel_missing and find_bicliques()."))
   }
 
   if (design != "auto") {
@@ -344,7 +411,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     ## actionably, not deep inside the engine)
     chosen <- design
     reason <- "forced via design ="
-    if (design %in% c("dyadic", "missing")) {
+    if (design %in% c("dyadic", "missing", "dyadic_het")) {
       if (C != 2L)
         stop(sprintf("design = \"%s\" needs exactly 2 index dimensions.",
                      design), call. = FALSE)
@@ -359,32 +426,52 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       cells_exp <- prod(dims[1:2])
       balance <- if (N == cells_exp) "complete"
                  else sprintf("incomplete (%d of %d cells)", N, cells_exp)
-      if (design == "dyadic" && N != cells_exp)
-        stop(sprintf(paste0("design = \"dyadic\" requires a complete ",
+      if (design %in% c("dyadic", "dyadic_het") && N != cells_exp)
+        stop(sprintf(paste0("design = \"%s\" requires a complete ",
                             "array but only ",
                             "%d of %d cells are observed. Use ",
                             "design = \"missing\" ",
                             "(Procedure 2, fully observed bicliques) instead."),
-                     N, cells_exp), call. = FALSE)
+                     design, N, cells_exp), call. = FALSE)
       if (design == "missing") {
         K_default <- NA_integer_          # depends on the biclique blocks
+      }
+      if (design == "dyadic_het") {
+        ## The sign-flip group's order is 2^(n_flip - 1) at the fit's default
+        ## n_flip (8, capped by the smaller dimension: .default_n_flip()), and
+        ## K_default has no meaning for it.
+        K_default <- NA_integer_
+        n_flip_default <- min(8L, min(dims[1:2]))
       }
     } else if (design == "panel") {
       if (is.null(time_v) && C != 3L)
         stop(paste0("design = \"panel\" needs a time dimension: pass 3 ",
                     "index columns or `time =`."), call. = FALSE)
-      if (is.null(time_v)) {
-        time_v <- idx[3L]
-        idx <- idx[1:2]
-        dims <- dims[1:2]
-        dense <- dense[1:2]
-      }
+      third_index_as_time()
+      pc <- panel_cells()
+      if (!pc$complete)
+        stop(sprintf(paste0(
+          "design = \"panel\" needs a complete balanced (row, col, time) ",
+          "array, but only %d of %s = %d cells are observed. Use design = ",
+          "\"panel_missing\" (or call mwperm_panel_missing() directly), ",
+          "which restricts to the (row, col) pairs observed in every period ",
+          "and permutes within fully observed blocks with the period held ",
+          "fixed; or curate a complete balanced subset."),
+          N, pc$dims_str, pc$expected), call. = FALSE)
       roles <- list(row = names(idx)[1L], col = names(idx)[2L],
                     time = names(time_v))
       K_default <- min(dims[1:2]) - 1L
       cells_obs <- N
-      cells_exp <- require_complete_panel()
+      cells_exp <- pc$expected
       balance <- "complete"
+    } else if (design == "panel_missing") {
+      if (is.null(time_v) && C != 3L)
+        stop(paste0("design = \"panel_missing\" needs a time dimension: ",
+                    "pass 3 index columns or `time =`."), call. = FALSE)
+      third_index_as_time()
+      pc <- panel_cells()
+      finish_panel_missing("forced via design =", complete = pc$complete,
+                           expected = pc$expected, announce = FALSE)
     } else if (design == "threeway") {
       if (C != 3L)
         stop("design = \"threeway\" needs exactly 3 index dimensions.",
@@ -451,18 +538,27 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
            call. = FALSE)
     finish_layout("`rep =` declares within-cell replication")
   } else if (!is.null(time_v)) {
-    ## user declared a time dimension -> panel
+    ## user declared a time dimension -> panel; an incomplete array is the
+    ## incomplete-panel design, exactly as on the three-untagged-index route
+    ## below (completeness is structure, so this fork is silent)
     if (C != 2L)
       stop(paste0("With `time =`, pass exactly 2 index dimensions (the ",
                   "cross-section)."), call. = FALSE)
-    chosen <- "panel"
-    roles <- list(row = names(idx)[1L], col = names(idx)[2L],
-                  time = names(time_v))
-    reason <- "`time =` declares a panel"
-    K_default <- min(dims[1:2]) - 1L
-    cells_obs <- N
-    cells_exp <- require_complete_panel()
-    balance <- "complete"
+    pc <- panel_cells()
+    if (pc$complete) {
+      chosen <- "panel"
+      roles <- list(row = names(idx)[1L], col = names(idx)[2L],
+                    time = names(time_v))
+      reason <- "`time =` declares a panel"
+      K_default <- min(dims[1:2]) - 1L
+      cells_obs <- N
+      cells_exp <- pc$expected
+      balance <- "complete"
+    } else {
+      finish_panel_missing("`time =` declares a panel; incomplete array",
+                           complete = FALSE, expected = pc$expected,
+                           announce = TRUE)
+    }
   } else if (C == 2L) {
     if (dup2) {
       ## ASSUMPTION FORK: layout by default, suppressed-panel warning
@@ -482,6 +578,12 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         chosen <- "dyadic"
         balance <- "complete"
         reason <- "2 indices, one observation per cell, complete array"
+        ## Heteroskedasticity leaves no trace in the clustering structure, so
+        ## the sign-flip test can never be detected -- only offered.
+        alternatives <- c(alternatives, paste0(
+          "design = \"dyadic_het\" runs the sign-flip test instead, which ",
+          "trades exchangeability of the errors for symmetry about zero and ",
+          "so tolerates arbitrary heteroskedasticity (see ?mwperm_dyadic_het)"))
       } else {
         chosen <- "missing"
         balance <- sprintf("incomplete (%d of %d cells)", N, cells_exp)
@@ -497,7 +599,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     ## C == 3, no tags. A REPEATED cell is still fatal -- with two
     ## observations in one (i, j, t) neither the complete-array designs nor the
     ## blockwise one has a well-defined map. An INCOMPLETE array is not: since
-    ## 0.3.0 it routes to mwperm_panel_missing(), which masks to the pairs
+    ## 0.4.0 it routes to mwperm_panel_missing(), which masks to the pairs
     ## observed in every period and permutes blockwise. The time role is
     ## decided first because that choice does not depend on completeness, and
     ## the incomplete design needs it too.
@@ -573,17 +675,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       K_default <- min(dims_cs) - 1L
       balance <- "complete"
     } else {
-      ## Incomplete: the group order comes from the biclique blocks, which are
-      ## not searched until fit time, so K is unknown here (as for "missing").
-      chosen <- "panel_missing"
-      K_default <- NA_integer_
-      balance <- "incomplete"
-      reason <- paste0(t_why, "; incomplete array")
-      notes <- c(notes, paste0(
-        "The array is incomplete, so the test restricts to (row, col) pairs ",
-        "observed in EVERY period and to the fully observed blocks the ",
-        "biclique search extracts from them; the group order follows those ",
-        "blocks. See ?mwperm_panel_missing and find_bicliques()."))
+      finish_panel_missing(paste0(t_why, "; incomplete array"),
+                           complete = FALSE, expected = cells_exp,
+                           announce = TRUE)
     }
     dims <- c(dims_cs, dims[t_k])
     names(dims) <- c(names(idx), names(time_v))
@@ -593,21 +687,31 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   ## The verdict is about the p-value the FIT will report, so it uses the same
   ## floor .ipt_engine() gates on: 1/(K+1) under "median", 2/(K+1) under
   ## "median2" (which reports min(1, 2 x median)), compared against the alpha
-  ## the fit will use -- not a hard-coded 0.05.
+  ## the fit will use -- not a hard-coded 0.05. For the sign-flip design the
+  ## group order is 2^(n_flip - 1) at the default n_flip, and `levels_needed`
+  ## is then the n_flip a set needs rather than a cluster count.
   agg_mult <- if (identical(aggregate, "median2")) 2L else 1L
   need_lvl <- as.integer(ceiling(agg_mult / alpha))
-  p_floor <- if (is.na(K_default)) NA_real_ else
-    min(1, agg_mult / (K_default + 1L))
-  res_ok <- if (is.na(K_default)) NA else p_floor <= alpha
+  if (!is.null(n_flip_default)) {
+    p_floor <- min(1, agg_mult / 2^(n_flip_default - 1L))
+    need_lvl <- 1L + as.integer(ceiling(log2(need_lvl)))
+    res_ok <- p_floor <= alpha
+  } else {
+    p_floor <- if (is.na(K_default)) NA_real_ else
+      min(1, agg_mult / (K_default + 1L))
+    res_ok <- if (is.na(K_default)) NA else p_floor <= alpha
+  }
 
   ## the exact downstream call
   fn <- c(dyadic = "mwperm_dyadic", panel = "mwperm_panel",
           panel_missing = "mwperm_panel_missing",
           threeway = "mwperm_threeway", layout = "mwperm_layout",
           missing = "mwperm_missing",
-          irregular = "mwperm_irregular")[[chosen]]
+          irregular = "mwperm_irregular",
+          dyadic_het = "mwperm_dyadic_het")[[chosen]]
   args <- switch(chosen,
     dyadic = sprintf("row = %s, col = %s", roles$row, roles$col),
+    dyadic_het = sprintf("row = %s, col = %s", roles$row, roles$col),
     missing = sprintf("row = %s, col = %s, min_block = ...", roles$row,
                       roles$col),
     panel = sprintf("row = %s, col = %s, time = %s, time_fe = TRUE",
@@ -631,8 +735,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     balance = balance, K_default = K_default,
     alpha = alpha, aggregate = aggregate, p_floor = p_floor,
     levels_needed = need_lvl, resolution_ok = res_ok,
+    n_flip_default = n_flip_default,
     call_str = call_str, reason = reason,
-    warnings = warns, notes = notes,
+    warnings = warns, notes = notes, alternatives = alternatives,
     time = if (!is.null(time_v)) time_v[[1L]] else NULL,
     rep = if (!is.null(rep_v)) rep_v[[1L]] else NULL,
     index = idx
@@ -654,7 +759,8 @@ print.mwperm_design <- function(x, ...) {
       paste(sprintf("%s (%d)", names(x$dims), x$dims), collapse = " x "),
       sprintf(" | %d observations\n", x$n_obs), sep = "")
   cat("Balance         : ", x$balance, "\n", sep = "")
-  if (is.na(x$K_default)) {
+  is_flip <- !is.null(x$n_flip_default)
+  if (is.na(x$K_default) && !is_flip) {
     cat("Resolution      : set by the biclique blocks, so not known until\n",
         "                  they are found (see find_bicliques)\n", sep = "")
   } else {
@@ -662,10 +768,18 @@ print.mwperm_design <- function(x, ...) {
     ## fraction shows where it comes from, the decimal is what gets compared
     ## against alpha. "Too coarse" means no 95% set can exclude anything --
     ## the p-value stays exact either way, so say what is and is not lost.
-    cat(sprintf(paste0("Resolution      : default K = %d, so p-values are ",
-                       "multiples of 1/%d = %s\n"),
-                x$K_default, x$K_default + 1L,
-                .fmt_p(1 / (x$K_default + 1L))))
+    ## The sign-flip design's order is 2^(n_flip - 1), and its remedy is a
+    ## larger n_flip, not more clusters.
+    order <- if (is_flip) 2^(x$n_flip_default - 1L) else x$K_default + 1L
+    if (is_flip)
+      cat(sprintf(paste0("Resolution      : default n_flip = %d, so p-values ",
+                         "are multiples of 1/2^%d = 1/%d = %s\n"),
+                  x$n_flip_default, x$n_flip_default - 1L, order,
+                  .fmt_p(1 / order)))
+    else
+      cat(sprintf(paste0("Resolution      : default K = %d, so p-values are ",
+                         "multiples of 1/%d = %s\n"),
+                  x$K_default, order, .fmt_p(1 / order)))
     ## Objects from before `alpha`/`aggregate` were fields carry neither; read
     ## the 0.05 / "median" they were computed under.
     alpha <- if (is.null(x$alpha)) 0.05 else x$alpha
@@ -678,14 +792,16 @@ print.mwperm_design <- function(x, ...) {
               art, lvl, format(alpha))
     else sprintf(paste0("-> TOO COARSE for %s %s confidence set at alpha = ",
                         "%s (p cannot reach %s). The p-value is still ",
-                        "exact; %s %s set needs >= %d levels in the ",
-                        "smallest permuted dimension."),
-                 art, lvl, format(alpha), format(alpha), art, lvl, need)
+                        "exact; %s %s set needs %s."),
+                 art, lvl, format(alpha), format(alpha), art, lvl,
+                 if (is_flip) sprintf("n_flip >= %d", need)
+                 else sprintf(">= %d levels in the smallest permuted dimension",
+                              need))
     if (identical(agg, "median2"))
       verdict <- paste0(verdict, sprintf(paste0(
         " Under aggregate = \"median2\" the reported p-value is min(1, 2 x ",
         "median), so its floor is 2/%d = %s."),
-        x$K_default + 1L, .fmt_p(2 / (x$K_default + 1L))))
+        order, .fmt_p(2 / order)))
     ## Wrapped at the full console width (not the 0.9 the notes use) so the
     ## verdict's first line -- the one README.md shows -- stays whole.
     cat(strwrap(verdict, initial = "                  ",
@@ -699,6 +815,12 @@ print.mwperm_design <- function(x, ...) {
   for (nt in x$notes)
     cat(strwrap(nt, initial = "  - ", prefix = "    ",
                 width = 0.9 * getOption("width", 80)), sep = "\n")
+  ## Designs the data cannot select (the assumption is invisible in the
+  ## structure), offered in one line each. Objects fitted before this field
+  ## existed carry NULL, which the loop treats as none.
+  for (alt in x$alternatives)
+    cat(strwrap(alt, initial = "  ? ", prefix = "    ",
+                width = 0.9 * getOption("width", 80)), sep = "\n")
   cat("\n")
   invisible(x)
 }
@@ -709,8 +831,11 @@ print.mwperm_design <- function(x, ...) {
 #'
 #' Detects the clustering design of the data via [mwperm_check()] and
 #' dispatches to the matching test -- [mwperm_dyadic()], [mwperm_panel()],
-#' [mwperm_threeway()], [mwperm_layout()] or [mwperm_missing()] -- forwarding
-#' all arguments unchanged. A thin convenience layer: the returned object is
+#' [mwperm_panel_missing()], [mwperm_threeway()], [mwperm_layout()] or
+#' [mwperm_missing()]; [mwperm_irregular()] is never chosen automatically and
+#' needs `design = "irregular"` with `L0`, and [mwperm_dyadic_het()] is never
+#' chosen automatically and needs `design = "dyadic_het"` -- forwarding all
+#' arguments unchanged. A thin convenience layer: the returned object is
 #' exactly what the underlying function returns (plus a record of what was
 #' detected), and calling the specific function directly with the same seed
 #' gives identical results.
@@ -731,16 +856,26 @@ print.mwperm_design <- function(x, ...) {
 #' @param time,rep Optional explicit role tags (vector or column name); see
 #'   [mwperm_check()].
 #' @param design Force a design instead of auto-detecting (the structure is
-#'   still validated against it).
+#'   still validated against it). `"dyadic_het"` runs [mwperm_dyadic_het()],
+#'   the sign-flip test that tolerates heteroskedasticity at the price of
+#'   assuming symmetric errors; it is *never* chosen automatically, because
+#'   heteroskedasticity is invisible in the clustering structure.
 #' @param K Number of non-identity permutations; the default and the
 #'   admissible range depend on the dispatched design -- see the dispatched
-#'   function.
+#'   function. Does not apply to `design = "dyadic_het"`, whose group is
+#'   sized by `n_flip`; supplying it there warns and ignores it.
+#' @param n_flip Passed to [mwperm_dyadic_het()] (`design = "dyadic_het"`
+#'   only: the number of flip groups, group order `2^(n_flip - 1)`;
+#'   supplying it for another design warns and ignores it).
 #' @param time_fe Passed to [mwperm_panel()] or [mwperm_panel_missing()]
 #'   (panel designs only; supplying it for another design warns and ignores
 #'   it).
-#' @param L0 Passed to [mwperm_layout()] (layout only).
-#' @param min_block,block_method,permute Passed to [mwperm_missing()] (missing
-#'   only).
+#' @param L0 Passed to [mwperm_layout()] or [mwperm_irregular()] (layout and
+#'   irregular only; required for `design = "irregular"`).
+#' @param min_block,block_method,permute `min_block` and `block_method` are
+#'   passed to [mwperm_missing()], [mwperm_panel_missing()] or
+#'   [mwperm_irregular()]; `permute` to [mwperm_missing()] only. Supplying any
+#'   of them for another design warns and ignores it.
 #' @param verbose If `TRUE` (default) print one line stating the detected
 #'   design and the dispatched call.
 #' @inheritParams mwperm_dyadic
@@ -783,8 +918,8 @@ print.mwperm_design <- function(x, ...) {
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
 #' @seealso [mwperm_check()] for the diagnosis without any computation;
 #'   [mwperm_dyadic()], [mwperm_panel()], [mwperm_threeway()],
-#'   [mwperm_layout()], [mwperm_irregular()], [mwperm_missing()] for the
-#'   underlying tests.
+#'   [mwperm_layout()], [mwperm_irregular()], [mwperm_missing()],
+#'   [mwperm_dyadic_het()] for the underlying tests.
 #' @examples
 #' data(trade_dyadic)
 #' fit <- mwperm(y = "log_trade", d = "log_dist",
@@ -796,12 +931,12 @@ print.mwperm_design <- function(x, ...) {
 mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                    design = c("auto", "dyadic", "threeway", "panel",
                               "panel_missing", "layout", "missing",
-                              "irregular"),
+                              "irregular", "dyadic_het"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
                    n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
                    time_fe = TRUE, L0 = NULL, min_block = 3L,
                    block_method = c("greedy", "exact"),
-                   permute = c("both", "rows", "cols"),
+                   permute = c("both", "rows", "cols"), n_flip = NULL,
                    aggregate = c("median", "median2"), verbose = TRUE) {
   design <- match.arg(design)
   aggregate <- match.arg(aggregate)
@@ -880,6 +1015,13 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   check_arg("min_block", c("missing", "irregular", "panel_missing"))
   check_arg("block_method", c("missing", "irregular", "panel_missing"))
   check_arg("permute", "missing")
+  check_arg("n_flip", "dyadic_het")
+  ## The sign-flip group is sized by n_flip, not K (its order is 2^(n_flip -
+  ## 1)); a K passed to it would be silently meaningless, so say so.
+  if ("K" %in% supplied && chk$design == "dyadic_het")
+    warning(paste0("`K` sizes a permutation group and does not apply to the ",
+                   "sign-flip design; it was ignored for 'dyadic_het'. Use ",
+                   "`n_flip` (group order 2^(n_flip - 1))."), call. = FALSE)
   if (chk$design == "irregular" && is.null(L0))
     stop(paste0("The Section 6.4 (irregular) design requires `L0 =`, the ",
                 "number of within-cell levels retained per cell, which sets ",
@@ -909,6 +1051,10 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   res <- switch(chk$design,
     dyadic = do.call(mwperm_dyadic,
                      c(common, list(row = ix[[1L]], col = ix[[2L]]))),
+    dyadic_het = do.call(mwperm_dyadic_het,
+                         c(common[names(common) != "K"],
+                           list(row = ix[[1L]], col = ix[[2L]],
+                                n_flip = n_flip))),
     missing = do.call(mwperm_missing,
                       c(common, list(row = ix[[1L]], col = ix[[2L]],
                                      min_block = min_block,

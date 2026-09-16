@@ -80,9 +80,19 @@ print.mwperm <- function(x, digits = 4L, ...) {
         paste(sprintf("%s=%d", names(nc), nc), collapse = ", "),
         sprintf(" (%d observations)\n", x$n_obs), sep = "")
   }
-  cat("Permutations : ", sprintf("K = %d  (group order %d, %d rep%s)\n",
-                                 x$K, x$n_perm, x$n_reps,
-                                 if (x$n_reps == 1L) "" else "s"), sep = "")
+  ## The sign-flip design's group is not "K permutations": its order is
+  ## 2^(n_flip - 1), and n_flip -- not K -- is the number the user chose and
+  ## can change. Name it that way; every permutation design keeps its line.
+  if (!is.null(x$n_flip)) {
+    cat("Sign flips   : ",
+        sprintf("n_flip = %d flip groups  (group order 2^%d = %d, %d rep%s)\n",
+                x$n_flip, x$n_flip - 1L, x$n_perm, x$n_reps,
+                if (x$n_reps == 1L) "" else "s"), sep = "")
+  } else {
+    cat("Permutations : ", sprintf("K = %d  (group order %d, %d rep%s)\n",
+                                   x$K, x$n_perm, x$n_reps,
+                                   if (x$n_reps == 1L) "" else "s"), sep = "")
+  }
   ## The p-value is exact but DISCRETE -- each rep's p-value can only land on
   ## multiples of 1/(K+1). Saying so here is what stops the smallest
   ## attainable value from being read as a coincidence, or a borderline one as
@@ -323,14 +333,16 @@ confint.mwperm <- function(object, parm, level = NULL, ...) {
     ## before `p_floor` existed carry only the grid step.
     floor_p <- if (is.null(object$p_floor)) object$resolution else object$p_floor
     mult <- max(1, round(floor_p * object$n_perm))   # 1, or 2 under "median2"
+    ## Same vocabulary the engine's notes use: the remedy is more clusters
+    ## for a permutation group, a larger n_flip for the sign-flip group.
+    voc <- .group_vocab(if (is.null(object$n_flip)) "perm" else "flip",
+                        as.integer(mult), ceiling(mult / object$alpha))
     why <- if (isTRUE(floor_p > object$alpha))
       sprintf(paste0("the smallest attainable p-value is %s = %.3g, ",
                      "above alpha = %.3g, so no value could have been ",
-                     "excluded. That needs at least %d levels in the ",
-                     "smallest permuted dimension -- a refit alone will not ",
+                     "excluded. That needs %s -- a refit alone will not ",
                      "produce one"),
-              if (mult == 2) "2/(K+1)" else "1/(K+1)",
-              floor_p, object$alpha, ceiling(mult / object$alpha))
+              voc$floor, floor_p, object$alpha, voc$need)
     else "it was not requested; refit with conf_int = TRUE"
     stop(sprintf("No confidence set is stored in this object: %s.", why),
          call. = FALSE)

@@ -117,10 +117,28 @@
 #'
 #' @param y,D,X numeric outcome, covariate(s) of interest, and nuisance design
 #'   (intercept already included), all with N rows.
-#' @param perm_builder function(rep_seed) -> list of K+1 observation gather
-#'   vectors (element 1 the identity), independent of any shift of `y`.
-#' @param K,n_reps,seed group order (non-identity count), number of
-#'   repetitions, and base RNG seed.
+#' @param perm_builder function(rep_seed) -> list of K+1 group elements over
+#'   the observations (element 1 the identity), independent of any shift of
+#'   `y`. **An element is either a bare integer gather vector or a signed
+#'   gather `list(g = , s = )`** -- see `.apply_op()` in core.R for the
+#'   contract and `.ipt_prepare()` for why the engine can treat both alike.
+#'   The five permutation front ends return gather vectors;
+#'   `mwperm_dyadic_het()` returns sign-flip elements (`g = NULL`); a design
+#'   that permutes and flips would return both slots filled. Whatever kind it
+#'   returns, the list must be a group closed under composition with the
+#'   identity first, because that is what Theorem 1 of Guo, Toulis and Wang
+#'   (2026) -- and its extension to any invariance group in their Section 2
+#'   -- assumes.
+#' @param K,n_reps,seed group order minus one (the non-identity count: `K`
+#'   for a permutation group, `2^(n_flip - 1) - 1` for the sign-flip group),
+#'   number of repetitions, and base RNG seed.
+#' @param group which construction built the elements, `"perm"` (default) or
+#'   `"flip"`. It changes NO arithmetic: the p-value, its grid step
+#'   `1/(K+1)` and its floor are computed from `K` alone. It selects only the
+#'   vocabulary of the two resolution notes below, which for a permutation
+#'   group name the cluster count the design needs and for the sign-flip
+#'   group name the `n_flip` it needs (see `.group_vocab()`); with the
+#'   default the note text is byte-identical to what it always was.
 #' @param alpha,conf_int,beta_null,grid test level, whether to invert a
 #'   confidence set, the null value(s), and an optional inversion grid.
 #' @param type,d_names,n_clusters,call metadata stored on the result for
@@ -139,7 +157,8 @@
 .ipt_engine <- function(y, D, X, perm_builder, K, n_reps, seed,
                         alpha, conf_int, beta_null, grid,
                         type, d_names, n_clusters, call, n_cores = 1L,
-                        ci_agg = "median") {
+                        ci_agg = "median", group = c("perm", "flip")) {
+  group <- match.arg(group)
   y <- as.numeric(y)
   D <- as.matrix(D)
   X <- as.matrix(X)
@@ -234,11 +253,17 @@
   agg_mult <- if (identical(ci_agg, "median2")) 2L else 1L
   p_floor  <- min(1, agg_mult * res_min)
   ## Wording and arithmetic shared by the two resolution notes below.
-  floor_lab <- if (agg_mult == 2L) "2/(K+1)" else "1/(K+1)"
-  ## p_floor <= alpha requires K + 1 >= agg_mult / alpha.
+  ## p_floor <= alpha requires (group order) >= agg_mult / alpha.
   need_lvl  <- ceiling(agg_mult / alpha)
+  ## How the notes NAME the group order and the remedy depends on which
+  ## construction built the group: "K + 1 >= 20, at least 20 levels in the
+  ## smallest permuted dimension" for a permutation group, "2^(n_flip - 1) >=
+  ## 20, n_flip >= 6" for the sign-flip group. The numbers are the same
+  ## either way; only the vocabulary changes.
+  voc <- .group_vocab(group, agg_mult, need_lvl)
+  floor_lab <- voc$floor
   agg_why   <- if (agg_mult == 2L)
-    paste0(" The floor is twice the p-value grid step 1/(K+1) = ",
+    paste0(" The floor is twice the p-value grid step ", voc$step, " = ",
            sprintf("%.3g", res_min), " because aggregate = \"median2\" ",
            "reports min(1, 2 x median).") else ""
   ## The permuted-D projections (W in the prep object) are needed for CI / joint
@@ -306,12 +331,11 @@
         paste0("No %.0f%% confidence %s: the smallest attainable p-value is ",
                "%s = %.3g, which is above alpha = %.3g, so no value ",
                "could be excluded and the set would be the whole line. A ",
-               "%.0f%% set needs K + 1 >= %d -- that is, at least %d levels ",
-               "in the smallest permuted dimension. The p-value reported ",
-               "above is unaffected and remains exact.%s"),
+               "%.0f%% set needs %s >= %d -- that is, %s. The p-value ",
+               "reported above is unaffected and remains exact.%s"),
         100 * conf_level, if (d == 1L) "interval" else "region",
         floor_lab, p_floor, alpha, 100 * conf_level,
-        need_lvl, need_lvl, agg_why))
+        voc$order, need_lvl, voc$need, agg_why))
       warned_res <- TRUE
     } else if (d == 1L) {
       ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
@@ -394,9 +418,10 @@
       paste0("The smallest attainable p-value is %s = %.3g, which is ",
              "above alpha = %.3g, so this test cannot reject at that level ",
              "however strong the effect. Rejecting at alpha = %.3g needs ",
-             "K + 1 >= %d -- at least %d levels in the smallest permuted ",
-             "dimension. The p-value itself is still exact and valid.%s"),
-      floor_lab, p_floor, alpha, alpha, need_lvl, need_lvl, agg_why))
+             "%s >= %d -- %s. The p-value itself is still exact and ",
+             "valid.%s"),
+      floor_lab, p_floor, alpha, alpha, voc$order, need_lvl, voc$need,
+      agg_why))
   }
 
   ## Assemble the returned "mwperm" object. Field meanings (read by the S3
@@ -1149,6 +1174,96 @@
     stop("Not enough clusters to permute (need >= 2 in each dimension).",
                    call. = FALSE)
   K
+}
+
+#' Default / validate the number of sign-flip groups `n_flip`.
+#'
+#' Deliberately NOT `.default_K()`: its semantics are wrong here. The
+#' sign-flip group has order `2^(n_flip - 1)` (not `n_flip + 1`), so the
+#' smallest attainable p-value is `1 / 2^(n_flip - 1)` and the cost -- one
+#' residual projection per non-identity element -- is EXPONENTIAL in
+#' `n_flip`, where the permutation designs' cost is linear in `K`. Hence a
+#' fixed default rather than "as large as the design allows": `n_flip = 8`
+#' gives order 128 and a floor of 0.0078, resolution enough for a 95% set
+#' (which needs `2^(n_flip - 1) >= 20`, i.e. `n_flip >= 6`) at 127
+#' projections per repetition. The default is capped at `min(n_row, n_col)`
+#' so every flip group can be reached by the row assignment alone, and a
+#' request above `max_flip` is refused with the projection count it implies.
+#'
+#' @param n_flip user-supplied `n_flip` or `NULL`.
+#' @param n_row,n_col the two cluster counts.
+#' @param default the value used when `n_flip` is `NULL` (before the cap).
+#' @param max_flip the largest `n_flip` accepted.
+#' @keywords internal
+#' @noRd
+.default_n_flip <- function(n_flip, n_row, n_col, default = 8L,
+                            max_flip = 20L) {
+  smallest <- min(n_row, n_col)
+  if (is.null(n_flip)) {
+    n_flip <- min(default, smallest)
+  } else {
+    if (!(is.numeric(n_flip) && length(n_flip) == 1L && is.finite(n_flip) &&
+          n_flip == trunc(n_flip) && n_flip >= 2))
+      stop("`n_flip` must be a single integer >= 2 (or NULL for the default).",
+           call. = FALSE)
+    n_flip <- as.integer(n_flip)
+    if (n_flip > max_flip)
+      stop(sprintf(paste0("`n_flip` = %d is too large: the sign-flip group ",
+                          "has 2^(n_flip - 1) elements, so the fit would ",
+                          "need %s residual projections (one factorization ",
+                          "of the stacked design [X | S_k X] each) per ",
+                          "repetition. Use n_flip <= %d; n_flip = 8 (127 ",
+                          "projections, p-value floor 1/128) is the default."),
+                   n_flip, format(2^(n_flip - 1) - 1, big.mark = ",",
+                                  scientific = FALSE),
+                   max_flip), call. = FALSE)
+    if (n_flip > smallest)
+      stop(sprintf(paste0("`n_flip` = %d exceeds the smaller clustering ",
+                          "dimension (%d levels): each of the n_flip flip ",
+                          "groups must be reachable by the row and column ",
+                          "assignments. Use n_flip <= %d, or leave n_flip = ",
+                          "NULL for the default."),
+                   n_flip, smallest, smallest), call. = FALSE)
+  }
+  if (n_flip < 2L)
+    stop(paste0("Not enough clusters for a sign-flip group (need >= 2 in ",
+                "each dimension, so that n_flip >= 2)."), call. = FALSE)
+  n_flip
+}
+
+#' Vocabulary of the resolution notes, per group construction.
+#'
+#' The engine's two coarse-resolution notes and `confint()`'s refusal all say
+#' the same thing -- the smallest attainable p-value is above alpha, and here
+#' is what the design would need -- but the noun that carries the group order
+#' differs: `K + 1` levels for a permutation group, `2^(n_flip - 1)` for the
+#' sign-flip group, where the remedy is a larger `n_flip`, not more clusters.
+#' The `"perm"` strings are byte-identical to the historical wording, so no
+#' existing note changes.
+#'
+#' @param group `"perm"` or `"flip"`.
+#' @param agg_mult 1, or 2 under `aggregate = "median2"`.
+#' @param need_lvl the group order a `(1 - alpha)` set needs,
+#'   `ceiling(agg_mult / alpha)`.
+#' @return list of strings: `order` (the group-order expression), `step` (the
+#'   grid step), `floor` (the reported floor), `need` (the remedy clause).
+#' @keywords internal
+#' @noRd
+.group_vocab <- function(group, agg_mult, need_lvl) {
+  if (identical(group, "flip")) {
+    list(order = "2^(n_flip - 1)",
+         step  = "1/2^(n_flip-1)",
+         floor = if (agg_mult == 2L) "2/2^(n_flip-1)" else "1/2^(n_flip-1)",
+         ## 2^(n_flip - 1) >= need_lvl  <=>  n_flip >= 1 + ceiling(log2(need))
+         need  = sprintf("n_flip >= %d flip groups",
+                         1L + as.integer(ceiling(log2(need_lvl)))))
+  } else {
+    list(order = "K + 1",
+         step  = "1/(K+1)",
+         floor = if (agg_mult == 2L) "2/(K+1)" else "1/(K+1)",
+         need  = sprintf("at least %d levels in the smallest permuted dimension",
+                         need_lvl))
+  }
 }
 
 #' Derive a per-rep, per-dimension seed from a rep-level seed (or NULL).

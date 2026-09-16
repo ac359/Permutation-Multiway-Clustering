@@ -70,5 +70,7 @@ multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm_dyadic}} and the other front ends, which
-  compose these groups into observation-level permutations.
+  compose these groups into observation-level permutations;
+  \code{\link{build_flip_set}} for the package's other group construction,
+  the sign-flip group behind \code{\link{mwperm_dyadic_het}}.
 }

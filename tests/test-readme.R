@@ -1,8 +1,8 @@
 ## The output README.md SHOWS must be the output the package PRODUCES.
 ##
-## README.md displays three transcripts -- the quick-start dyadic fit, the
-## design diagnosis, and the panel fit under "Extensions" -- as fenced blocks a
-## reader is invited to reproduce. Nothing was checking them, and two of the
+## README.md displays five transcripts -- the quick-start dyadic fit and its
+## summary() data frame, the design diagnosis, and the panel and sign-flip fits
+## under "Extensions" -- as fenced blocks a reader is invited to reproduce. Nothing was checking them, and two of the
 ## three silently went stale for a whole release: they still carried 0.2.0
 ## intervals after the 0.3.0 exact confidence set moved eight seeded end
 ## points. tests/golden/ pins the fitted OBJECTS, which is why it did not
@@ -24,7 +24,7 @@ source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
 data(trade_dyadic)
 data(trade_panel)
 
-## The lines README.md shows. Keep these three in step with the README; if the
+## The lines README.md shows. Keep these in step with the README; if the
 ## package's numbers move, BOTH have to be updated, and section 2 says so.
 readme_lines <- c(
   quick_start_est =
@@ -44,7 +44,17 @@ readme_lines <- c(
   panel_res =
     "Resolution   : p-values are multiples of 1/22 = 0.045 per rep; reported floor 0.045",
   panel_res_caveat =
-    "               the median of 10 reps can fall between grid points"
+    "               the median of 10 reps can fall between grid points",
+  quick_start_summary =
+    "1 log_dist   -0.8985026   0.08728893  -1.246471  -0.5484962   0.025",
+  het_group =
+    "Sign flips   : n_flip = 6 flip groups  (group order 2^5 = 32, 3 reps)",
+  het_est =
+    "  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.16, -0.6251]",
+  het_p =
+    "H0: beta = 0    p-value = 0.031",
+  check_alternative =
+    "  ? design = \"dyadic_het\" runs the sign-flip test instead, which trades"
 )
 
 ## ---- 1. the package still prints what the README claims -------------------
@@ -58,6 +68,11 @@ out_qs <- capture.output(print(fit_qs))
 stopifnot(readme_lines[["quick_start_est"]] %in% out_qs,
           readme_lines[["quick_start_p"]] %in% out_qs,
           readme_lines[["quick_start_res"]] %in% out_qs)
+## the summary() data frame the README shows below the print block; its
+## interval columns carry the exact end points at full precision, which is
+## where the 0.2.0 bisection numbers survived unnoticed
+out_sum <- capture.output(print(summary(fit_qs)))
+stopifnot(readme_lines[["quick_start_summary"]] %in% out_sum)
 
 fit_pan <- mwperm(y = "log_trade", d = "fta", x = c("log_gdp_i", "log_gdp_j"),
                   index = c("importer", "exporter", "year"),
@@ -71,7 +86,19 @@ stopifnot(readme_lines[["panel_est"]] %in% out_pan,
 out_chk <- capture.output(print(
   mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)))
 stopifnot(readme_lines[["check_resolution"]] %in% out_chk,
-          readme_lines[["check_verdict"]] %in% out_chk)
+          readme_lines[["check_verdict"]] %in% out_chk,
+          readme_lines[["check_alternative"]] %in% out_chk)
+
+## the sign-flip transcript under "Extensions"
+fit_het <- with(trade_dyadic,
+                mwperm_dyadic_het(y = log_trade, d = log_dist,
+                                  x = cbind(log_gdp_i, log_gdp_j),
+                                  row = importer, col = exporter,
+                                  n_flip = 6, n_reps = 3, seed = 1))
+out_het <- capture.output(print(fit_het))
+stopifnot(readme_lines[["het_group"]] %in% out_het,
+          readme_lines[["het_est"]] %in% out_het,
+          readme_lines[["het_p"]] %in% out_het)
 
 ## the dispatch banner the README prints above the quick-start output
 banner <- msgs_of(mwperm(y = "log_trade", d = "log_dist",

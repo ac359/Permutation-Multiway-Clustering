@@ -14,7 +14,7 @@ mwperm_check(
   rep = NULL,
   design = c("auto", "dyadic", "threeway", "panel", "panel_missing",
     "layout", "missing",
-    "irregular"),
+    "irregular", "dyadic_het"),
   alpha = 0.05,
   aggregate = c("median", "median2")
 )
@@ -35,13 +35,19 @@ constant within every cell), never for fitting.}
 
 \item{time}{Optional explicit time dimension: a vector, or the name of a
 column of \code{data} (or of one of the \code{index} columns). Forces
-the panel interpretation of that dimension.}
+the panel interpretation of that dimension: a complete
+\code{(row, col, time)} array runs \code{\link{mwperm_panel}}, an
+incomplete one \code{\link{mwperm_panel_missing}}.}
 
 \item{rep}{Optional explicit replication identifier (vector or column
 name): declares within-cell replication and forces the layout design.}
 
 \item{design}{Force a design instead of auto-detecting (the structure is
-still validated against it).}
+still validated against it). \code{"dyadic_het"} -- the sign-flip test of
+\code{\link{mwperm_dyadic_het}} -- is \emph{opt-in only}: it is never
+detected, because heteroskedasticity leaves no trace in the clustering
+structure, and it is validated exactly as \code{"dyadic"} (two indices,
+one observation per cell, complete array).}
 
 \item{alpha, aggregate}{The test level and cross-repetition rule the fit
 will use (the defaults of every front end). They decide the resolution
@@ -65,9 +71,16 @@ An object of class \code{"mwperm_design"}: a list with fields
   smallest reportable p-value at the default K), \code{levels_needed} (the
   smallest permuted dimension a \code{(1 - alpha)} set requires) and
   \code{resolution_ok} (whether that set is attainable), \code{call_str}
-  (the downstream call), \code{reason} (one-line explanation), and
-  \code{warnings}/\code{notes} (the assumption-fork notices etc.). Its
-  \code{print} method lays this out as a short human diagnosis.
+  (the downstream call), \code{reason} (one-line explanation),
+  \code{warnings}/\code{notes} (the assumption-fork notices etc.) and
+  \code{alternatives} (one-line pointers to designs the data cannot select
+  for you -- on a complete dyadic array, \code{design = "dyadic_het"}).
+  For \code{design = "dyadic_het"} the group order is \code{2^(n_flip -
+  1)}, so \code{K_default} is \code{NA}, the extra field
+  \code{n_flip_default} carries the fit's default \code{n_flip}, and
+  \code{levels_needed} is the \code{n_flip} a \code{(1 - alpha)} set
+  requires. Its \code{print} method lays this out as a short human
+  diagnosis.
 }
 \description{
 Inspects the clustering structure of a dataset -- number of index
@@ -77,11 +90,11 @@ anything. \code{\link{mwperm}} uses it for automatic dispatch; call it
 directly to see the diagnosis.
 }
 \details{
-Structural forks (dyadic vs missing vs layout-by-replication) are resolved
-silently from the data. Two forks depend on an \emph{exchangeability
-assumption the data cannot reveal} and are therefore announced with
-override instructions, defaulting to the choice that remains valid under
-the widest set of error processes:
+Structural forks (dyadic vs missing, panel vs incomplete panel, and
+layout-by-replication) are resolved silently from the data. Two forks
+depend on an \emph{exchangeability assumption the data cannot reveal} and are
+therefore announced with override instructions, defaulting to the choice
+that remains valid under the widest set of error processes:
 \itemize{
   \item \strong{panel vs three-way} (complete balanced 3-index arrays):
     running \code{\link{mwperm_threeway}} on a panel whose errors are
@@ -107,6 +120,15 @@ the widest set of error processes:
     time variable via \code{time =} to get the panel test instead. A
     notice is attached.
 }
+
+A third assumption the data cannot reveal is \emph{heteroskedasticity}:
+every permutation design needs the errors exchangeable \emph{given} the
+covariates, which an error variance that depends on the covariates
+violates. Nothing in the clustering structure shows this, so the diagnosis
+never selects the sign-flip test (\code{\link{mwperm_dyadic_het}}, valid
+under arbitrary heteroskedasticity but needing symmetric errors); on a
+complete dyadic array it prints one line offering \code{design =
+"dyadic_het"}, and the choice is yours.
 }
 \examples{
 data(trade_dyadic)
