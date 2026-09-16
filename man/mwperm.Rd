@@ -13,7 +13,7 @@ mwperm(
   time = NULL,
   rep = NULL,
   design = c("auto", "dyadic", "threeway", "panel", "panel_missing", "layout",
-    "missing", "irregular"),
+    "missing", "irregular", "dyadic_het"),
   K = NULL,
   alpha = 0.05,
   beta_null = 0,
@@ -27,6 +27,7 @@ mwperm(
   min_block = 3L,
   block_method = c("greedy", "exact"),
   permute = c("both", "rows", "cols"),
+  n_flip = NULL,
   aggregate = c("median", "median2"),
   verbose = TRUE
 )
@@ -47,11 +48,16 @@ of vectors, or character vector of column names in \code{data}.}
 \code{\link{mwperm_check}}.}
 
 \item{design}{Force a design instead of auto-detecting (the structure is
-still validated against it).}
+still validated against it). \code{"dyadic_het"} runs
+\code{\link{mwperm_dyadic_het}}, the sign-flip test that tolerates
+heteroskedasticity at the price of assuming symmetric errors; it is
+\emph{never} chosen automatically, because heteroskedasticity is invisible
+in the clustering structure.}
 
 \item{K}{Number of non-identity permutations; the default and the
 admissible range depend on the dispatched design -- see the dispatched
-function.}
+function. Does not apply to \code{design = "dyadic_het"}, whose group is
+sized by \code{n_flip}; supplying it there warns and ignores it.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -96,10 +102,20 @@ with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 \code{\link{mwperm_panel_missing}} (panel designs only; supplying it for
 another design warns and ignores it).}
 
-\item{L0}{Passed to \code{\link{mwperm_layout}} (layout only).}
+\item{L0}{Passed to \code{\link{mwperm_layout}} or
+\code{\link{mwperm_irregular}} (layout and irregular only; required for
+\code{design = "irregular"}).}
 
-\item{min_block, block_method, permute}{Passed to
-\code{\link{mwperm_missing}} (missing only).}
+\item{n_flip}{Passed to \code{\link{mwperm_dyadic_het}} (\code{design =
+"dyadic_het"} only: the number of flip groups, group order
+\code{2^(n_flip - 1)}; supplying it for another design warns and ignores
+it).}
+
+\item{min_block, block_method, permute}{\code{min_block} and
+\code{block_method} are passed to \code{\link{mwperm_missing}},
+\code{\link{mwperm_panel_missing}} or \code{\link{mwperm_irregular}};
+\code{permute} to \code{\link{mwperm_missing}} only. Supplying any of
+them for another design warns and ignores it.}
 
 \item{aggregate}{
 How the \code{n_reps} per-repetition p-values are combined into the reported
@@ -146,9 +162,12 @@ The \code{"mwperm"} object of the dispatched test, with an extra
 \description{
 Detects the clustering design of the data via \code{\link{mwperm_check}}
 and dispatches to the matching test -- \code{\link{mwperm_dyadic}},
-\code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
-\code{\link{mwperm_layout}} or \code{\link{mwperm_missing}} -- forwarding
-all arguments unchanged. A thin convenience layer: the returned object is
+\code{\link{mwperm_panel}}, \code{\link{mwperm_panel_missing}},
+\code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}} or
+\code{\link{mwperm_missing}}; \code{\link{mwperm_irregular}} is never
+chosen automatically and needs \code{design = "irregular"} with \code{L0},
+and \code{\link{mwperm_dyadic_het}} is never chosen automatically and
+needs \code{design = "dyadic_het"} -- forwarding all arguments unchanged. A thin convenience layer: the returned object is
 exactly what the underlying function returns (plus a record of what was
 detected), and calling the specific function directly with the same seed
 gives identical results.
@@ -176,6 +195,6 @@ Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 \code{\link{mwperm_check}} for the diagnosis without any
   computation; \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
   \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}},
-  \code{\link{mwperm_irregular}}, \code{\link{mwperm_missing}} for the
-  underlying tests.
+  \code{\link{mwperm_irregular}}, \code{\link{mwperm_missing}},
+  \code{\link{mwperm_dyadic_het}} for the underlying tests.
 }

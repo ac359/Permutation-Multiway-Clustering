@@ -15,20 +15,43 @@ Toulis and Wang (2026).
 The recommended entry points are \code{\link{mwperm}}, which detects the
 clustering design of the data and dispatches to the matching test, and
 \code{\link{mwperm_check}}, which prints the diagnosis (detected design,
-roles, balance, attainable resolution) without running anything. The key
-object is the block-cyclic permutation group built by
-\code{\link{build_perm_set}}. The design-specific tests -- which
-\code{\link{mwperm}} calls and which remain fully supported for direct
-use -- are \code{\link{mwperm_dyadic}} (two-way / dyadic clustering),
-\code{\link{mwperm_threeway}} (three-way clustering),
-\code{\link{mwperm_panel}} (panels with an arbitrary time effect),
-\code{\link{mwperm_layout}} (replicated two-way layouts),
+roles, balance, attainable resolution) without running anything. The
+design-specific tests -- which \code{\link{mwperm}} calls and which remain
+fully supported for direct use -- are \code{\link{mwperm_dyadic}} (two-way
+/ dyadic clustering), \code{\link{mwperm_threeway}} (three-way
+clustering), \code{\link{mwperm_panel}} (panels with an arbitrary time
+effect), \code{\link{mwperm_layout}} (replicated two-way layouts),
 \code{\link{mwperm_irregular}} (irregular layouts, Section 6.4: repeats
-that are time periods, or a covariate constant within cells) and
+that are time periods, or a covariate constant within cells),
 \code{\link{mwperm_missing}} (incomplete arrays, via fully observed
-bicliques). All return an object of class \code{"mwperm"} with
+bicliques) and \code{\link{mwperm_dyadic_het}} (dyadic clustering under
+heteroskedasticity). All return an object of class \code{"mwperm"} with
 \code{\link{print.mwperm}}, \code{\link{summary.mwperm}},
 \code{\link{confint.mwperm}} and \code{\link{plot.mwperm}} methods.
+
+Every test is the same procedure -- partial out the nuisance design against
+its transformed copy, minorize, count -- run under a group of
+transformations the errors are assumed invariant to, and the package has
+two group constructions with two different assumptions:
+\itemize{
+  \item \strong{Permutations} (\code{\link{build_perm_set}}, the
+  block-cyclic group of Algorithm 1): the error array must be
+  \emph{exchangeable} under relabelling of the clusters, conditional on the
+  covariates (Assumption 1). Used by every test except the last. Tolerates
+  any error distribution and any dependence that is symmetric in the
+  cluster labels; does not tolerate an error variance that depends on the
+  cluster identity or the covariates.
+  \item \strong{Sign flips} (\code{\link{build_flip_set}}, the group of
+  joint row-and-column sign changes, order \code{2^(n_flip - 1)}): the
+  errors must be \emph{symmetric about zero} under those sign changes. Used
+  by \code{\link{mwperm_dyadic_het}}. Tolerates arbitrary
+  heteroskedasticity; does not tolerate skewness.
+}
+
+Neither assumption implies the other, and the sign-flip test is less
+powerful when exchangeability does hold, so the choice is a judgement about
+the errors that the data cannot make for you: \code{\link{mwperm}} never
+selects the sign-flip test automatically.
 
 Two synthetic data sets, \code{\link{trade_dyadic}} and
 \code{\link{trade_panel}}, illustrate the dyadic and panel work flows.
@@ -51,8 +74,9 @@ multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
 \code{\link{mwperm}}, \code{\link{mwperm_check}},
-  \code{\link{mwperm_dyadic}}, \code{\link{mwperm_panel}},
-  \code{\link{build_perm_set}}.
+  \code{\link{mwperm_dyadic}}, \code{\link{mwperm_dyadic_het}},
+  \code{\link{mwperm_panel}}, \code{\link{build_perm_set}},
+  \code{\link{build_flip_set}}.
 }
 \author{
 \strong{Maintainer}: Andrew Chen \email{andrewc24@uchicago.edu} [copyright holder]

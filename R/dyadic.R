@@ -13,7 +13,12 @@
 #' Unlike multi-way cluster-robust standard errors or the wild cluster
 #' bootstrap, the test makes no assumption on the covariate distribution
 #' (covariates may be irregular or heavy-tailed) and is valid for a finite
-#' number of clusters.
+#' number of clusters. What it does assume is exchangeability of the errors
+#' *given* the covariates, which rules out an error variance that depends on
+#' the cluster identity or on the covariates; for that case see
+#' [mwperm_dyadic_het()], the same test under a sign-flip group, which
+#' tolerates arbitrary heteroskedasticity at the price of assuming the
+#' errors symmetric about zero. Neither assumption implies the other.
 #'
 #' **Aggregation over repetitions, and what "exact" covers.** Theorem 1
 #' establishes finite-sample validity for a single random permutation group,
@@ -164,8 +169,10 @@
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
 #'
-#' @seealso [mwperm_panel()], [mwperm_threeway()], [mwperm_layout()],
-#'   [mwperm_missing()].
+#' @seealso [mwperm_dyadic_het()] for the same design under sign symmetry
+#'   instead of exchangeability (robust to heteroskedasticity, needs
+#'   symmetric errors); [mwperm_panel()], [mwperm_threeway()],
+#'   [mwperm_layout()], [mwperm_missing()].
 #'
 #' @examples
 #' data(trade_dyadic)

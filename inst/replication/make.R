@@ -8,7 +8,7 @@
 ## re-running make.R after an interruption only computes what is missing.
 ##
 ## Usage (from THIS directory, with mwperm installed):
-##   Rscript make.R                 # default sim counts (a few minutes total)
+##   Rscript make.R                 # default sim counts (~25 min total)
 ##   MC_N=10000 Rscript make.R      # tighter Monte-Carlo error (much longer)
 ##
 ## Outputs land in ./out (one .txt table + .rds summary per script). Compare
@@ -17,7 +17,8 @@
 ## verdicts printed by each script should agree).
 
 scripts <- c("01_size.R", "02_power.R", "03_ci_coverage.R",
-             "04_negative_control.R", "05_permute.R", "06_size_by_design.R")
+             "04_negative_control.R", "05_permute.R", "06_size_by_design.R",
+             "07_size_signflip.R")
 rscript <- file.path(R.home("bin"), "Rscript")
 dir.create("out", showWarnings = FALSE)
 

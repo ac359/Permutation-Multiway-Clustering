@@ -2,8 +2,8 @@
 ##
 ## Runs every exported front end on the shipped data at seed = 1, at default and
 ## at one non-default configuration each, plus find_bicliques() on the
-## diagonal-deleted design, and compares the FULL result objects against the
-## stored snapshot. Any drift in pvalue / estimate / conf_int / conf_set / K is
+## diagonal-deleted design and the two group constructors, and compares the
+## FULL result objects against the stored snapshot. Any drift in pvalue / estimate / conf_int / conf_set / K is
 ## a defect until proven otherwise: the paper's tables and the README's shown
 ## output are keyed to these seeded numbers.
 ##

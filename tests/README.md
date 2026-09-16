@@ -53,6 +53,7 @@ named after the function it tests.
 | `test-main.R` | `mwperm()`, `mwperm_check()` — design detection, the printed diagnosis, forced-design validation, the assumption warnings, and **dispatch identity**: `mwperm()` must return exactly what the direct front-end call returns |
 | `test-formula.R` | `mwperm_formula()` — the `y ~ d \| x` interface; an identity test, since it only assembles arguments |
 | `test-dyadic.R` | `mwperm_dyadic()` — the **two-way** (dyadic) design, condition InvA |
+| `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()` — the same two-way design under **sign symmetry** instead of exchangeability (the heteroskedasticity-robust sign-flip test, 0.5.0): agreement with a corrected port of the author's `RPT_signflip()` given the same flip-group assignment (`helpers/signflip-reference.R`), the group axioms and the `2^(n_flip-1)` order, the `.apply_op()` signed-gather contract, size under heteroskedasticity, the `n_flip >= 6` resolution guard, seed hygiene, the opt-in dispatcher route, and that the permutation designs are untouched. Named for the *group* rather than the function because `build_flip_set()` is tested here too |
 | `test-threeway.R` | `mwperm_threeway()` — the three-way design, InvA in three dimensions |
 | `test-panel.R` | `mwperm_panel()` — the panel design, condition InvB, including invariance to an arbitrary common time trend |
 | `test-panel-missing.R` | `mwperm_panel_missing()` — incomplete panels; pins that on a complete array it builds permutations *identical* to `mwperm_panel()` |
@@ -63,7 +64,7 @@ named after the function it tests.
 | `test-validation.R` | the input-validation contract shared by all front ends: bad input fails early naming the argument, degenerate input gets the exact answer, and no confidence set is reported that the design cannot support |
 | `test-equivariance.R` | properties every fit must have: row-order, nuisance (FWL), null-shift and scale/sign equivariance, and **parallel ≡ serial**, bit for bit |
 | `test-readme.R` | the transcripts `README.md` shows are the ones the package prints |
-| `test-golden.R` | the seeded snapshot gate — 26 fits across all seven designs compared field by field against `golden/baseline.rds` |
+| `test-golden.R` | the seeded snapshot gate — 29 entries across all eight designs compared field by field against `golden/baseline.rds` |
 | `test-lower-level.R` | the runner for `lower-level-tests/` |
 
 Design-specific arguments are tested in that design's own file (`L0` and `rep`
@@ -104,12 +105,15 @@ of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
   power sanity check; those live in `inst/replication/`, not here, because they
   are too slow for `R CMD check`.
 
-## `helpers/assertions.R`
+## `helpers/`
 
-`msg_of()`, `expect_err()`, `expect_warn()`, `warns_of()`, `msgs_of()`,
-`same_fit()`, `internal()` and `passed()`. It lives in a subdirectory so
-`R CMD check` does not mistake it for a test, and every file loads it with the
-same two lines, which resolve both from the package root and from `tests/`:
+`assertions.R` holds `msg_of()`, `expect_err()`, `expect_warn()`, `warns_of()`,
+`msgs_of()`, `same_fit()`, `internal()` and `passed()`; `signflip-reference.R`
+holds the corrected port of the author's `RPT_signflip()` and the
+heteroskedastic gravity DGP that `test-signflip.R` checks the package
+against. They live in a subdirectory so `R CMD check` does not mistake them
+for tests, and every file loads what it needs with the same two-line idiom,
+which resolves both from the package root and from `tests/`:
 
 ```r
 source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
