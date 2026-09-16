@@ -1,12 +1,71 @@
-# mwperm 0.5.0
+# mwperm 0.4.0
 
-Adds a second invariance group, and with it a test for the case every
-permutation design excludes: heteroskedastic errors. **No existing number
-moves**: every seeded p-value, estimate, confidence set and note of the seven
-permutation front ends is `identical()` before and after (the 26 golden
-entries reproduce; three entries are added). The change to the shared engine
-is a widening of one internal contract, described under *Under the hood*,
-which the next person adding a design needs to know about.
+Adds a second invariance group -- and with it a test for the case every
+permutation design excludes, heteroskedastic errors -- closes the largest
+feature gap the 0.3.0 audit left open, incomplete panels, and two smaller
+ones, and repairs a validity defect in `mwperm_irregular()`. Reported
+p-values, estimates and confidence sets are **unchanged for every existing
+design except the irregular one**, whose retained observations change (see
+*Corrections that change a number*); the other seeded output that moves is
+the wording of two notes, enumerated below. The sign-flip test moves no
+existing number: every seeded p-value, estimate, confidence set and note of
+the seven permutation front ends is `identical()` before and after it. Its
+one change to the shared engine is a widening of an internal contract,
+described under *Under the hood*, which the next person adding a design
+needs to know about.
+
+## Corrections that change a number
+
+* **`mwperm_irregular()` held the wrong index fixed, and could reject a true
+  null almost surely.** Section 6.4 of Guo, Toulis and Wang is "the conditional
+  permutation test for missing data (Section 5) combined with the panel-data
+  test from Case (B)", and Case (B) is condition InvB:
+  `(eps_ijt) =d (eps_[pi(i)][sigma(j)]t)` with the **same** `t` on both sides.
+  The index the permutation holds fixed must therefore be the period itself.
+  The 0.3.0 implementation followed the paper's printed step (i) -- mask on the
+  count, `M_ij = 1{ell_ij >= L0}`, then drop `ell_ij - L0` observations from
+  each cell at random -- and then held fixed the *within-cell rank* of the
+  survivors. After independent per-cell draws, rank 2 is one period in one
+  cell and another period in the next, so the permutation moved observations
+  across periods. With a covariate that varies within cells (staggered
+  adoption, say) and any common period effect in the errors -- precisely the
+  "the repeats are really time" case the function exists for -- the empirical
+  size at nominal 0.05 was 0.96 to 1.00 in this package's own simulations
+  (1200 replications, K = 21); with a cell-constant `d` the slot map cancels
+  and the test was unaffected, which is why every shipped example and test
+  passed.
+
+  The mask and the cut now follow Case (B) rather than the printed step (i).
+  A common set S of `L0` `rep` levels is chosen from the observation pattern
+  alone -- the `L0` levels jointly observed by the most cells, built up
+  greedily with ties to the lower level -- the mask is `M_ij = 1{cell (i, j)
+  observes every level in S}`, every retained cell is cut to exactly the
+  observations at those levels (deterministically: nothing is subsampled at
+  random any more), and the permutation holds the *level* fixed, so cell
+  `(i, j)` level `s` maps to cell `(pi(i), sigma(j))` level `s`. This is the
+  device `mwperm_panel_missing()` already used, and it is why that front end
+  was never affected. With `rep = NULL` the levels are the order of appearance
+  within the cell, the common set is `{1, ..., L0}`, and the mask reduces
+  exactly to the printed `1{ell_ij >= L0}` with the first `L0` observations
+  kept; that degeneracy is pinned in `tests/test-irregular.R`, as is the
+  structural claim itself, on the gather vectors: every group element
+  preserves the `rep` level of every retained observation. `rep` must now be
+  unique within a cell (a repeated level contradicts a shared index and is
+  refused with a message naming `mwperm_layout()`), and the fitted object
+  carries the retained labels in a new `rep_levels` field. `mwperm_layout(L0
+  = )` is untouched: its permutation is within-cell, so alignment across cells
+  is irrelevant and a uniform random subset of exchangeable replicates is
+  itself exchangeable.
+
+  Re-measured after the change, at nominal 0.05 and n_reps = 1: the two
+  designs that failed now come in at or below nominal (numbers in the
+  verification record), and the cell-constant case is unchanged. What moves
+  for existing calls is *which* observations are retained, hence the OLS
+  estimate, the naive SE and the confidence set; the p-value can move too.
+  The `man` example moves from an estimate of 0.6731 to 0.6362 (p-value
+  0.3333, 25 cells, 100 of 310 observations and K = 2 all unchanged); a fit
+  whose retained cells already shared their levels, such as a complete panel
+  with `L0` equal to the number of periods, is unchanged in every number.
 
 ## New
 
@@ -84,98 +143,6 @@ which the next person adding a design needs to know about.
   Supplying `K` to that design, or `n_flip` to any other, warns and ignores
   it. The diagnosis object gains `n_flip_default` and `alternatives`; the
   latter is printed but never merged into a fitted object's `note`.
-
-## Under the hood
-
-* **The engine's group-element contract is wider.** `.ipt_engine()`'s
-  `perm_builder` used to return K + 1 integer gather vectors. It may now return
-  *signed gathers*, `list(g = <gather or NULL>, s = <+/-1 vector or NULL>)`,
-  applied by the new `.apply_op()` in `core.R` as `M[g, ] * s` with `NULL`
-  meaning the identity in that slot. A bare integer vector is still accepted
-  and is applied by exactly the indexing expression the permutation front ends
-  always used, which is why none of them changed and none of their numbers
-  moved. `.ipt_prepare()` needed only this: everything it exploits --
-  `X_k' X_k = X' X`, and `Dr' y_k = Dr' y` when the element fixes `Dr` --
-  holds for any orthogonal row action, and a signed permutation is one. The
-  two-slot form was chosen over a type tag so that a future design that
-  permutes *and* flips is one `(g, s)` pair, with no third branch anywhere.
-  Anyone adding a design should read the `.apply_op()` and `.ipt_prepare()`
-  documentation in `core.R` first.
-* The engine's two resolution notes, and `confint()`'s refusal, take their
-  vocabulary from `.group_vocab()`: "K + 1 >= 20, at least 20 levels in the
-  smallest permuted dimension" for a permutation group, "2^(n_flip - 1) >=
-  20, n_flip >= 6 flip groups" for the sign-flip group. The permutation
-  strings are byte-identical to before.
-* `print()` shows a `Sign flips` line (n_flip, group order) in place of the
-  `Permutations` line for the new design; every other design prints as
-  before.
-* `tests/golden/baseline.rds` has 29 entries: `dyadic_het_default`,
-  `dyadic_het_nondefault` and `flipset` are new, and the previous 26 are
-  `identical()` to the 0.4.0 snapshot.
-
-# mwperm 0.4.0
-
-Closes the largest feature gap the 0.3.0 audit left open -- incomplete panels
--- and two smaller ones, and repairs a validity defect in
-`mwperm_irregular()`. Reported p-values, estimates and confidence sets are
-**unchanged for every design except the irregular one**, whose retained
-observations change (see *Corrections that change a number*); the other
-seeded output that moves is the wording of two notes, enumerated below.
-
-## Corrections that change a number
-
-* **`mwperm_irregular()` held the wrong index fixed, and could reject a true
-  null almost surely.** Section 6.4 of Guo, Toulis and Wang is "the conditional
-  permutation test for missing data (Section 5) combined with the panel-data
-  test from Case (B)", and Case (B) is condition InvB:
-  `(eps_ijt) =d (eps_[pi(i)][sigma(j)]t)` with the **same** `t` on both sides.
-  The index the permutation holds fixed must therefore be the period itself.
-  The 0.3.0 implementation followed the paper's printed step (i) -- mask on the
-  count, `M_ij = 1{ell_ij >= L0}`, then drop `ell_ij - L0` observations from
-  each cell at random -- and then held fixed the *within-cell rank* of the
-  survivors. After independent per-cell draws, rank 2 is one period in one
-  cell and another period in the next, so the permutation moved observations
-  across periods. With a covariate that varies within cells (staggered
-  adoption, say) and any common period effect in the errors -- precisely the
-  "the repeats are really time" case the function exists for -- the empirical
-  size at nominal 0.05 was 0.96 to 1.00 in this package's own simulations
-  (1200 replications, K = 21); with a cell-constant `d` the slot map cancels
-  and the test was unaffected, which is why every shipped example and test
-  passed.
-
-  The mask and the cut now follow Case (B) rather than the printed step (i).
-  A common set S of `L0` `rep` levels is chosen from the observation pattern
-  alone -- the `L0` levels jointly observed by the most cells, built up
-  greedily with ties to the lower level -- the mask is `M_ij = 1{cell (i, j)
-  observes every level in S}`, every retained cell is cut to exactly the
-  observations at those levels (deterministically: nothing is subsampled at
-  random any more), and the permutation holds the *level* fixed, so cell
-  `(i, j)` level `s` maps to cell `(pi(i), sigma(j))` level `s`. This is the
-  device `mwperm_panel_missing()` already used, and it is why that front end
-  was never affected. With `rep = NULL` the levels are the order of appearance
-  within the cell, the common set is `{1, ..., L0}`, and the mask reduces
-  exactly to the printed `1{ell_ij >= L0}` with the first `L0` observations
-  kept; that degeneracy is pinned in `tests/test-irregular.R`, as is the
-  structural claim itself, on the gather vectors: every group element
-  preserves the `rep` level of every retained observation. `rep` must now be
-  unique within a cell (a repeated level contradicts a shared index and is
-  refused with a message naming `mwperm_layout()`), and the fitted object
-  carries the retained labels in a new `rep_levels` field. `mwperm_layout(L0
-  = )` is untouched: its permutation is within-cell, so alignment across cells
-  is irrelevant and a uniform random subset of exchangeable replicates is
-  itself exchangeable.
-
-  Re-measured after the change, at nominal 0.05 and n_reps = 1: the two
-  designs that failed now come in at or below nominal (numbers in the
-  verification record), and the cell-constant case is unchanged. What moves
-  for existing calls is *which* observations are retained, hence the OLS
-  estimate, the naive SE and the confidence set; the p-value can move too.
-  The `man` example moves from an estimate of 0.6731 to 0.6362 (p-value
-  0.3333, 25 cells, 100 of 310 observations and K = 2 all unchanged); a fit
-  whose retained cells already shared their levels, such as a complete panel
-  with `L0` equal to the number of periods, is unchanged in every number.
-
-## New
 
 * **`mwperm_panel_missing()` tests incomplete and unbalanced panels.** Until
   now a panel with any hole in it -- a country pair never observed, or observed
@@ -341,12 +308,36 @@ seeded output that moves is the wording of two notes, enumerated below.
 
 ## Under the hood
 
-* `tests/golden/baseline.rds` now has 26 entries, adding
-  `panel_missing_default`, `panel_missing_nondefault`, `irregular_default` and
-  `irregular_nondefault` (the last two with the aligned mask; the other 24
-  entries are `identical()` before and after the irregular change). It also
-  records `p_floor`, which post-dated the previous snapshot and so was not
-  being compared.
+* **The engine's group-element contract is wider.** `.ipt_engine()`'s
+  `perm_builder` used to return K + 1 integer gather vectors. It may now return
+  *signed gathers*, `list(g = <gather or NULL>, s = <+/-1 vector or NULL>)`,
+  applied by the new `.apply_op()` in `core.R` as `M[g, ] * s` with `NULL`
+  meaning the identity in that slot. A bare integer vector is still accepted
+  and is applied by exactly the indexing expression the permutation front ends
+  always used, which is why none of them changed and none of their numbers
+  moved. `.ipt_prepare()` needed only this: everything it exploits --
+  `X_k' X_k = X' X`, and `Dr' y_k = Dr' y` when the element fixes `Dr` --
+  holds for any orthogonal row action, and a signed permutation is one. The
+  two-slot form was chosen over a type tag so that a future design that
+  permutes *and* flips is one `(g, s)` pair, with no third branch anywhere.
+  Anyone adding a design should read the `.apply_op()` and `.ipt_prepare()`
+  documentation in `core.R` first.
+* The engine's two resolution notes, and `confint()`'s refusal, take their
+  vocabulary from `.group_vocab()`: "K + 1 >= 20, at least 20 levels in the
+  smallest permuted dimension" for a permutation group, "2^(n_flip - 1) >=
+  20, n_flip >= 6 flip groups" for the sign-flip group. The permutation
+  strings are byte-identical to before.
+* `print()` shows a `Sign flips` line (n_flip, group order) in place of the
+  `Permutations` line for the new design; every other design prints as
+  before.
+* `tests/golden/baseline.rds` now has 29 entries, adding
+  `panel_missing_default`, `panel_missing_nondefault`, `irregular_default`,
+  `irregular_nondefault`, `dyadic_het_default`, `dyadic_het_nondefault` and
+  `flipset` (the irregular pair with the aligned mask; the 24 others that
+  existed at the time are `identical()` before and after the irregular
+  change, and the 26 that predate the sign-flip test are `identical()`
+  before and after the engine change). It also records `p_floor`, which
+  post-dated the previous snapshot and so was not being compared.
 * The completeness error from `mwperm_panel()` now names
   `mwperm_panel_missing()` as the way forward.
 

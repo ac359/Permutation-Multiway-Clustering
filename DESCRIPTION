@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.5.0
+Version: 0.4.0
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre", "cph")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = c("aut", "cph")),
@@ -31,7 +31,7 @@ License: MIT + file LICENSE
 URL: https://github.com/ac359/Permutation-Multiway-Clustering
 BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
 Language: en-US
-Date: 2026-09-13
+Date: 2026-09-16
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
