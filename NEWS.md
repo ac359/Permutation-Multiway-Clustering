@@ -1,3 +1,118 @@
+# mwperm 0.5.0
+
+Adds a second invariance group, and with it a test for the case every
+permutation design excludes: heteroskedastic errors. **No existing number
+moves**: every seeded p-value, estimate, confidence set and note of the seven
+permutation front ends is `identical()` before and after (the 26 golden
+entries reproduce; three entries are added). The change to the shared engine
+is a widening of one internal contract, described under *Under the hood*,
+which the next person adding a design needs to know about.
+
+## New
+
+* **`mwperm_dyadic_het()` -- the sign-flip test (IPT-Het).** Every test in
+  the package so far rests on Assumption 1: the error array is exchangeable
+  under relabelling of the clusters, conditional on the covariates. That fails
+  under heteroskedasticity, because relabelling the clusters relabels the
+  variance pattern -- an error variance that depends on the cluster identity
+  or on the covariates makes the permutation test over-reject. Section 2 of
+  Guo, Toulis and Wang observes that the partialling-out and minorization
+  argument holds for *any* invariance group, and this front end runs
+  Procedure 1 with a group of joint row-and-column sign changes instead of a
+  permutation group. Its assumption is that the errors are symmetric about
+  zero under those sign changes, `(eps_ij) =d (s_i t_j eps_ij) | X, D`. A sign
+  flip changes no variance, so arbitrary heteroskedasticity is fine; skewed
+  errors are not. The two assumptions are complementary and neither implies
+  the other. Same model, same null, same statistic, same exact confidence set
+  by test inversion; only the group changes.
+
+  What it buys and what it costs, measured on the authors' heteroskedastic
+  gravity design (25 clusters per side, error sd increasing in the gravity
+  mean and in the distance covariate; 300 replications, single group,
+  alpha = 0.05): the permutation test rejected a true null at 0.06-0.09 as the
+  heteroskedasticity strengthened (the authors report 0.13 in their own run),
+  the sign-flip test at 0.02 or below throughout; under homoskedastic errors
+  at beta = 0.15 the permutation test's power was 0.96 against the sign-flip
+  test's 0.86. **It is not a strict upgrade** -- use it when exchangeability is
+  in doubt and symmetry is defensible, `mwperm_dyadic()` otherwise -- and
+  because heteroskedasticity leaves no trace in the clustering structure,
+  `mwperm()` never selects it automatically: `design = "dyadic_het"` is the
+  only way in. `mwperm_check()` prints one line offering it on a complete
+  dyadic array.
+
+  The group and its resolution differ from every other test in the package.
+  Each row and each column cluster is assigned at random to one of `n_flip`
+  flip groups, and a sign vector in `{-1, +1}^n_flip` multiplies cell (i, j)
+  by the product of its row group's sign and its column group's sign. A sign
+  vector and its negative induce the same transformation, so the group has
+  **`2^(n_flip - 1)`** distinct elements, not `2^n_flip`, and the package
+  enumerates each exactly once (the reference script computed each twice,
+  with the same p-value). The smallest attainable p-value is therefore
+  `1 / 2^(n_flip - 1)` and a 95% confidence set needs `n_flip >= 6`; the
+  resolution notes, `confint()`'s refusal and the `mwperm_check()` verdict
+  all say so in those terms. The cost is one residual projection per
+  non-identity element, `2^(n_flip - 1) - 1` per repetition -- exponential in
+  `n_flip` where the permutation designs are linear in K -- so the default is
+  a fixed `n_flip = 8` (order 128, floor 0.0078), capped at the smaller
+  cluster count, with values above 20 refused. At that default with
+  `n_reps = 10` the exact confidence set exceeds the engine's candidate
+  budget and the interval comes from the bracketing fallback (the fit says
+  so), as it does for any design with K above about 100.
+
+  Two details of the reference implementation were deliberately not carried
+  over, both confirmed with the author and both recorded in
+  `tests/helpers/signflip-reference.R`: the duplicate enumeration above, and
+  the inclusion of the identity element in `min_j a_j`, which Equation (10)
+  takes over the non-identity elements only (the identity's stacked design
+  has rank p, and pushing it through a full-rank complement lowered the
+  minimum in a few percent of draws -- conservatively, so the original was
+  valid but was not Procedure 1). `tests/test-signflip.R` pins the package
+  against that corrected port: given the same flip-group assignment the two
+  return the identical p-value, at the null and at a non-zero null.
+
+* **`build_flip_set()`** builds the group, as `build_perm_set()` does for
+  permutations: one representative per coset `{s, -s}`, identity first,
+  attributes carrying the realised order and the two assignments, and the
+  same RNG hygiene (a seeded call leaves the caller's stream untouched, which
+  the reference script did not). The assignment is redrawn until every flip
+  group is used by at least one cluster: an unused group enlarges the kernel,
+  the representatives then contain duplicates, and the *reported* resolution
+  would be wrong.
+
+* **`mwperm()` and `mwperm_check()` accept `design = "dyadic_het"`** (opt-in
+  only, validated exactly as `"dyadic"`) and `mwperm()` takes `n_flip`.
+  Supplying `K` to that design, or `n_flip` to any other, warns and ignores
+  it. The diagnosis object gains `n_flip_default` and `alternatives`; the
+  latter is printed but never merged into a fitted object's `note`.
+
+## Under the hood
+
+* **The engine's group-element contract is wider.** `.ipt_engine()`'s
+  `perm_builder` used to return K + 1 integer gather vectors. It may now return
+  *signed gathers*, `list(g = <gather or NULL>, s = <+/-1 vector or NULL>)`,
+  applied by the new `.apply_op()` in `core.R` as `M[g, ] * s` with `NULL`
+  meaning the identity in that slot. A bare integer vector is still accepted
+  and is applied by exactly the indexing expression the permutation front ends
+  always used, which is why none of them changed and none of their numbers
+  moved. `.ipt_prepare()` needed only this: everything it exploits --
+  `X_k' X_k = X' X`, and `Dr' y_k = Dr' y` when the element fixes `Dr` --
+  holds for any orthogonal row action, and a signed permutation is one. The
+  two-slot form was chosen over a type tag so that a future design that
+  permutes *and* flips is one `(g, s)` pair, with no third branch anywhere.
+  Anyone adding a design should read the `.apply_op()` and `.ipt_prepare()`
+  documentation in `core.R` first.
+* The engine's two resolution notes, and `confint()`'s refusal, take their
+  vocabulary from `.group_vocab()`: "K + 1 >= 20, at least 20 levels in the
+  smallest permuted dimension" for a permutation group, "2^(n_flip - 1) >=
+  20, n_flip >= 6 flip groups" for the sign-flip group. The permutation
+  strings are byte-identical to before.
+* `print()` shows a `Sign flips` line (n_flip, group order) in place of the
+  `Permutations` line for the new design; every other design prints as
+  before.
+* `tests/golden/baseline.rds` has 29 entries: `dyadic_het_default`,
+  `dyadic_het_nondefault` and `flipset` are new, and the previous 26 are
+  `identical()` to the 0.4.0 snapshot.
+
 # mwperm 0.4.0
 
 Closes the largest feature gap the 0.3.0 audit left open -- incomplete panels
@@ -86,8 +201,8 @@ seeded output that moves is the wording of two notes, enumerated below.
   the same `seed` gives different, equally valid, random groups and hence
   different p-values and intervals; the test matches the offsets by hand.
 
-  Size and power were measured before shipping, as CLAUDE.md section 6
-  requires, on a DGP where three-way exchangeability FAILS and InvB holds --
+  Size and power were measured before shipping, as every new design must
+  be, on a DGP where three-way exchangeability FAILS and InvB holds --
   errors AR(1) over time with an arbitrary trend, missingness at the pair level
   and independent of the errors. Over 1000 replications with K = 19 (so the
   smallest attainable p-value is 0.05 and the check is not vacuous): size
@@ -97,14 +212,20 @@ seeded output that moves is the wording of two notes, enumerated below.
   beta = 0.05 / 0.10 / 0.15 / 0.30.
 
 * **`mwperm()` dispatches to it.** Three indices that are not a complete
-  balanced array used to be a hard error listing three workarounds. The time
-  role is now decided first -- that choice never depended on completeness --
-  and an incomplete array routes to the new design, reported by
+  balanced array -- or two indices plus a tagged `time =` on such an array --
+  used to be a hard error listing three workarounds. The time role is now
+  decided first -- that choice never depended on completeness -- and an
+  incomplete array routes to the new design on both routes, reported by
   `mwperm_check()` as `design = "panel_missing"` with `balance = "incomplete"`
   and `K_default = NA` (the group order follows the blocks, which are not
   searched until fit time). A REPEATED (i, j, t) cell is still an error, with a
   message that now says what to do about it. `design = "panel_missing"` forces
-  the choice. Every previously successful classification is unchanged.
+  the choice, taking the time role from `time =` or the third index; forcing
+  `design = "panel"` on an incomplete array remains an error, and its message
+  now points to `panel_missing`. Every previously successful classification
+  is unchanged, and dispatch stays an identity: `tests/test-main.R` compares
+  all three routes to the direct `mwperm_panel_missing()` call field by
+  field.
 
 ## Corrections that change no number
 

@@ -49,7 +49,9 @@
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
 #'
 #' @seealso [mwperm_dyadic()] and the other front ends, which compose these
-#'   groups into observation-level permutations.
+#'   groups into observation-level permutations; [build_flip_set()] for the
+#'   package's other group construction, the sign-flip group behind
+#'   [mwperm_dyadic_het()].
 #' @examples
 #' G <- build_perm_set(n = 8, K = 3, seed = 1)
 #' length(G)          # 4 permutations (identity + 3)
