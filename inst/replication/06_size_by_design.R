@@ -7,15 +7,15 @@
 ## exceeds alpha CANNOT reject and its measured size is a vacuous zero. Each
 ## cell asserts K + 1 >= 1/alpha before its size is quoted.
 ##
-## The irregular design is run twice, and the second arm is the one that
-## matters. With a covariate CONSTANT within each cell the residualised
-## regressor depends only on cell sums and the within-cell alignment cancels,
-## so that arm would pass under any slot rule. With a covariate that VARIES
-## within a cell (staggered adoption) and a common period effect in the errors,
+## The irregular design is run twice. The first arm is Section 6.4 as printed
+## (the 0.4.1 default, trim = "random"): exchangeable replicates inside each
+## cell, a covariate CONSTANT within each cell, a random per-cell trim to L0
+## redrawn per repetition. The second arm has a covariate that VARIES within a
+## cell (staggered adoption) and a common period effect in the errors: there
 ## the test is valid only if the permutation holds the `rep` LEVEL fixed in
-## every cell -- the property mwperm_irregular() enforces since 0.4.0, and the
-## one the paper's printed step (i) (a random per-cell trim) does not
-## guarantee: under that rule this arm rejected a true null 96-100% of the time.
+## every cell, trim = "levels" -- under the random trim this arm rejects a true
+## null essentially always (1.000 in 1000 simulations), which is the reason
+## the argument exists.
 ##
 ## Usage:  Rscript 06_size_by_design.R          # 1000 sims/cell (default)
 ## Output: out/06_size_by_design.txt (+ _summary.rds); cache under ./cache.
@@ -101,14 +101,14 @@ sim_irr_c <- function(s, dgp_seed, fit_seed) {
   c(p = fit$pvalue, K = fit$K)
 }
 report("irregular 30x30, cell-constant d",
-       mc_cell("size06_irregular_const_v1", N, sim_irr_c,
+       mc_cell("size06_irregular_const_v2", N, sim_irr_c,
                params = list(design = "irregular", L0 = 4L), batch = BATCH))
 
 ## ---- irregular (Section 6.4), covariate VARYING within cells ---------------
 ## 22 x 22 cells each observed in periods 1..4, L0 = 2 (so two periods are cut
 ## from every cell), d_ijt = 1{t >= start_ij} (staggered adoption), and a
 ## common period effect zeta = (0, 0, 0, 20) in the errors. Valid only when
-## the retained periods are the SAME two in every cell.
+## the retained periods are the SAME two in every cell: trim = "levels".
 cat("\n---- irregular layout, mwperm_irregular(L0 = 2), d varies in cells\n")
 sim_irr_w <- function(s, dgp_seed, fit_seed) {
   set.seed(dgp_seed)
@@ -118,12 +118,12 @@ sim_irr_w <- function(s, dgp_seed, fit_seed) {
   d <- as.numeric(g$t >= start[cbind(g$i, g$j)])
   y <- rnorm(m)[g$i] + rnorm(m)[g$j] + c(0, 0, 0, 20)[g$t] + rnorm(nrow(g))
   fit <- mwperm_irregular(y, d, row = g$i, col = g$j, rep = g$t, L0 = 2L,
-                          min_block = 20L, n_reps = 1, seed = fit_seed,
-                          conf_int = FALSE)
+                          trim = "levels", min_block = 20L, n_reps = 1,
+                          seed = fit_seed, conf_int = FALSE)
   c(p = fit$pvalue, K = fit$K)
 }
 report("irregular 22x22x4, within-cell d, L0 = 2",
-       mc_cell("size06_irregular_within_v1", N, sim_irr_w,
+       mc_cell("size06_irregular_within_v2", N, sim_irr_w,
                params = list(design = "irregular", L0 = 2L), batch = BATCH))
 
 ## ---- missing (Procedure 2): 40 x 40 array with the diagonal deleted --------

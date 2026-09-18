@@ -140,9 +140,10 @@
 #' which an error variance that depends on the covariates violates. Nothing
 #' in the clustering structure shows this, so the diagnosis never selects
 #' the sign-flip test ([mwperm_dyadic_het()], valid under arbitrary
-#' heteroskedasticity but needing symmetric errors); on a complete dyadic
-#' array it prints one line offering `design = "dyadic_het"`, and the choice
-#' is yours.
+#' heteroskedasticity for errors that are independent across cells and
+#' symmetric, but not under additive cluster effects); on a dyadic array,
+#' complete or not, it prints one line offering `design = "dyadic_het"`, and
+#' the choice is yours.
 #'
 #' @param index The clustering dimensions (2 or 3): a data frame, a named list
 #'   of vectors, or a character vector of column names resolved against
@@ -328,9 +329,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                    rep = if (!is.null(rep_v)) names(rep_v) else
                      "(within-cell order)")
     reason <<- why
-    ## K is set by the biclique blocks found under the Section 6.4 mask (cell
-    ## observes every one of the L0 retained levels), which depends on L0 --
-    ## not knowable here.
+    ## K is set by the biclique blocks found under the Section 6.4 mask
+    ## (M_ij = 1{ell_ij >= L0}; under trim = "levels", cell observes every one
+    ## of the L0 retained levels), which depends on L0 -- not knowable here.
     K_default <<- NA_integer_
     balance <<- sprintf(paste0("irregular (%d cells, %d-%d observations ",
                                "each; L0 sets which cells are usable)"),
@@ -339,9 +340,10 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     cells_exp <<- prod(dims[1:2])
     notes <<- c(notes, paste0(
       "The permutation-group order for the Section 6.4 design is set by the ",
-      "biclique blocks found under the mask M_ij = 1{cell observes every one ",
-      "of the L0 retained levels}, so it depends on `L0`; see ",
-      "find_bicliques() and ?mwperm_irregular."))
+      "biclique blocks found under the mask M_ij = 1{ell_ij >= L0} (under ",
+      "trim = \"levels\", 1{cell observes every one of the L0 retained ",
+      "levels}), so it depends on `L0`; see find_bicliques() and ",
+      "?mwperm_irregular."))
   }
 
   ## Structural gate shared by every panel path (auto, tagged, forced). A
@@ -426,7 +428,10 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       cells_exp <- prod(dims[1:2])
       balance <- if (N == cells_exp) "complete"
                  else sprintf("incomplete (%d of %d cells)", N, cells_exp)
-      if (design %in% c("dyadic", "dyadic_het") && N != cells_exp)
+      ## A sign flip moves no observation, so "dyadic_het" runs on an
+      ## incomplete array as it is (every observed cell, nothing discarded);
+      ## only the permutation design needs the complete array.
+      if (design == "dyadic" && N != cells_exp)
         stop(sprintf(paste0("design = \"%s\" requires a complete ",
                             "array but only ",
                             "%d of %d cells are observed. Use ",
@@ -581,9 +586,10 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         ## Heteroskedasticity leaves no trace in the clustering structure, so
         ## the sign-flip test can never be detected -- only offered.
         alternatives <- c(alternatives, paste0(
-          "design = \"dyadic_het\" runs the sign-flip test instead, which ",
-          "trades exchangeability of the errors for symmetry about zero and ",
-          "so tolerates arbitrary heteroskedasticity (see ?mwperm_dyadic_het)"))
+          "design = \"dyadic_het\" runs the sign-flip test instead: valid ",
+          "under arbitrary heteroskedasticity for errors that are ",
+          "independent across cells and symmetric about zero, but NOT under ",
+          "additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
       } else {
         chosen <- "missing"
         balance <- sprintf("incomplete (%d of %d cells)", N, cells_exp)
@@ -593,6 +599,15 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           "The permutation-group order under missingness is set by the fully ",
           "observed biclique blocks; see find_bicliques() for the ",
           "achievable K."))
+        ## The sign-flip test needs no complete array (nothing is discarded),
+        ## which makes it worth naming here; its assumption is the same as
+        ## on a complete array.
+        alternatives <- c(alternatives, paste0(
+          "design = \"dyadic_het\" runs the sign-flip test on every observed ",
+          "cell, with no biclique search and nothing discarded: valid under ",
+          "arbitrary heteroskedasticity for errors that are independent ",
+          "across cells and symmetric about zero, but NOT under additive ",
+          "cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
       }
     }
   } else {
@@ -858,8 +873,10 @@ print.mwperm_design <- function(x, ...) {
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it). `"dyadic_het"` runs [mwperm_dyadic_het()],
 #'   the sign-flip test that tolerates heteroskedasticity at the price of
-#'   assuming symmetric errors; it is *never* chosen automatically, because
-#'   heteroskedasticity is invisible in the clustering structure.
+#'   assuming errors independent across cells and symmetric (no additive
+#'   cluster effects); it is *never* chosen automatically, because
+#'   heteroskedasticity is invisible in the clustering structure. It runs
+#'   on incomplete arrays too (nothing is discarded).
 #' @param K Number of non-identity permutations; the default and the
 #'   admissible range depend on the dispatched design -- see the dispatched
 #'   function. Does not apply to `design = "dyadic_het"`, whose group is
@@ -872,6 +889,9 @@ print.mwperm_design <- function(x, ...) {
 #'   it).
 #' @param L0 Passed to [mwperm_layout()] or [mwperm_irregular()] (layout and
 #'   irregular only; required for `design = "irregular"`).
+#' @param trim Passed to [mwperm_irregular()] (irregular only): `"random"`,
+#'   the paper's random per-cell trim, or `"levels"`, the same `rep` levels in
+#'   every cell. Supplying it for another design warns and ignores it.
 #' @param min_block,block_method,permute `min_block` and `block_method` are
 #'   passed to [mwperm_missing()], [mwperm_panel_missing()] or
 #'   [mwperm_irregular()]; `permute` to [mwperm_missing()] only. Supplying any
@@ -934,11 +954,12 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                               "irregular", "dyadic_het"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
                    n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
-                   time_fe = TRUE, L0 = NULL, min_block = 3L,
-                   block_method = c("greedy", "exact"),
+                   time_fe = TRUE, L0 = NULL, trim = c("random", "levels"),
+                   min_block = 3L, block_method = c("greedy", "exact"),
                    permute = c("both", "rows", "cols"), n_flip = NULL,
                    aggregate = c("median", "median2"), verbose = TRUE) {
   design <- match.arg(design)
+  trim <- match.arg(trim)
   aggregate <- match.arg(aggregate)
   cl <- match.call()
   ## capture the caller's expression for d BEFORE evaluation: the front ends
@@ -1012,6 +1033,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   }
   check_arg("time_fe", c("panel", "panel_missing"))
   check_arg("L0", c("layout", "irregular"))
+  check_arg("trim", "irregular")
   check_arg("min_block", c("missing", "irregular", "panel_missing"))
   check_arg("block_method", c("missing", "irregular", "panel_missing"))
   check_arg("permute", "missing")
@@ -1024,9 +1046,8 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                    "`n_flip` (group order 2^(n_flip - 1))."), call. = FALSE)
   if (chk$design == "irregular" && is.null(L0))
     stop(paste0("The Section 6.4 (irregular) design requires `L0 =`, the ",
-                "number of within-cell levels retained per cell, which sets ",
-                "the mask M_ij = 1{cell observes every one of the L0 ",
-                "retained levels}. See ?mwperm_irregular."),
+                "number of observations retained per cell, which sets the ",
+                "mask M_ij = 1{ell_ij >= L0}. See ?mwperm_irregular."),
          call. = FALSE)
 
   ## Assumption-fork and weak-evidence detection notices are REAL warnings at
@@ -1077,7 +1098,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                                     rep = chk$rep, L0 = L0))),
     irregular = do.call(mwperm_irregular,
                         c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                       rep = chk$rep, L0 = L0,
+                                       rep = chk$rep, L0 = L0, trim = trim,
                                        min_block = min_block,
                                        block_method = block_method))))
 
