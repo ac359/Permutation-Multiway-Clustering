@@ -1,19 +1,39 @@
 ==== 06 Type-I error by design: layout, irregular, missing, panel (bicliques) ====
-mwperm 0.4.0 | 1000 sims/cell | n_reps = 1 | rejection rule p <= 0.05 | 2026-09-11 17:29:00
+mwperm 0.4.1 | 1000 sims/cell | n_reps = 1 | rejection rule p <= 0.05 | 2026-09-18 12:18:38
 
 ---- replicated two-way layout, mwperm_layout(L0 = 22) ----
+  [size06_layout_v2] batch 1/4 (250 sims) in 1.1s
+  [size06_layout_v2] batch 2/4 (250 sims) in 1.1s
+  [size06_layout_v2] batch 3/4 (250 sims) in 1.1s
+  [size06_layout_v2] batch 4/4 (250 sims) in 1.1s
   layout 10x10, 22-30 reps, L0 = 22  K = 21 (floor 0.0455, attainable)  size@.05 = 4.8% (CP upper 6.1%)  |  super-unif: clean
 
 ---- irregular layout, mwperm_irregular(L0 = 4), d constant in cells
-  irregular 30x30, cell-constant d   K = 24 (floor 0.0400, attainable)  size@.05 = 4.3% (CP upper 5.5%)  |  super-unif: clean
+  [size06_irregular_const_v2] batch 1/4 (250 sims) in 1.4s
+  [size06_irregular_const_v2] batch 2/4 (250 sims) in 1.4s
+  [size06_irregular_const_v2] batch 3/4 (250 sims) in 1.4s
+  [size06_irregular_const_v2] batch 4/4 (250 sims) in 1.4s
+  irregular 30x30, cell-constant d   K = 24 (floor 0.0400, attainable)  size@.05 = 4.5% (CP upper 5.7%)  |  super-unif: clean
 
 ---- irregular layout, mwperm_irregular(L0 = 2), d varies in cells
+  [size06_irregular_within_v2] batch 1/4 (250 sims) in 1.0s
+  [size06_irregular_within_v2] batch 2/4 (250 sims) in 1.0s
+  [size06_irregular_within_v2] batch 3/4 (250 sims) in 1.0s
+  [size06_irregular_within_v2] batch 4/4 (250 sims) in 1.0s
   irregular 22x22x4, within-cell d, L0 = 2 K = 21 (floor 0.0455, attainable)  size@.05 = 4.3% (CP upper 5.5%)  |  super-unif: clean
 
 ---- incomplete array (no diagonal), mwperm_missing(min_block = 20)
+  [size06_missing_v2] batch 1/4 (250 sims) in 0.9s
+  [size06_missing_v2] batch 2/4 (250 sims) in 0.9s
+  [size06_missing_v2] batch 3/4 (250 sims) in 1.0s
+  [size06_missing_v2] batch 4/4 (250 sims) in 0.9s
   missing 40x40, diagonal deleted    K = 19 (floor 0.0500, attainable)  size@.05 = 4.8% (CP upper 6.1%)  |  super-unif: clean
 
 ---- incomplete panel, mwperm_panel_missing(min_block = 20) ----
+  [size06_panel_missing_v1] batch 1/4 (250 sims) in 1.6s
+  [size06_panel_missing_v1] batch 2/4 (250 sims) in 1.6s
+  [size06_panel_missing_v1] batch 3/4 (250 sims) in 1.7s
+  [size06_panel_missing_v1] batch 4/4 (250 sims) in 1.7s
   panel 26x26x4, 6 pairs thinned     K = 22 (floor 0.0435, attainable)  size@.05 = 0.9% (CP upper 1.6%)
 
 ---- summary ----
@@ -24,13 +44,13 @@ mwperm 0.4.0 | 1000 sims/cell | n_reps = 1 | rejection rule p <= 0.05 | 2026-09-
 full table:
                                      cell  K attainable size05   cp_lo
         layout 10x10, 22-30 reps, L0 = 22 21       TRUE  0.048 0.03560
-         irregular 30x30, cell-constant d 24       TRUE  0.043 0.03129
+         irregular 30x30, cell-constant d 24       TRUE  0.045 0.03301
  irregular 22x22x4, within-cell d, L0 = 2 21       TRUE  0.043 0.03129
           missing 40x40, diagonal deleted 19       TRUE  0.048 0.03560
            panel 26x26x4, 6 pairs thinned 22       TRUE  0.009 0.00412
  cp_upper1 su_violation
     0.0607        FALSE
-    0.0551        FALSE
+    0.0573        FALSE
     0.0551        FALSE
     0.0607        FALSE
     0.0157           NA

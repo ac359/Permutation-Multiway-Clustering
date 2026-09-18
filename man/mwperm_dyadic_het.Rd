@@ -107,9 +107,10 @@ Finite-sample valid test of H0: beta = b in the dyadic regression model
 
 \preformatted{  y_ij = x_ij' gamma + d_ij' beta + eps_ij}
 
-with a single observation per cell, under an invariance assumption that
-tolerates \strong{arbitrary heteroskedasticity}: the errors must be
-symmetrically distributed under joint row-and-column sign changes,
+with one observation per cell (the array need not be complete), under an
+invariance assumption that tolerates \strong{arbitrary heteroskedasticity}
+but \strong{not additive cluster effects}: the error array must be
+\emph{jointly} symmetric under row-and-column sign changes,
 
 \preformatted{  (eps_ij) =d (s_i t_j eps_ij) | X, D   for all row signs s and column signs t.}
 
@@ -121,20 +122,45 @@ model, same null, same statistic, same confidence set by test inversion;
 only the group changes, and with it the assumption.
 }
 \details{
+\strong{What the assumption does and does not allow.} A sign flip moves no
+observation and changes no variance, so the variance \code{sigma_ij} may
+depend on \code{i}, on \code{j} and on the covariates in any way. The
+assumption holds for errors that are \strong{independent across cells} and
+symmetric about zero (\code{eps_ij = sigma_ij u_ij} with \code{u_ij}
+independent symmetric, \code{sigma_ij} arbitrary), and more generally for
+errors whose dependence across cells is itself sign-symmetric
+(multiplicative cluster factors, \code{eps_ij = a_i b_j u_ij} with
+\code{a_i, b_j} symmetric). It does \strong{not} hold under the additive
+random-effects structure that motivates multi-way clustering,
+\code{eps_ij = eta_i + xi_j + u_ij}: flipping the sign of one row turns
+\code{Cov(eps_ij, eps_kj) = Var(xi_j)} (k another row) into its negative,
+so the joint law changes even though every single error is symmetric. Under
+that structure
+this test \strong{over-rejects} -- about 0.12-0.15 at a nominal 0.05 when
+\code{d} carries a row-level component, in this package's own checks (the
+permutation test held 0.04-0.05 on the same data) -- and symmetry of each
+error on its own is not enough. Skewed errors are excluded as well.
+
 \strong{When to use it instead of \code{\link{mwperm_dyadic}}.} The two
 assumptions are complementary and neither contains the other:
 \itemize{
   \item \code{\link{mwperm_dyadic}} needs the error array to be
   \emph{exchangeable} under relabelling of the clusters, conditional on the
-  covariates. That fails whenever the error variance depends on the cluster
-  identity or on the covariates -- a gravity equation whose residual
-  variance grows with distance or GDP, say -- because relabelling the
-  clusters relabels the variance pattern. Symmetry is \emph{not} required.
-  \item \code{mwperm_dyadic_het()} needs the errors to be \emph{symmetric
-  about zero} under row and column sign changes. A sign flip changes no
-  variance, so any pattern of heteroskedasticity is fine; skewed errors
-  are not.
+  covariates. That tolerates additive cluster effects and any error
+  distribution, but fails whenever the error variance (or any other feature
+  of the error law) depends on the covariates -- a gravity equation whose
+  residual variance grows with distance or GDP, say -- because relabelling
+  the clusters relabels the variance pattern. Symmetry is \emph{not}
+  required.
+  \item \code{mwperm_dyadic_het()} tolerates any covariate-driven
+  heteroskedasticity but needs the joint sign symmetry above: independent
+  (or sign-symmetrically dependent) symmetric errors, \strong{no additive
+  cluster effects}.
 }
+The authors' own design for this test (\code{simulate_gravity_model()} in
+their revision material) draws errors that are independent across cells
+with a variance increasing in the gravity mean and in distance; that is the
+setting it is meant for.
 
 Under covariate-dependent heteroskedasticity (25 clusters per side, a
 gravity design with the residual variance increasing in the mean and in the
@@ -146,11 +172,19 @@ and 0.05 respectively). That gap is the reason the function exists. It is
 \strong{not a strict upgrade}: under homoskedastic, exchangeable errors the
 sign-flip test is less powerful (about 0.86 against 0.96 at beta = 0.15 in
 the same design here; 0.90 against 0.98 in the authors' run), because its
-group is smaller and coarser than a full relabelling group. Use it when you
-have reason to doubt exchangeability and are prepared to assume symmetry;
-use \code{\link{mwperm_dyadic}} otherwise. Heteroskedasticity leaves no
-trace in the clustering structure, so \code{\link{mwperm}} never selects
-this test automatically: request it with \code{design = "dyadic_het"}.
+group is smaller and coarser than a full relabelling group. Use it when the
+errors are plausibly independent across cells with a variance that depends
+on the covariates; use \code{\link{mwperm_dyadic}} when additive cluster
+effects are the concern. Heteroskedasticity leaves no trace in the
+clustering structure, so \code{\link{mwperm}} never selects this test
+automatically: request it with \code{design = "dyadic_het"}.
+
+\strong{Incomplete arrays.} No fully observed block is needed: every
+observed cell is used and nothing is discarded (the fit says so in a note).
+The only thing an incomplete array changes is the guard on the flip-group
+assignment, which must keep the group's kernel at \code{{s, -s}} on the
+observed cells -- see the \code{cells} argument of
+\code{\link{build_flip_set}}.
 
 \strong{The group and its resolution.} Each row cluster and each column
 cluster is assigned at random to one of \code{n_flip} flip groups, and a

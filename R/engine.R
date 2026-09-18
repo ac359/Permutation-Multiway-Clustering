@@ -128,7 +128,12 @@
 #'   returns, the list must be a group closed under composition with the
 #'   identity first, because that is what Theorem 1 of Guo, Toulis and Wang
 #'   (2026) -- and its extension to any invariance group in their Section 2
-#'   -- assumes.
+#'   -- assumes. The list may carry an integer attribute `"rows"`: that
+#'   repetition is then computed on `y[rows]`, `D[rows, ]`, `X[rows, ]`, and
+#'   the elements are a group over those rows (the Section 6.4 random trim,
+#'   which subsamples afresh in every repetition). The caller must then
+#'   guarantee `length(rows) > 2p` itself; the `N > 2p` check below sees the
+#'   full data. Without the attribute every repetition uses all N rows.
 #' @param K,n_reps,seed group order minus one (the non-identity count: `K`
 #'   for a permutation group, `2^(n_flip - 1) - 1` for the sign-flip group),
 #'   number of repetitions, and base RNG seed.
@@ -298,10 +303,24 @@
   }
   one_rep <- function(s) {
     op <- perm_builder(s)               # K+1 gather-vectors for this rep
-    prep <- .ipt_prepare(y, D, X, op, need_perm_D = need_W,
-                         n_cores = if (rep_axis) 1L else n_cores,
-                         cl = psock_cl, degenerate = degenerate,
-                         design = type)
+    ## A builder may confine this repetition to a subset of the rows: the
+    ## Section 6.4 random trim (mwperm_irregular(trim = "random")) redraws
+    ## the retained observations from the rep seed, so the group elements it
+    ## returns index a subsample, named in `attr(op, "rows")`. Every
+    ## inversion path consumes only the cached cross products of the prep
+    ## object, so repetitions on different row subsets aggregate exactly as
+    ## repetitions on the same rows do. No attribute (every other design)
+    ## leaves the historical path untouched.
+    rows <- attr(op, "rows")
+    prep <- if (is.null(rows))
+      .ipt_prepare(y, D, X, op, need_perm_D = need_W,
+                   n_cores = if (rep_axis) 1L else n_cores,
+                   cl = psock_cl, degenerate = degenerate, design = type)
+    else
+      .ipt_prepare(y[rows], D[rows, , drop = FALSE], X[rows, , drop = FALSE],
+                   op, need_perm_D = need_W,
+                   n_cores = if (rep_axis) 1L else n_cores,
+                   cl = psock_cl, degenerate = degenerate, design = type)
     list(prep = prep, pv = .ipt_eval(prep, beta0)$pvalue)
   }
   reps <- .plapply(seeds, one_rep, n_cores = if (rep_axis) n_cores else 1L)

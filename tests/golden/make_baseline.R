@@ -149,10 +149,12 @@ run("panel_missing_nondefault", with(ipn, mwperm_panel_missing(
   y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j),
   row = importer, col = exporter, time = year, min_block = 5L,
   beta_null = 0.5, n_reps = 9L, conf_int = TRUE, time_fe = FALSE, seed = 1)))
-## Irregular design with a covariate that VARIES within cells and cells whose
-## level sets differ (rows 1-20 hold periods 1-2, rows 21-40 periods 2-3): the
-## case in which the slot the permutation holds fixed must be the `rep` level.
-## 20 retained rows give K = 19, so the confidence set is attainable.
+## Irregular design with a covariate that VARIES within cells, a common period
+## effect, and cells whose level sets differ (rows 1-20 hold periods 1-2, rows
+## 21-40 periods 2-3): the case in which the slot the permutation holds fixed
+## must be the `rep` level, i.e. trim = "levels" (the paper's random trim is
+## not valid here -- see ?mwperm_irregular). 20 retained rows give K = 19, so
+## the confidence set is attainable.
 set.seed(3)
 irr2 <- do.call(rbind, lapply(seq_len(40L), function(i)
   do.call(rbind, lapply(seq_len(20L), function(j)
@@ -162,8 +164,23 @@ irr2$d <- as.numeric(irr2$t >= matrix(sample(1:4, 800L, TRUE), 40L,
 irr2$y <- 0.4 * irr2$d + rnorm(40L)[irr2$i] + rnorm(20L)[irr2$j] +
   c(0, 0, 5)[irr2$t] + rnorm(nrow(irr2))
 run("irregular_nondefault", with(irr2, mwperm_irregular(
-  y = y, d = d, row = i, col = j, rep = t, L0 = 2L, min_block = 2L,
-  beta_null = 0.4, n_reps = 9L, conf_int = TRUE, seed = 1)))
+  y = y, d = d, row = i, col = j, rep = t, L0 = 2L, trim = "levels",
+  min_block = 2L, beta_null = 0.4, n_reps = 9L, conf_int = TRUE, seed = 1)))
+## The paper's own reading of Section 6.4 (trim = "random", the default):
+## exchangeable replicates inside each cell, unequal cell sizes, a covariate
+## constant within cells, cluster random effects. 25 x 25 cells with 3-8
+## replicates, L0 = 3 keeps every cell, K = 24, so the confidence set is
+## attainable and the per-repetition subsample is exercised by every path.
+set.seed(5)
+irr3 <- do.call(rbind, lapply(seq_len(25L), function(i)
+  do.call(rbind, lapply(seq_len(25L), function(j)
+    data.frame(i = i, j = j, l = seq_len(sample(3:8, 1L)),
+               d = rnorm(1), eta = rnorm(1))))))
+irr3$y <- 0.3 * irr3$d + rnorm(25L)[irr3$i] + rnorm(25L)[irr3$j] +
+  rnorm(nrow(irr3))
+run("irregular_random_nondefault", with(irr3, mwperm_irregular(
+  y = y, d = d, row = i, col = j, rep = l, L0 = 3L, min_block = 3L,
+  beta_null = 0.3, n_reps = 9L, conf_int = TRUE, seed = 1)))
 run("dyadic_het_nondefault", with(td, mwperm_dyadic_het(
   y = log_trade, d = log_dist, x = cbind(log_gdp_i, log_gdp_j),
   row = importer, col = exporter, n_flip = 6L, beta_null = -1, n_reps = 9L,

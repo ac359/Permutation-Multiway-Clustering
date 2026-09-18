@@ -295,10 +295,18 @@ stopifnot(any(grepl("default n_flip = 8", out_h, fixed = TRUE)),
 chk_s <- mwperm_check(index = list(i = g5$i, j = g5$j), design = "dyadic_het")
 stopifnot(identical(chk_s$n_flip_default, 5L), isFALSE(chk_s$resolution_ok))
 stopifnot(any(grepl("n_flip >= 6", capture.output(print(chk_s)), fixed = TRUE)))
-## forced on an incomplete array: refused, like design = "dyadic"
+## forced on an incomplete array: accepted (section 10), unlike "dyadic"
 inc <- trade_dyadic[trade_dyadic$importer != trade_dyadic$exporter, ]
+chk_i <- mwperm_check(index = c("importer", "exporter"), data = inc,
+                      design = "dyadic_het")
+stopifnot(identical(chk_i$design, "dyadic_het"),
+          grepl("mwperm_dyadic_het(", chk_i$call_str, fixed = TRUE))
 expect_err(mwperm_check(index = c("importer", "exporter"), data = inc,
-                        design = "dyadic_het"), "complete")
+                        design = "dyadic"), "complete")
+## and the automatic route on an incomplete array (missing) still offers it
+chk_a <- mwperm_check(index = c("importer", "exporter"), data = inc)
+stopifnot(identical(chk_a$design, "missing"),
+          any(grepl("dyadic_het", chk_a$alternatives, fixed = TRUE)))
 ## dispatch identity
 f_dir <- with(trade_dyadic,
               mwperm_dyadic_het(y = log_trade, d = log_dist,
@@ -347,5 +355,75 @@ f_small <- mwperm_dyadic(y5, d5, row = g5$i, col = g5$j, seed = 1, n_reps = 1)
 stopifnot(any(grepl(paste0("A 95% set needs K + 1 >= 20 -- that is, at least ",
                            "20 levels in the smallest permuted dimension."),
                     f_small$note, fixed = TRUE)))
+
+## ---- 10. incomplete arrays ---------------------------------------------------
+## A sign flip moves no observation, so the construction needs neither a
+## complete array nor a biclique search: every observed cell is used and none
+## is discarded. What it DOES need is that the kernel of the action stays
+## {s, -s} on the observed cells. A flip group can be reachable only through
+## cells that are all missing -- then its sign is free, the kernel doubles,
+## and the 2^(n_flip - 1) representatives would contain duplicates while the
+## fit reported a resolution it cannot attain. build_flip_set() therefore
+## takes the observed cells and redraws until the row-group / column-group
+## graph over them is connected.
+##
+## (a) on a complete array the observed-cell argument changes nothing: the
+##     connectivity condition is implied by "every group used", so the draw
+##     -- and every seeded result -- is bit-identical.
+cells_all <- as.matrix(expand.grid(row = 1:6, col = 1:5))
+for (sd in 1:5)
+  stopifnot(identical(build_flip_set(6L, 5L, 4L, seed = sd),
+                      build_flip_set(6L, 5L, 4L, seed = sd, cells = cells_all)))
+## (b) a diagonal-only 4 x 4 array with n_flip = 4: without the guard most
+##     assignments leave the group graph disconnected and the observation-
+##     level sign vectors collapse onto fewer than 2^3 distinct ones.
+cells_diag <- cbind(row = 1:4, col = 1:4)
+for (sd in 1:40) {
+  F <- build_flip_set(4L, 4L, 4L, seed = sd, cells = cells_diag)
+  sv <- vapply(F, function(e) paste(e$row[cells_diag[, 1]] *
+                                      e$col[cells_diag[, 2]], collapse = ""),
+               "")
+  stopifnot(length(F) == 8L, !anyDuplicated(sv))
+}
+expect_err(build_flip_set(4L, 4L, 4L, seed = 1, cells = cbind(1:2, 1:2)),
+           "cells")                 # rows/cols outside 1..n_row / 1..n_col
+## (c) the fit runs on an incomplete array, uses every observed cell, and is
+##     Procedure 1 under the sign-flip group restricted to those cells: an
+##     explicit orthonormal complement of [X | S_k X] built from scratch gives
+##     the identical p-value.
+set.seed(9)
+inc2 <- inc[sample.int(nrow(inc), floor(0.8 * nrow(inc))), ]
+f_inc <- with(inc2, mwperm_dyadic_het(y = log_trade, d = log_dist,
+                                      x = cbind(log_gdp_i, log_gdp_j),
+                                      row = importer, col = exporter,
+                                      n_flip = 5, n_reps = 1, seed = 3,
+                                      conf_int = FALSE))
+stopifnot(f_inc$n_obs == nrow(inc2), f_inc$K == 15L,
+          any(grepl("incomplete", f_inc$note, fixed = TRUE)),
+          any(grepl("no cell is discarded", f_inc$note, fixed = TRUE)))
+ri2 <- as.integer(factor(inc2$importer)); ci2 <- as.integer(factor(inc2$exporter))
+F2 <- build_flip_set(max(ri2), max(ci2), 5L, seed = sub_seed(3L, 1L),
+                     cells = cbind(ri2, ci2))
+X2 <- cbind(1, inc2$log_gdp_i, inc2$log_gdp_j); D2 <- inc2$log_dist
+y2 <- inc2$log_trade
+null_basis <- function(M) {
+  s <- svd(M, nu = nrow(M)); r <- sum(s$d > 1e-10 * s$d[1])
+  s$u[, (r + 1):nrow(M), drop = FALSE]
+}
+a <- b <- numeric(length(F2) - 1L)
+for (k in seq_along(a)) {
+  sgn <- F2[[k + 1L]]$row[ri2] * F2[[k + 1L]]$col[ci2]
+  V <- null_basis(cbind(X2, X2 * sgn)); P <- V %*% t(V)
+  a[k] <- abs(sum(D2 * (P %*% y2))); b[k] <- abs(sum(D2 * (P %*% (y2 * sgn))))
+}
+stopifnot(identical(f_inc$pvalue, (1 + sum(b >= min(a))) / length(F2)))
+## (d) dispatch identity on the incomplete array, and the complete-array
+##     anchor is untouched (golden baseline; also section 9)
+f_inc_dis <- mwperm(y = "log_trade", d = "log_dist",
+                    x = c("log_gdp_i", "log_gdp_j"),
+                    index = c("importer", "exporter"), data = inc2,
+                    design = "dyadic_het", n_flip = 5, n_reps = 1, seed = 3,
+                    conf_int = FALSE, verbose = FALSE)
+stopifnot(isTRUE(same_fit(f_inc, f_inc_dis, skip = c("call", "auto"))))
 
 passed("test-signflip.R")

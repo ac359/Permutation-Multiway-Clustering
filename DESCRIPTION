@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.4.0
+Version: 0.4.1
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre", "cph")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = c("aut", "cph")),
@@ -13,9 +13,11 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     permutation test of Guo, W., Toulis, P. and Wang, Y. (2026)
     <doi:10.48550/arXiv.2601.08610>. Validity requires only an invariance of
     the errors conditional on the covariates: separate exchangeability across
-    the clustering dimensions for the permutation tests, or symmetry under
-    row-and-column sign changes for the heteroskedasticity-robust sign-flip
-    variant. The covariate distribution is unrestricted, so the tests remain
+    the clustering dimensions for the permutation tests, or joint symmetry
+    of the error array under row-and-column sign changes for the
+    heteroskedasticity-robust sign-flip variant (independent symmetric
+    errors with any variance pattern; not additive cluster effects). The
+    covariate distribution is unrestricted, so the tests remain
     exact in finite samples even with few clusters or heavy-tailed regressors,
     where multi-way cluster-robust standard errors and the wild cluster
     bootstrap can be badly miscalibrated. A block-cyclic permutation group (or
@@ -26,12 +28,13 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     time effects, incomplete and unbalanced panels, replicated two-way layouts,
     irregular layouts in which the repeats are time periods or the covariate
     is constant within cells, incomplete arrays via fully observed bicliques,
-    and dyadic designs with arbitrary heteroskedasticity.
+    and dyadic designs with arbitrary heteroskedasticity and errors
+    independent across cells.
 License: MIT + file LICENSE
 URL: https://github.com/ac359/Permutation-Multiway-Clustering
 BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
 Language: en-US
-Date: 2026-09-16
+Date: 2026-09-18
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
