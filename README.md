@@ -1,7 +1,8 @@
 # mwperm
 
 **Finite-sample-exact tests and confidence intervals for regression under
-multi-way clustering, panels, replicated layouts, and missing cells.**
+multi-way clustering, panels, replicated and irregular layouts, missing
+cells, and — through a sign-flip group — heteroskedastic errors.**
 
 `mwperm` implements the invariant permutation test (IPT) of Guo, Toulis & Wang
 (2026), built on the residual permutation test of Wen, Wang & Wang (2025). It
@@ -33,8 +34,9 @@ standard errors 0.006–0.009. A naive OLS test on the same dyadic design
 rejected **43.8%** of the time at a nominal 5%. The shipped script
 `inst/replication/06_size_by_design.R` covers the remaining designs, at 1000
 replications and `n_reps = 1` each: 0.048 replicated layout (10 × 10 cells,
-K = 21), 0.043 irregular layout (with a cell-constant covariate, K = 24, and
-with one that varies within cells, K = 21), 0.048 incomplete array (40 × 40
+K = 21), 0.045 irregular layout (with a cell-constant covariate, K = 24; 0.043
+with one that varies within cells under a common period effect, K = 21, using
+`trim = "levels"`), 0.048 incomplete array (40 × 40
 minus its diagonal, K = 19) and 0.009 incomplete panel (26 × 26 × 4, K = 22).
 Other simulations quoted for this package (the rest of `inst/replication/`,
 the software paper) use different sizes, error laws and `n_reps`, and report
@@ -56,15 +58,19 @@ This holds, for example, under a two-way random-effects structure
 $$\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$$
 
 with $\eta_i,\xi_j,u_{ij}$ i.i.d. given the covariates. It does **not** require
-normality or independence across cells. It does require that the error
-variance not depend on the cluster identity or on the covariates: relabelling
-the clusters relabels the variance pattern, so covariate-dependent
-heteroskedasticity breaks exchangeability *given the covariates* and makes
-the permutation test over-reject. For that case the package has a second
-invariance route, `mwperm_dyadic_het()`, which replaces relabelling by joint
-row-and-column **sign changes** — a sign flip changes no variance, so any
-heteroskedasticity is fine, but the errors must then be **symmetric about
-zero**. Neither assumption implies the other; see
+normality or independence across cells, and random cluster-level
+heterogeneity that is itself i.i.d. across clusters and independent of the
+covariates is fine. It does require that the error law — its variance in
+particular — not depend on the covariates: relabelling the clusters relabels
+the variance pattern, so covariate-dependent heteroskedasticity breaks
+exchangeability *given the covariates* and makes the permutation test
+over-reject. For that case the package has a second invariance route,
+`mwperm_dyadic_het()`, which replaces relabelling by joint row-and-column
+**sign changes** — a sign flip changes no variance, so any heteroskedasticity
+is fine, but the error array must then be **jointly symmetric** under those
+sign changes: independent (or sign-symmetrically dependent) symmetric errors,
+and **not** the additive cluster effects $\eta_i + \xi_j$ above, which a sign
+flip does not preserve. Neither assumption implies the other; see
 [Extensions](#extensions).
 
 Critically, neither assumption restricts the **covariate distribution**.
@@ -179,9 +185,10 @@ Balance         : complete
 Resolution      : default K = 39, so p-values are multiples of 1/40 = 0.025
                   -> fine enough for a 95% confidence set at alpha = 0.05
 Would run       : mwperm_dyadic(y, d, x, row = importer, col = exporter)
-  ? design = "dyadic_het" runs the sign-flip test instead, which trades
-    exchangeability of the errors for symmetry about zero and so
-    tolerates arbitrary heteroskedasticity (see ?mwperm_dyadic_het)
+  ? design = "dyadic_het" runs the sign-flip test instead: valid under
+    arbitrary heteroskedasticity for errors that are independent across
+    cells and symmetric about zero, but NOT under additive cluster
+    effects eta_i + xi_j (see ?mwperm_dyadic_het)
 ```
 
 There is also a formula interface, and the design-specific functions are fully
@@ -219,19 +226,21 @@ in the third is one you are willing to assume.
 | Three crossed dimensions, **all** exchangeable | `mwperm_threeway()` | $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$ | all three index sets, jointly |
 | Two dimensions observed **over time** | `mwperm_panel()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary** | rows and columns — the *same* relabelling in every period; $t$ is never moved |
 | Repeated **independent** observations per cell | `mwperm_layout()` | $\varepsilon_{ijl} = \eta_{ij} + u_{ijl}$, with $\eta_{ij}$ **arbitrary** | the replicates $l$ inside each cell, drawn independently per cell |
-| Repeated observations per cell, but they are **time periods**, or `d` is constant within a cell | `mwperm_irregular()` | $\varepsilon_{ijl} = \eta_i + \xi_j + \zeta_l + u_{ijl}$, with $\zeta_l$ **arbitrary**, and which cells clear $L_0$ not depending on $y$ | whole cells, across rows and columns; the within-cell slot $l$ is never moved |
+| Repeated observations per cell with **unequal cell sizes**, and `d` constant within a cell (or the repeats are periods: `trim = "levels"`) | `mwperm_irregular()` | $\varepsilon_{ijl} = \eta_i + \xi_j + u_{ijl}$ with exchangeable replicates $l$ (default), or $+\,\zeta_l$ **arbitrary** with `trim = "levels"`; which cells clear $L_0$ not depending on $y$ | whole cells, across rows and columns; the within-cell position $l$ is never moved |
 | Two dimensions over time, but the array has **holes** | `mwperm_panel_missing()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary**, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns within each fully observed block, the same relabelling in every period; $t$ is never moved |
 | Two dimensions with **missing cells** | `mwperm_missing()` | $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns *within* each fully observed block |
-| Two crossed dimensions, one observation per cell, **heteroskedastic** errors | `mwperm_dyadic_het()` | $\varepsilon_{ij} = \sigma_{ij}\, u_{ij}$ with $\sigma_{ij}$ **arbitrary** (it may depend on $i$, $j$ and the covariates) and $u_{ij}$ independent and **symmetric** about zero | the signs of row groups and column groups, jointly; nothing is relabelled |
+| Two crossed dimensions, at most one observation per cell (complete or not), **heteroskedastic** errors that are **independent across cells** | `mwperm_dyadic_het()` | $\varepsilon_{ij} = \sigma_{ij}\, u_{ij}$ with $\sigma_{ij}$ **arbitrary** (it may depend on $i$, $j$ and the covariates) and $u_{ij}$ independent and **symmetric** about zero — **no** additive $\eta_i + \xi_j$ | the signs of row groups and column groups, jointly; nothing is relabelled |
 | Not sure | `mwperm()` or `mwperm_check()` | — | detects the structure and tells you |
 
-In every row but the last the $u$ terms are i.i.d. given the covariates — for
+In every permutation row the $u$ terms are i.i.d. given the covariates — for
 `mwperm_layout()`, i.i.d. *within* each cell, which may differ freely from one
 another — and each named family of random effects is i.i.d. within itself;
 nothing requires normality, and cluster-level variance heterogeneity that is
-itself exchangeable (i.i.d. random scales) is fine, but a variance tied to
-the cluster identity or the covariates is not — that is the last row's job.
-A term marked **arbitrary** is completely unrestricted — no distribution, no
+itself exchangeable (i.i.d. random scales, independent of the covariates) is
+fine, but a variance tied to the covariates is not — that is the
+`mwperm_dyadic_het()` row's job, and its price is independence across cells:
+the additive $\eta_i + \xi_j$ of every other row is exactly what it cannot
+have. A term marked **arbitrary** is completely unrestricted — no distribution, no
 independence, not even randomness — and that freedom is the reason the row
 exists. These are *sufficient* models, given as the easiest way to recognise
 your setting; the actual requirement is the invariance below, which each of
@@ -295,25 +304,29 @@ usually not exchangeable across $l$ at all, and even a benign shared replicate
 effect $\zeta_l$ falls outside this argument, because the independent per-cell
 permutations change its alignment across cells. Use `mwperm_irregular()`.
 
-**`mwperm_irregular()` — §6.4.** Condition InvB applied blockwise, with the
-within-cell level $l$ (the `rep` argument: a period, a wave) playing time's
-role. Choose, from the observation pattern alone, a common set $S$ of $L_0$
-levels — the $L_0$ levels jointly observed by the most cells — form the mask
-$M_{ij} = \mathbf{1}(\text{cell } (i,j) \text{ observes every } l \in S)$,
-find disjoint fully observed blocks under it, keep in every retained cell
-exactly the observations at the levels in $S$, then require, within each block
-$I_q \times J_q$ and with the same $(\pi, \sigma)$ at every level,
+**`mwperm_irregular()` — §6.4.** Procedure 2 combined with the panel
+construction, as the paper prints it and applies it in its Appendix B. Form
+the mask $M_{ij} = \mathbf{1}(\ell_{ij} \ge L_0)$ on the cell sizes, find
+disjoint fully observed blocks under it, in every retained cell drop
+$\ell_{ij} - L_0$ observations **at random**, then require, within each block
+$I_q \times J_q$ and with the same $(\pi, \sigma)$ at every within-cell
+position $l$,
 
 $$(\varepsilon_{ijl})_{i \in I_q, j \in J_q} \overset{d}{=}
 (\varepsilon_{\pi(i)\sigma(j)l})_{i \in I_q, j \in J_q}
 \mid \mathbf{X}, \mathbf{D}.$$
 
-An arbitrary level effect shared across cells is permitted, which is the whole
-point: the permutation never moves an observation to a different $l$. (The
-paper's printed step (i) masks on the cell count and drops observations at
-random, which does not keep $l$ aligned across cells; see `?mwperm_irregular`.)
-It also needs the mask condition below: which cells observe $S$ must not depend
-on the outcomes.
+The subsample is redrawn in every repetition and the median p-value reported,
+as the paper does. Because the position $l$ of a survivor is its rank among
+the survivors, this holds for *exchangeable replicates* inside a cell (the
+paper's application: individuals within a group × country cell), with
+cluster random effects allowed — but **not** for a common effect $\zeta_l$
+indexed by $l$ (periods): a random draw does not keep $l$ aligned across
+cells. For periods use `trim = "levels"`, which instead chooses a common set
+of $L_0$ `rep` levels from the observation pattern, keeps exactly those in
+every cell, and holds the *level* fixed, so an arbitrary $\zeta_l$ is carried
+along as in the panel test. Either way the mask condition below applies:
+which cells clear $L_0$ must not depend on the outcomes.
 
 **`mwperm_panel_missing()` — §6.2 blockwise, under §5.** An incomplete panel:
 the mask keeps the pairs observed in *every* period,
@@ -351,33 +364,42 @@ $$(\varepsilon_{ij}) \overset{d}{=} (s_i\, t_j\, \varepsilon_{ij})
 \mid \mathbf{X}, \mathbf{D}.$$
 
 No label is moved, so no variance is moved: $\sigma_{ij}$ may depend on $i$,
-on $j$ and on the covariates in any way. What is assumed instead is symmetry
-of each error about zero (conditionally on the covariates), which InvA never
-asked for. Neither condition implies the other, and the sign-flip group is
-smaller and coarser than a relabelling group, so under homoskedastic
-exchangeable errors this test has less power than `mwperm_dyadic()`. It is a
-different bet, not a safer one.
+on $j$ and on the covariates in any way. What is assumed instead is *joint*
+symmetry of the whole array under independent row and column sign changes —
+not merely symmetry of each error about zero. It holds for errors independent
+across cells (and for multiplicative cluster factors $a_i b_j u_{ij}$ with
+symmetric $a_i, b_j$); it **fails** for the additive cluster effects of InvA,
+$\eta_i + \xi_j + u_{ij}$, because flipping one row turns
+$\mathrm{Cov}(\varepsilon_{ij}, \varepsilon_{kj}) = \mathrm{Var}(\xi_j)$
+into its negative. Under that structure the sign-flip test over-rejects
+(0.12–0.15 at nominal 0.05 when $d$ carries a row-level component, in this
+package's checks, against 0.04–0.05 for `mwperm_dyadic()`). Neither condition
+implies the other, and the sign-flip group is smaller and coarser than a
+relabelling group, so under homoskedastic exchangeable errors this test has
+less power than `mwperm_dyadic()`. It is a different bet, not a safer one.
 
 ### Still unsure? Four questions
 
 1. **Is one of your indices time, or otherwise ordered?** Then it must never be
    permuted. One observation per $(i, j, t)$ and a complete array →
    `mwperm_panel()`; the same with holes in it → `mwperm_panel_missing()`;
-   several observations per $(i, j)$ that are really periods →
-   `mwperm_irregular()`.
+   several observations per $(i, j)$ that are really periods, with unequal
+   counts → `mwperm_irregular(trim = "levels")`.
 2. **Do you have more than one observation per $(i, j)$ cell?**
-   `mwperm_layout()` if they are exchangeable replicates;
-   `mwperm_irregular()` if they are periods, or if `d` is constant within a
-   cell — within-cell permutation then has *no power*, because residualizing
-   removes all of `d`'s variation.
+   `mwperm_layout()` if they are exchangeable replicates and `d` varies
+   within cells; `mwperm_irregular()` if `d` is constant within a cell —
+   within-cell permutation then has *no power*, because residualizing
+   removes all of `d`'s variation — or if the repeats are periods
+   (`trim = "levels"`).
 3. **Are cells missing?** `mwperm_missing()` without a time dimension,
    `mwperm_panel_missing()` with one. Neither is an error path; both are
    different, valid procedures that trade discarded cells for exactness.
 4. **Otherwise:** `mwperm_dyadic()` for two indices, `mwperm_threeway()` for
    three genuinely exchangeable ones. If the error *variance* plausibly
-   depends on the clusters or the covariates and you are willing to assume
-   symmetric errors, `mwperm_dyadic_het()` instead — nothing in the data can
-   make that call for you, so `mwperm()` never does.
+   depends on the covariates and the errors are plausibly independent across
+   cells and symmetric (no additive cluster effects), `mwperm_dyadic_het()`
+   instead — nothing in the data can make that call for you, so `mwperm()`
+   never does.
 
 `mwperm_check(index = ...)` answers all four from the data, prints the
 diagnosis and the attainable resolution, and computes nothing.
@@ -401,9 +423,9 @@ diagnosis and the attainable resolution, and computes nothing.
 | Panel (two-way + arbitrary time trend) | `mwperm_panel()` |
 | Incomplete or unbalanced panel | `mwperm_panel_missing()` |
 | Replicated two-way layout (`L0=` to balance) | `mwperm_layout()` |
-| Irregular layout: repeats are periods, or `d` is cell-level | `mwperm_irregular()` |
+| Irregular layout (unequal cell sizes): `d` is cell-level, or the repeats are periods (`trim = "levels"`) | `mwperm_irregular()` |
 | Incomplete array (missing cells) | `mwperm_missing()` |
-| Two-way / dyadic clustering with **heteroskedastic** errors (sign-flip test, IPT-Het) | `mwperm_dyadic_het()` |
+| Dyadic design with **heteroskedastic**, cross-cell independent errors (sign-flip test, IPT-Het; complete or incomplete array) | `mwperm_dyadic_het()` |
 | Permutation-group construction (Algorithm 1) | `build_perm_set()` |
 | Sign-flip-group construction (order $2^{n_{\mathrm{flip}}-1}$) | `build_flip_set()` |
 | Fully observed biclique finder (greedy/exact) | `find_bicliques()` |
@@ -423,17 +445,20 @@ Forks the data itself can settle are resolved **silently**:
 - two indices with repeated cells, or `rep =` → `layout`.
 
 `mwperm_irregular()` is never chosen automatically: whether the repeats in a
-cell are exchangeable replicates (`layout`) or aligned levels such as periods
-(`irregular`) is an assumption, not a fact about the data. Pass
-`design = "irregular", L0 = ...` — and `rep =` naming the level — to run it.
-`mwperm()` does warn when `d` is constant within every cell, since the layout
-test then has no power and the irregular one is the design for that case.
+cell should be permuted within the cell (`layout`) or the cells permuted
+across rows and columns (`irregular`, needed when `d` is constant within a
+cell or the repeats are periods) is an assumption, not a fact about the data.
+Pass `design = "irregular", L0 = ...` to run it — with `trim = "levels"` and
+`rep =` naming the period when the repeats are periods. `mwperm()` does warn
+when `d` is constant within every cell, since the layout test then has no
+power and the irregular one is the design for that case.
 
 `mwperm_dyadic_het()` is never chosen automatically either, for a stronger
 reason: heteroskedasticity leaves **no trace in the clustering structure**, so
-there is nothing to detect. On a complete dyadic array `mwperm_check()` prints
-one line offering `design = "dyadic_het"`; pass it (with `n_flip =` if you
-want other than the default 8) to run the sign-flip test.
+there is nothing to detect. On a dyadic array, complete or not,
+`mwperm_check()` prints one line offering `design = "dyadic_het"`; pass it
+(with `n_flip =` if you want other than the default 8) to run the sign-flip
+test.
 
 Two forks depend on an exchangeability assumption the data *cannot* reveal.
 There, `mwperm()` defaults to whichever choice stays valid under the wider set
@@ -675,17 +700,20 @@ often the better trade.
 **Irregular layouts** (`mwperm_irregular()`) are the Section 6.4 procedure,
 and cover the two cases where within-cell permutation fails: the replication
 index is really *time* (so within-cell permutation is **invalid**), or
-$d_{ijl}$ is constant within each cell (so it has **no power**). It chooses a
-common set $S$ of $L_0$ within-cell levels from the observation pattern, forms
-the mask $M_{ij} = 1\lbrace \text{cell } (i,j) \text{ observes every level in }
-S \rbrace$, runs the biclique search on $M$, keeps in each retained cell
-exactly the observations at the levels in $S$, and then applies Procedure 2
-*across* cells with the level held fixed — cell $(i,j)$ level $l$ maps to cell
-$(\pi(i),\sigma(j))$ level $l$, the same device the panel test uses for time.
-It therefore needs exchangeability across $(i,j)$ within each level, not
-within-cell exchangeability. With `rep = NULL` the levels are the order of
-appearance within the cell and the mask is the paper's
-$1\lbrace \ell_{ij} \ge L_0 \rbrace$.
+$d_{ijl}$ is constant within each cell (so it has **no power**). As printed:
+form the mask $1\lbrace \ell_{ij} \ge L_0 \rbrace$ on the cell sizes, run the
+biclique search on it, drop $\ell_{ij} - L_0$ observations from every retained
+cell at random, and apply Procedure 2 *across* cells with the within-cell
+position held fixed — the $l$-th survivor of cell $(i,j)$ maps to the $l$-th
+survivor of cell $(\pi(i),\sigma(j))$. The random draw is repeated in every
+repetition and the median p-value reported, as in the paper's Appendix B.
+It therefore needs exchangeability across $(i,j)$ position by position, not
+within-cell exchangeability, which is right for exchangeable replicates
+inside a cell. When the repeats are *periods* with a common effect, pass
+`trim = "levels"`: a common set of $L_0$ `rep` levels is kept in every cell
+and the level itself is held fixed, the device the panel test uses for time
+(the random trim rejected a true null 100% of the time in that setting in the
+shipped replication script's design; `trim = "levels"` held 4%).
 
 **Heteroskedasticity: the sign-flip test** (`mwperm_dyadic_het()`, IPT-Het).
 Section 2 of the paper notes that the partialling-out and minorization
@@ -701,11 +729,16 @@ $(i,j)$ by $s_{g_1(i)}\, s_{g_2(j)}$, and element $k$ residualises on
 $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
 
 - **Assumption.** $(\varepsilon_{ij}) \overset{d}{=} (s_i t_j \varepsilon_{ij})
-  \mid \mathbf{X}, \mathbf{D}$: symmetry about zero under joint row-and-column
-  sign changes. A sign flip changes no variance, so **arbitrary
-  heteroskedasticity** — in $i$, in $j$, in the covariates — is permitted;
-  skewed errors are not. Exchangeability is *not* required, and this
-  assumption does not imply it, nor the reverse.
+  \mid \mathbf{X}, \mathbf{D}$: *joint* symmetry of the error array under
+  row-and-column sign changes. A sign flip changes no variance, so **arbitrary
+  heteroskedasticity** — in $i$, in $j$, in the covariates — is permitted for
+  errors **independent across cells**; skewed errors are not, and neither are
+  **additive cluster effects** $\eta_i + \xi_j$, which change the joint law
+  under a sign flip (size 0.12–0.15 at nominal 0.05 in this package's checks
+  when $d$ has a row-level component). The authors' own design for the test
+  has independent heteroskedastic errors. Exchangeability is *not* required,
+  and this assumption does not imply it, nor the reverse. The array need not
+  be complete: every observed cell is used and nothing is discarded.
 - **Group order and resolution.** Because the sign enters as a *product*,
   $s$ and $-s$ induce the same transformation: the $2^{n_{\mathrm{flip}}}$ sign
   vectors give only $2^{n_{\mathrm{flip}}-1}$ distinct elements, and
@@ -725,9 +758,9 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   sign-flip test stayed at 0.02 or below. Under homoskedastic errors, at
   $\beta = 0.15$, the permutation test's power was 0.96 against the sign-flip
   test's 0.86 (0.98 against 0.90 in the authors' run): a smaller, coarser
-  group buys robustness with power. Use it when you have reason to doubt
-  exchangeability and can defend symmetry; otherwise stay with
-  `mwperm_dyadic()`.
+  group buys robustness with power. Use it when the errors are plausibly
+  independent across cells with a covariate-driven variance; when additive
+  cluster effects are the concern, stay with `mwperm_dyadic()`.
 
 ```r
 with(trade_dyadic,
@@ -783,8 +816,10 @@ exhibits phase transitions in the missingness rate (Guo et al., 2026, §5).
 ## Reproducibility
 
 Pass `seed =` and results are exactly reproducible. Repetition `r` uses seed
-`seed + r − 1`, and all internal randomness is drawn through a save/restore
-wrapper, so **a seeded `mwperm` call never disturbs your global RNG stream**.
+`seed + r − 1` — for its permutation group, its flip-group assignment, and,
+in `mwperm_irregular()`, its random per-cell subsample — and all internal
+randomness is drawn through a save/restore wrapper, so **a seeded `mwperm`
+call never disturbs your global RNG stream**.
 
 With `seed = NULL` the permutations come from the ambient RNG and results vary
 between runs. Because the p-value depends on a random group, reporting a seed
@@ -823,8 +858,9 @@ search reuses cached factorizations and adds only a few percent.
   direction, but it costs power.
 - **Heteroskedasticity is a choice you make, not one the package detects.**
   The permutation tests need exchangeability *given the covariates*;
-  `mwperm_dyadic_het()` needs symmetric errors. Nothing in the data settles
-  which holds, and the sign-flip test is less powerful when both do.
+  `mwperm_dyadic_het()` needs errors independent across cells (no additive
+  cluster effects) and symmetric. Nothing in the data settles which holds,
+  and the sign-flip test is less powerful when both do.
 - **Incomplete panels pay in cells.** `mwperm_panel_missing()` keeps only
   the pairs observed in *every* period, and only those inside fully observed
   blocks, so a few thinly observed pairs can cost a large share of the array;

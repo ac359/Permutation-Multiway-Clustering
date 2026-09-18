@@ -29,13 +29,16 @@
 #'   Algorithm 1): the error array must be *exchangeable* under relabelling
 #'   of the clusters, conditional on the covariates (Assumption 1). Used by
 #'   every test except the last. Tolerates any error distribution and any
-#'   dependence that is symmetric in the cluster labels; does not tolerate
-#'   an error variance that depends on the cluster identity or the
-#'   covariates.
+#'   dependence that is symmetric in the cluster labels (additive cluster
+#'   effects included); does not tolerate an error variance, or any other
+#'   feature of the error law, that depends on the covariates.
 #' - **Sign flips** ([build_flip_set()], the group of joint row-and-column
-#'   sign changes, order `2^(n_flip - 1)`): the errors must be *symmetric
-#'   about zero* under those sign changes. Used by [mwperm_dyadic_het()].
-#'   Tolerates arbitrary heteroskedasticity; does not tolerate skewness.
+#'   sign changes, order `2^(n_flip - 1)`): the error array must be
+#'   *jointly symmetric* under those sign changes. Used by
+#'   [mwperm_dyadic_het()]. Tolerates arbitrary heteroskedasticity for
+#'   errors independent across cells; does not tolerate skewness, and does
+#'   **not** tolerate additive cluster effects `eta_i + xi_j`, which change
+#'   the joint law under a sign flip (the test then over-rejects).
 #'
 #' Neither assumption implies the other, and the sign-flip test is less
 #' powerful when exchangeability does hold, so the choice is a judgement

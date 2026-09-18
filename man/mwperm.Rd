@@ -24,6 +24,7 @@ mwperm(
   n_cores = 1L,
   time_fe = TRUE,
   L0 = NULL,
+  trim = c("random", "levels"),
   min_block = 3L,
   block_method = c("greedy", "exact"),
   permute = c("both", "rows", "cols"),
@@ -50,9 +51,10 @@ of vectors, or character vector of column names in \code{data}.}
 \item{design}{Force a design instead of auto-detecting (the structure is
 still validated against it). \code{"dyadic_het"} runs
 \code{\link{mwperm_dyadic_het}}, the sign-flip test that tolerates
-heteroskedasticity at the price of assuming symmetric errors; it is
-\emph{never} chosen automatically, because heteroskedasticity is invisible
-in the clustering structure.}
+heteroskedasticity at the price of assuming errors independent across cells
+and symmetric (no additive cluster effects); it is \emph{never} chosen
+automatically, because heteroskedasticity is invisible in the clustering
+structure. It runs on incomplete arrays too (nothing is discarded).}
 
 \item{K}{Number of non-identity permutations; the default and the
 admissible range depend on the dispatched design -- see the dispatched
@@ -105,6 +107,11 @@ another design warns and ignores it).}
 \item{L0}{Passed to \code{\link{mwperm_layout}} or
 \code{\link{mwperm_irregular}} (layout and irregular only; required for
 \code{design = "irregular"}).}
+
+\item{trim}{Passed to \code{\link{mwperm_irregular}} (irregular only):
+\code{"random"}, the paper's random per-cell trim, or \code{"levels"}, the
+same \code{rep} levels in every cell. Supplying it for another design warns
+and ignores it.}
 
 \item{n_flip}{Passed to \code{\link{mwperm_dyadic_het}} (\code{design =
 "dyadic_het"} only: the number of flip groups, group order
