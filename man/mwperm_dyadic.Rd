@@ -158,11 +158,16 @@ Unlike multi-way cluster-robust standard errors or the wild cluster
 bootstrap, the test makes no assumption on the covariate distribution
 (covariates may be irregular or heavy-tailed) and is valid for a finite
 number of clusters. What it does assume is exchangeability of the errors
-\emph{given} the covariates, which rules out an error variance that depends
-on the cluster identity or on the covariates; for that case see
+\emph{given} the covariates: additive cluster effects and any error
+distribution are fine, and so is cluster-level heterogeneity that is itself
+i.i.d. across clusters and independent of the covariates, but an error
+variance (or any other feature of the error law) that depends on the
+covariates, or a fixed non-exchangeable pattern across clusters, is not. For
+covariate-driven heteroskedasticity with errors independent across cells see
 \code{\link{mwperm_dyadic_het}}, the same test under a sign-flip group,
-which tolerates arbitrary heteroskedasticity at the price of assuming the
-errors symmetric about zero. Neither assumption implies the other.
+which tolerates arbitrary heteroskedasticity at the price of joint sign
+symmetry -- which additive cluster effects violate. Neither assumption
+implies the other.
 
 \strong{Aggregation over repetitions, and what "exact" covers.} Theorem 1
 establishes finite-sample validity for a single random permutation group, so
@@ -227,8 +232,9 @@ Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
   inference under multi-way clustering and missing data. arXiv:2601.08610.
 }
 \seealso{
-\code{\link{mwperm_dyadic_het}} for the same design under sign symmetry
-  instead of exchangeability (robust to heteroskedasticity, needs symmetric
-  errors); \code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
+\code{\link{mwperm_dyadic_het}} for the same design under joint sign
+  symmetry instead of exchangeability (robust to heteroskedasticity; needs
+  independent symmetric errors, no additive cluster effects);
+  \code{\link{mwperm_panel}}, \code{\link{mwperm_threeway}},
   \code{\link{mwperm_layout}}, \code{\link{mwperm_missing}}.
 }

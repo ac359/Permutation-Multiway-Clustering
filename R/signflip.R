@@ -101,6 +101,17 @@
 #' @param seed Optional integer seed for the random assignment. If `NULL`,
 #'   the current RNG state is used. A seeded call leaves the caller's RNG
 #'   stream exactly as it found it.
+#' @param cells Optional integer matrix with two columns, the `(row, col)`
+#'   ids (in `1..n_row`, `1..n_col`) of the cells that are actually
+#'   observed; `NULL` (the default) means the complete array. On an
+#'   incomplete array a flip group can be reachable only through cells that
+#'   are all missing, so "every group used" no longer guarantees that the
+#'   `2^(n_flip - 1)` representatives are distinct; the assignment is then
+#'   redrawn until the graph joining a row group to a column group whenever
+#'   some *observed* cell has that pair is connected (exactly the condition
+#'   for the kernel to be `{s, -s}` on the observed cells). On a complete
+#'   array that condition is implied by "every group used", so passing the
+#'   full cell set changes nothing.
 #'
 #' @return A list of length `2^(n_flip - 1)`. Element `k` is a list with two
 #'   numeric `+1/-1` vectors, `row` (length `n_row`) and `col` (length
@@ -126,10 +137,24 @@
 #' ## the sign applied to cell (i, j) by element 3
 #' outer(F[[3]]$row, F[[3]]$col)
 #' @export
-build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
+build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
   n_row  <- as.integer(n_row)
   n_col  <- as.integer(n_col)
   n_flip <- as.integer(n_flip)
+  if (!is.null(cells)) {
+    cells <- as.matrix(cells)
+    if (!is.numeric(cells) || ncol(cells) != 2L || nrow(cells) < 1L ||
+        anyNA(cells) || any(cells != trunc(cells)) ||
+        any(cells[, 1L] < 1L) || any(cells[, 1L] > n_row) ||
+        any(cells[, 2L] < 1L) || any(cells[, 2L] > n_col))
+      stop(paste0("`cells` must be a two-column integer matrix of observed ",
+                  "(row, col) ids within 1..n_row and 1..n_col."),
+           call. = FALSE)
+    storage.mode(cells) <- "integer"
+    ## A complete cell set is the default case; drop it so the draw below
+    ## takes the historical (cheaper) test and stays bit-identical.
+    if (nrow(unique(cells)) == n_row * n_col) cells <- NULL
+  }
   if (length(n_row) != 1L || is.na(n_row) || n_row < 1L ||
       length(n_col) != 1L || is.na(n_col) || n_col < 1L)
     stop("`n_row` and `n_col` must be single integers >= 1.", call. = FALSE)
@@ -156,15 +181,31 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
   ## and the 2^(n_flip - 1) representatives would no longer be distinct).
   ## The draw is `sample.int(n_flip, n, replace = TRUE)`, i.e. the same draw
   ## as `sample(n_flip, n, replace = TRUE)` in the reference script.
+  ##
+  ## On an incomplete array the kernel is {s, -s} exactly when the graph on
+  ## the n_flip groups with an edge (g1[i], g2[j]) for every OBSERVED cell
+  ## (i, j) is connected: S_s is the identity on the observed cells iff
+  ## s_a s_b = 1 along every edge, i.e. s is constant on each component, so
+  ## the kernel has order 2^(#components). On a complete array every used
+  ## group is adjacent to every used group on the other margin and the graph
+  ## is connected as soon as every group is used, so the two tests agree
+  ## there and the seeded draw is unchanged.
   for (attempt in seq_len(10000L)) {
     g1 <- sample.int(n_flip, n_row, replace = TRUE)
     g2 <- sample.int(n_flip, n_col, replace = TRUE)
-    if (length(unique(c(g1, g2))) == n_flip) break
+    ok <- length(unique(c(g1, g2))) == n_flip
+    if (ok && !is.null(cells))
+      ok <- .flip_graph_connected(n_flip, g1[cells[, 1L]], g2[cells[, 2L]])
+    if (ok) break
     if (attempt == 10000L)
-      stop(sprintf(paste0("Could not find an assignment using all %d flip ",
-                          "groups in 10000 draws (%d rows, %d columns); ",
-                          "use a smaller `n_flip`."),
-                   n_flip, n_row, n_col), call. = FALSE)
+      stop(sprintf(paste0("Could not find an assignment %s in 10000 draws ",
+                          "(%d rows, %d columns); use a smaller `n_flip`."),
+                   if (is.null(cells))
+                     sprintf("using all %d flip groups", n_flip)
+                   else sprintf(paste0("using all %d flip groups and ",
+                                       "connecting them through the ",
+                                       "observed cells"), n_flip),
+                   n_row, n_col), call. = FALSE)
   }
 
   ## One representative per coset {s, -s}: coordinate 1 is pinned to +1 and
@@ -188,6 +229,36 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
   attr(flips, "col_groups")  <- g2
   attr(flips, "signs")       <- S
   flips
+}
+
+#' Is the flip-group graph induced by the observed cells connected?
+#'
+#' Nodes are the `n_flip` groups; `a[m]` and `b[m]` are the row group and the
+#' column group of the m-th observed cell, i.e. one edge per cell (a cell
+#' whose two groups coincide is a self-loop and constrains nothing). Union-
+#' find over the edges; `TRUE` when every node ends in one component --
+#' the condition under which the sign action on the observed cells has
+#' kernel exactly `{s, -s}` (see `build_flip_set()`).
+#'
+#' @param n_flip number of groups (nodes).
+#' @param a,b integer vectors of equal length, the edge end points.
+#' @keywords internal
+#' @noRd
+.flip_graph_connected <- function(n_flip, a, b) {
+  parent <- seq_len(n_flip)
+  find <- function(x) {
+    while (parent[x] != x) {
+      parent[x] <<- parent[parent[x]]
+      x <- parent[x]
+    }
+    x
+  }
+  for (m in seq_along(a)) {
+    ra <- find(a[m])
+    rb <- find(b[m])
+    if (ra != rb) parent[ra] <- rb
+  }
+  length(unique(vapply(seq_len(n_flip), find, integer(1)))) == 1L
 }
 
 #' Build observation-level sign-flip operators from a flip set
@@ -231,9 +302,10 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
 #' Finite-sample valid test of H0: beta = b in the dyadic regression model
 #' \preformatted{  y_ij = x_ij' gamma + d_ij' beta + eps_ij}
 #'
-#' with a single observation per cell, under an invariance assumption that
-#' tolerates **arbitrary heteroskedasticity**: the errors must be
-#' symmetrically distributed under joint row-and-column sign changes,
+#' with one observation per cell (the array need not be complete), under an
+#' invariance assumption that tolerates **arbitrary heteroskedasticity** but
+#' **not additive cluster effects**: the error array must be *jointly*
+#' symmetric under row-and-column sign changes,
 #' \preformatted{  (eps_ij) =d (s_i t_j eps_ij) | X, D   for all row signs s and column signs t.}
 #'
 #' This is the invariant test of Guo, Toulis and Wang (2026) run with a
@@ -243,17 +315,41 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
 #' model, same null, same statistic, same confidence set by test inversion;
 #' only the group changes, and with it the assumption.
 #'
+#' **What the assumption does and does not allow.** A sign flip moves no
+#' observation and changes no variance, so the variance `sigma_ij` may
+#' depend on `i`, on `j` and on the covariates in any way. The assumption
+#' holds for errors that are **independent across cells** and symmetric
+#' about zero (`eps_ij = sigma_ij u_ij` with `u_ij` independent symmetric,
+#' `sigma_ij` arbitrary), and more generally for errors whose dependence
+#' across cells is itself sign-symmetric (multiplicative cluster factors,
+#' `eps_ij = a_i b_j u_ij` with `a_i, b_j` symmetric). It does **not** hold
+#' under the additive random-effects structure that motivates multi-way
+#' clustering, `eps_ij = eta_i + xi_j + u_ij`: flipping the sign of one row
+#' turns `Cov(eps_ij, eps_kj) = Var(xi_j)` (k another row) into its
+#' negative, so the joint law changes even though every single error is
+#' symmetric. Under that
+#' structure this test **over-rejects** -- about 0.12-0.15 at a nominal 0.05
+#' when `d` carries a row-level component, in this package's own checks (the
+#' permutation test held 0.04-0.05 on the same data) -- and symmetry of each
+#' error on its own is not enough. Skewed errors are excluded as well.
+#'
 #' **When to use it instead of [mwperm_dyadic()].** The two assumptions are
 #' complementary and neither contains the other:
 #' - [mwperm_dyadic()] needs the error array to be *exchangeable* under
-#'   relabelling of the clusters, conditional on the covariates. That fails
-#'   whenever the error variance depends on the cluster identity or on the
-#'   covariates -- a gravity equation whose residual variance grows with
-#'   distance or GDP, say -- because relabelling the clusters relabels the
-#'   variance pattern. Symmetry is *not* required.
-#' - `mwperm_dyadic_het()` needs the errors to be *symmetric about zero*
-#'   under row and column sign changes. A sign flip changes no variance, so
-#'   any pattern of heteroskedasticity is fine; skewed errors are not.
+#'   relabelling of the clusters, conditional on the covariates. That
+#'   tolerates additive cluster effects and any error distribution, but
+#'   fails whenever the error variance (or any other feature of the error
+#'   law) depends on the covariates -- a gravity equation whose residual
+#'   variance grows with distance or GDP, say -- because relabelling the
+#'   clusters relabels the variance pattern. Symmetry is *not* required.
+#' - `mwperm_dyadic_het()` tolerates any covariate-driven heteroskedasticity
+#'   but needs the joint sign symmetry above: independent (or
+#'   sign-symmetrically dependent) symmetric errors, **no additive cluster
+#'   effects**.
+#' The authors' own design for this test (`simulate_gravity_model()` in
+#' their revision material) draws errors that are independent across cells
+#' with a variance increasing in the gravity mean and in distance; that is
+#' the setting it is meant for.
 #'
 #' Under covariate-dependent heteroskedasticity (25 clusters per side, a
 #' gravity design with the residual variance increasing in the mean and in
@@ -266,11 +362,17 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL) {
 #' errors the sign-flip test is less powerful (about 0.86 against 0.96 at
 #' beta = 0.15 in the same design here; 0.90 against 0.98 in the authors'
 #' run), because its group is smaller and coarser than a full relabelling
-#' group. Use it when you have reason to doubt exchangeability and are
-#' prepared to assume symmetry; use [mwperm_dyadic()] otherwise.
-#' Heteroskedasticity leaves no trace in the clustering structure, so
-#' [mwperm()] never selects this test automatically: request it with
-#' `design = "dyadic_het"`.
+#' group. Use it when the errors are plausibly independent across cells
+#' with a variance that depends on the covariates; use [mwperm_dyadic()]
+#' when additive cluster effects are the concern. Heteroskedasticity leaves
+#' no trace in the clustering structure, so [mwperm()] never selects this
+#' test automatically: request it with `design = "dyadic_het"`.
+#'
+#' **Incomplete arrays.** No fully observed block is needed: every observed
+#' cell is used and nothing is discarded (the fit says so in a note). The
+#' only thing an incomplete array changes is the guard on the flip-group
+#' assignment, which must keep the group's kernel at `{s, -s}` on the
+#' observed cells -- see the `cells` argument of [build_flip_set()].
 #'
 #' **The group and its resolution.** Each row cluster and each column cluster
 #' is assigned at random to one of `n_flip` flip groups, and a sign vector in
@@ -376,15 +478,13 @@ mwperm_dyadic_het <- function(y, d, x = NULL, row, col, n_flip = NULL,
          "For repeated observations use mwperm_layout() or mwperm_panel().",
          call. = FALSE)
   coords <- cbind(ri, ci)              # per-observation (row, col) coordinates
-  ## Same contract as mwperm_dyadic(): one observation per cell of a complete
-  ## array. (A sign flip moves no observation, so the construction itself
-  ## would run on an incomplete array; the contract is kept identical to the
-  ## permutation front end so the two are interchangeable in a call.)
-  .require_complete_array(coords, c(row = n_row, col = n_col), N,
-                          what = "Dyadic regression",
-                          remedy = paste0("mwperm_missing(), which restricts ",
-                                          "to fully observed blocks and ",
-                                          "permutes within them"))
+  ## Unlike mwperm_dyadic(), no complete array is required: a sign flip moves
+  ## no observation, so every observed cell is used as it stands, with no
+  ## biclique search and nothing discarded. The only thing an incomplete
+  ## array changes is the kernel guard inside build_flip_set(), which then
+  ## needs the observed cells (see there).
+  complete <- N == n_row * n_col
+  cells_arg <- if (complete) NULL else coords
 
   n_flip <- .default_n_flip(n_flip, n_row, n_col)
   ## The engine's K is the non-identity count, whatever the construction:
@@ -399,7 +499,8 @@ mwperm_dyadic_het <- function(y, d, x = NULL, row, col, n_flip = NULL,
   ## front ends use for their first dimension; the two families of front end
   ## never share a seed scheme, so nothing existing is affected.
   perm_builder <- function(rep_seed) {
-    F <- build_flip_set(n_row, n_col, n_flip, seed = .sub_seed(rep_seed, 1L))
+    F <- build_flip_set(n_row, n_col, n_flip, seed = .sub_seed(rep_seed, 1L),
+                        cells = cells_arg)
     .build_obs_flips(coords, F, design = "dyadic (sign-flip)")
   }
 
@@ -410,6 +511,13 @@ mwperm_dyadic_het <- function(y, d, x = NULL, row, col, n_flip = NULL,
                      d_names = d_names,
                      n_clusters = c(row = n_row, col = n_col), call = cl,
                      n_cores = n_cores, ci_agg = aggregate, group = "flip")
+  if (!complete)
+    res$note <- c(sprintf(paste0(
+      "The array is incomplete: %d of %d cells are observed. The sign-flip ",
+      "test uses every observed cell and no cell is discarded -- a sign ",
+      "change moves no observation, so no fully observed block is needed; ",
+      "the flip-group assignment is drawn so that its kernel stays {s, -s} ",
+      "on the observed cells."), N, n_row * n_col), res$note)
   res$n_flip <- n_flip                 # read by print() / confint()
   res
 }

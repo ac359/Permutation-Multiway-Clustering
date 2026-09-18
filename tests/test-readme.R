@@ -54,7 +54,9 @@ readme_lines <- c(
   het_p =
     "H0: beta = 0    p-value = 0.031",
   check_alternative =
-    "  ? design = \"dyadic_het\" runs the sign-flip test instead, which trades"
+    "  ? design = \"dyadic_het\" runs the sign-flip test instead: valid under",
+  check_alternative_2 =
+    "    cells and symmetric about zero, but NOT under additive cluster"
 )
 
 ## ---- 1. the package still prints what the README claims -------------------
@@ -87,7 +89,8 @@ out_chk <- capture.output(print(
   mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)))
 stopifnot(readme_lines[["check_resolution"]] %in% out_chk,
           readme_lines[["check_verdict"]] %in% out_chk,
-          readme_lines[["check_alternative"]] %in% out_chk)
+          readme_lines[["check_alternative"]] %in% out_chk,
+          readme_lines[["check_alternative_2"]] %in% out_chk)
 
 ## the sign-flip transcript under "Extensions"
 fit_het <- with(trade_dyadic,

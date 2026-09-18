@@ -191,13 +191,21 @@ fit_m
 
 Every test above assumes the errors are *exchangeable* under relabelling of
 the clusters, conditional on the covariates. That rules out an error variance
-that depends on the cluster identity or on the covariates -- a gravity
-equation whose residuals spread out with distance, say -- because relabelling
-the clusters relabels the variance pattern, and the permutation test then
-over-rejects. `mwperm_dyadic_het()` runs the same procedure under a different
-invariance: joint row-and-column **sign changes**, which move no variance at
-all. The price is that the errors must be symmetric about zero, which
-exchangeability never required.
+that depends on the covariates -- a gravity equation whose residuals spread
+out with distance, say -- because relabelling the clusters relabels the
+variance pattern, and the permutation test then over-rejects. (Random
+cluster-level heterogeneity that is itself i.i.d. across clusters and
+independent of the covariates is fine.) `mwperm_dyadic_het()` runs the same
+procedure under a different invariance: joint row-and-column **sign
+changes**, which move no variance at all. The price is that the error array
+must be *jointly* symmetric under those sign changes: errors independent
+across cells (or dependent only through sign-symmetric multiplicative
+factors) and symmetric about zero. The additive cluster effects
+$\eta_i + \xi_j$ that motivate multi-way clustering are **not** allowed --
+flipping one row's signs turns the covariance between two cells of a column
+into its negative -- and under them the sign-flip test over-rejects. It is a
+test for covariate-driven heteroskedasticity with independent errors, which
+is the setting the authors designed it for.
 
 The group has $2^{n_\text{flip}-1}$ elements, where `n_flip` is the number of
 flip groups the clusters are randomly assigned to, so a 95% interval needs
@@ -215,12 +223,15 @@ fit_h
 **Deciding between the two dyadic tests.** They answer the same question
 under complementary assumptions, and neither implies the other:
 
-- If you can defend exchangeability -- random effects plus noise whose scale
-  does not depend on who the clusters are or on the covariates -- use
-  `mwperm_dyadic()`. It is the more powerful test when both assumptions hold.
-- If the variance plausibly depends on the covariates or the clusters, and
-  symmetric errors are defensible, use `mwperm_dyadic_het()`. It is a
-  different bet, not a safer one: skewed errors break it.
+- If you can defend exchangeability -- random effects plus noise whose law
+  does not depend on the covariates -- use `mwperm_dyadic()`. It is the more
+  powerful test when both assumptions hold, and the only one of the two that
+  tolerates additive cluster effects.
+- If the variance plausibly depends on the covariates, and errors that are
+  independent across cells and symmetric are defensible, use
+  `mwperm_dyadic_het()`. It is a different bet, not a safer one: skewed
+  errors break it, and so do additive cluster effects. It also runs on an
+  incomplete array, using every observed cell.
 - Nothing in the data settles this, so `mwperm()` never chooses the sign-flip
   test for you; ask for it with `design = "dyadic_het"`.
 

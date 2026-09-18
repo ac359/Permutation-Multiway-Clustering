@@ -4,7 +4,7 @@
 \alias{build_flip_set}
 \title{Construct a random sign-flip group (the sign-flip analogue of Algorithm 1)}
 \usage{
-build_flip_set(n_row, n_col, n_flip, seed = NULL)
+build_flip_set(n_row, n_col, n_flip, seed = NULL, cells = NULL)
 }
 \arguments{
 \item{n_row, n_col}{Integer cluster counts along the two dimensions.}
@@ -18,6 +18,18 @@ to 8 and refuses values above 20.}
 \item{seed}{Optional integer seed for the random assignment. If \code{NULL},
 the current RNG state is used. A seeded call leaves the caller's RNG
 stream exactly as it found it.}
+
+\item{cells}{Optional integer matrix with two columns, the \code{(row, col)}
+ids (in \code{1..n_row}, \code{1..n_col}) of the cells that are actually
+observed; \code{NULL} (the default) means the complete array. On an
+incomplete array a flip group can be reachable only through cells that are
+all missing, so "every group used" no longer guarantees that the
+\code{2^(n_flip - 1)} representatives are distinct; the assignment is then
+redrawn until the graph joining a row group to a column group whenever some
+\emph{observed} cell has that pair is connected (exactly the condition for
+the kernel to be \code{{s, -s}} on the observed cells). On a complete array
+that condition is implied by "every group used", so passing the full cell
+set changes nothing.}
 }
 \value{
 A list of length \code{2^(n_flip - 1)}. Element \code{k} is a list with

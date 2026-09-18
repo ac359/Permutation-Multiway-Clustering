@@ -126,8 +126,9 @@ every permutation design needs the errors exchangeable \emph{given} the
 covariates, which an error variance that depends on the covariates
 violates. Nothing in the clustering structure shows this, so the diagnosis
 never selects the sign-flip test (\code{\link{mwperm_dyadic_het}}, valid
-under arbitrary heteroskedasticity but needing symmetric errors); on a
-complete dyadic array it prints one line offering \code{design =
+under arbitrary heteroskedasticity for errors that are independent across
+cells and symmetric, but not under additive cluster effects); on a dyadic
+array, complete or not, it prints one line offering \code{design =
 "dyadic_het"}, and the choice is yours.
 }
 \examples{

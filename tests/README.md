@@ -53,18 +53,18 @@ named after the function it tests.
 | `test-main.R` | `mwperm()`, `mwperm_check()` — design detection, the printed diagnosis, forced-design validation, the assumption warnings, and **dispatch identity**: `mwperm()` must return exactly what the direct front-end call returns |
 | `test-formula.R` | `mwperm_formula()` — the `y ~ d \| x` interface; an identity test, since it only assembles arguments |
 | `test-dyadic.R` | `mwperm_dyadic()` — the **two-way** (dyadic) design, condition InvA |
-| `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()` — the same two-way design under **sign symmetry** instead of exchangeability (the heteroskedasticity-robust sign-flip test, 0.4.0): agreement with a corrected port of the author's `RPT_signflip()` given the same flip-group assignment (`helpers/signflip-reference.R`), the group axioms and the `2^(n_flip-1)` order, the `.apply_op()` signed-gather contract, size under heteroskedasticity, the `n_flip >= 6` resolution guard, seed hygiene, the opt-in dispatcher route, and that the permutation designs are untouched. Named for the *group* rather than the function because `build_flip_set()` is tested here too |
+| `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()` — the same two-way design under **sign symmetry** instead of exchangeability (the heteroskedasticity-robust sign-flip test, 0.4.0): agreement with a corrected port of the author's `RPT_signflip()` given the same flip-group assignment (`helpers/signflip-reference.R`), the group axioms and the `2^(n_flip-1)` order, the `.apply_op()` signed-gather contract, size under heteroskedasticity, the `n_flip >= 6` resolution guard, seed hygiene, the opt-in dispatcher route, that the permutation designs are untouched, and (0.4.1) incomplete arrays: the `cells` kernel guard of `build_flip_set()` is bit-identical on a complete array and gives `2^(n_flip-1)` distinct elements on a diagonal-only one, and the fit on an incomplete array equals a from-scratch Procedure 1 with an explicit orthonormal complement. Named for the *group* rather than the function because `build_flip_set()` is tested here too |
 | `test-threeway.R` | `mwperm_threeway()` — the three-way design, InvA in three dimensions |
 | `test-panel.R` | `mwperm_panel()` — the panel design, condition InvB, including invariance to an arbitrary common time trend |
 | `test-panel-missing.R` | `mwperm_panel_missing()` — incomplete panels; pins that on a complete array it builds permutations *identical* to `mwperm_panel()` |
 | `test-layout.R` | `mwperm_layout()` — replicated two-way layouts, within-cell exchangeability, `L0` balancing |
 | `test-missing.R` | `mwperm_missing()` and `find_bicliques()` — incomplete arrays via fully observed blocks, one-sided permutation |
-| `test-irregular.R` | `mwperm_irregular()` — Section 6.4, irregular within-cell counts; pins on the gather vectors that every group element preserves the `rep` level (the InvB index), that the common level set is chosen from the observation pattern, and that `rep = NULL` reduces to the paper's `1{ell_ij >= L0}` mask |
+| `test-irregular.R` | `mwperm_irregular()` — Section 6.4 as printed (0.4.1, `trim = "random"`): on a balanced array with `L0 = T` the gather vectors equal the panel construction's; every repetition keeps exactly `L0` observations per retained cell, redrawn from the rep seed (and reproduced by the rep-parallel path); every element holds the within-cell position fixed; the `N > 2p` check counts `cells_used * L0`. Under `trim = "levels"` it pins that every element preserves the `rep` level (the InvB index) and that `rep = NULL` reduces to the `1{ell_ij >= L0}` mask. Section 8 pins the engine's per-repetition `"rows"` hook against `mwperm_dyadic()` on a subset |
 | `test-methods.R` | `print` / `summary` / `confint` / `coef` / `nobs` / `plot` / `mwperm_save` — the **output-label contract** and every figure path |
 | `test-validation.R` | the input-validation contract shared by all front ends: bad input fails early naming the argument, degenerate input gets the exact answer, and no confidence set is reported that the design cannot support |
 | `test-equivariance.R` | properties every fit must have: row-order, nuisance (FWL), null-shift and scale/sign equivariance, and **parallel ≡ serial**, bit for bit |
 | `test-readme.R` | the transcripts `README.md` shows are the ones the package prints |
-| `test-golden.R` | the seeded snapshot gate — 29 entries across all eight designs compared field by field against `golden/baseline.rds` |
+| `test-golden.R` | the seeded snapshot gate — 30 entries across all eight designs compared field by field against `golden/baseline.rds` |
 | `test-lower-level.R` | the runner for `lower-level-tests/` |
 
 Design-specific arguments are tested in that design's own file (`L0` and `rep`
@@ -123,8 +123,9 @@ source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
 ## `golden/`
 
 `baseline.rds` is the authoritative record of every seeded number the package
-produces; `baseline-0.2.0.rds` is the previous release's, kept so the change
-list in `NEWS.md` can be re-derived. Regenerate only after an intentional,
+produces; `baseline-0.4.0.rds` and `baseline-0.2.0.rds` are earlier releases'
+snapshots, kept so the change lists in `NEWS.md` can be re-derived
+(`make_baseline.R --check --against=baseline-0.4.0.rds`). Regenerate only after an intentional,
 documented change:
 
 ```bash

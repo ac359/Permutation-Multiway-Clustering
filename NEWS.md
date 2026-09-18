@@ -1,3 +1,136 @@
+# mwperm 0.4.1
+
+A correction release from an independent audit of 0.4.0 against Guo, Toulis
+and Wang (2026). Three things change: `mwperm_irregular()` now follows
+Section 6.4 **as printed** (random per-cell subsampling, redrawn in every
+repetition), the assumption behind the sign-flip test `mwperm_dyadic_het()`
+is stated correctly everywhere -- it does **not** tolerate additive cluster
+effects -- and that test now runs on incomplete arrays. Every seeded
+p-value, estimate, confidence set and note of every design other than the
+irregular one is `identical()` before and after (28 of the 30 golden entries,
+the two irregular ones enumerated below).
+
+## Corrections that change a number
+
+* **`mwperm_irregular()` follows Section 6.4 as the paper prints and applies
+  it.** 0.4.0 replaced the printed step (i) -- "randomly drop `ell_ij - L0`
+  observations" from each retained cell -- by a deterministic cut to a
+  common set of `rep` levels, because the printed step is not valid when
+  the repeats are periods with a common effect. The paper's own application
+  (Appendix B, the trust-level study) settles what the procedure is for:
+  the within-cell index there is "the *l*-th observation within the (i, j)
+  cell" -- individuals, exchangeable replicates -- and the authors "repeat
+  the full permutation test 100 times to reduce randomness from
+  subsampling" and report the median. That is now the default,
+  `trim = "random"`: mask `1{ell_ij >= L0}`, Algorithm 2, a uniform random
+  subsample of exactly `L0` in every retained cell, Procedure 2 with the
+  within-cell position held fixed -- and **the subsample is redrawn in every
+  one of the `n_reps` repetitions** from that repetition's seed, so the
+  median p-value and the inverted confidence set aggregate over the
+  subsampling as Appendix B does (the rep-parallel path reproduces the
+  serial result bit for bit). The engine gained one guarded hook for this:
+  a builder may return its group with an integer attribute `"rows"`, and
+  that repetition is then computed on those rows; every other design leaves
+  the attribute absent and is untouched. The level-aligned cut of 0.4.0
+  survives as **`trim = "levels"`**, which is what condition InvB needs when
+  the repeats are periods with a common effect: under the random trim the
+  position the permutation holds fixed is the rank among the survivors, not
+  the period, and with a within-cell-varying covariate and a common period
+  effect that test rejected a true null in 100% of 1000 simulations, against
+  4.1% under `trim = "levels"` (K = 21).
+  The man page's *Assumptions* section states both regimes; under the
+  random trim the requirement is exchangeability of the retained array
+  across cells position by position, which holds for exchangeable replicates
+  with random-effects dependence (size 0.045 with a cell-constant covariate
+  and 0.019 with a within-cell-varying one under t(3) errors, K = 24, 1000
+  simulations each; power 0.998 and 0.904 at beta = 0.3) and fails under a
+  common effect indexed by `l`. `mwperm()` forwards a new `trim` argument.
+  Other consequences: `estimate`/`se_naive` under the random trim are the
+  OLS quantities on *all* observations of the retained cells (before the
+  per-repetition trim), so the point estimate does not depend on a
+  subsampling draw; `n_obs` is the per-repetition count `cells_used * L0`;
+  `rep_levels` is `NULL` under the random trim; `rep` no longer needs to be
+  unique within a cell there (it only orders the survivors). **Numbers that
+  move:** the man example (`L0 = 4`, seed 1) keeps p = 0.3333 and its blocks
+  but its estimate is now 0.7701 on all 158 observations of the 25 retained
+  cells (was 0.6362 on the 100 level-aligned ones); the golden entry
+  `irregular_nondefault` -- the period-effect design -- is now run with
+  `trim = "levels"` and is `identical()` to 0.4.0 apart from the note's
+  wording; a new golden entry `irregular_random_nondefault` pins the random
+  trim on a replicate design (25 x 25 cells, 3-8 replicates, `L0 = 3`,
+  K = 24, `n_reps = 9`, exact confidence set). `tests/golden/baseline-0.4.0.rds`
+  keeps the previous snapshot; `make_baseline.R --check
+  --against=baseline-0.4.0.rds` reproduces this list.
+  `inst/replication/06_size_by_design.R` runs its period-effect arm with
+  `trim = "levels"` and its expected output was regenerated.
+
+## Corrections to what the package claims
+
+* **The sign-flip test's assumption was overstated.** 0.4.0 described
+  `mwperm_dyadic_het()` as needing "symmetric errors" and tolerating
+  "arbitrary heteroskedasticity", which reads as if it were the
+  cluster-robust test with one extra condition. It is not. The assumption is
+  *joint* symmetry of the error array under row-and-column sign changes,
+  and the additive random-effects structure that motivates multi-way
+  clustering, `eps_ij = eta_i + xi_j + u_ij`, violates it: flipping the sign
+  of one row turns `Cov(eps_ij, eps_kj) = Var(xi_j)` into its negative,
+  although every single error stays symmetric. Measured on 20 x 20 arrays
+  (1000 simulations, single group, `n_flip = 6`): with additive cluster
+  effects and a covariate carrying a row-level component the sign-flip test
+  rejected a true null at 0.119 (cluster sd 1) and 0.145 (cluster sd 3) at
+  nominal 0.05, against 0.052 and 0.050 for `mwperm_dyadic()`; with an
+  i.i.d. covariate the distortion is invisible (0.009-0.013), which is why
+  the 0.4.0 checks missed it; with errors independent across cells and
+  covariate-driven heteroskedasticity it held 0.010-0.017 while the
+  permutation test rose to 0.12-0.14. The authors' own design for this test
+  (`simulate_gravity_model()` in their revision material) has independent
+  errors, so the test is what it always was -- a heteroskedasticity-robust
+  test for errors independent across cells (or dependent only through
+  sign-symmetric multiplicative factors) -- and the code is unchanged. What
+  changed is every statement of the assumption: the man pages of
+  `mwperm_dyadic_het()`, `mwperm_dyadic()`, `mwperm()`, `mwperm_check()` and
+  the package page, `DESCRIPTION`, the README (every passage, including the
+  design table, the function map, the decision list and one that said
+  "symmetry of each error about zero", which is exactly the condition that
+  is not enough), the vignette's sign-flip section, and the one-line offer
+  `mwperm_check()` prints; `tests/test-readme.R` pins the new offer line. All now say: independent symmetric errors
+  with any variance pattern, **not** additive cluster effects.
+* **When exchangeability fails, stated precisely.** The README, the
+  vignette, `mwperm_dyadic()` and the package page said Assumption 1 "rules
+  out an error variance that depends on the cluster identity". A random
+  cluster-level scale that is itself i.i.d. across clusters and independent
+  of the covariates leaves the array exchangeable given the covariates;
+  what breaks the assumption is an error law that depends on the
+  covariates, or a fixed non-exchangeable pattern across clusters. Reworded
+  everywhere.
+
+## New
+
+* **`mwperm_dyadic_het()` accepts incomplete arrays.** A sign flip moves no
+  observation, so the construction never needed a complete array; the
+  completeness check was inherited from `mwperm_dyadic()` for interface
+  parity and is gone. Every observed cell is used, nothing is discarded, and
+  the fit says so in a note. The one thing an incomplete array changes is
+  the kernel guard: on the observed cells the sign action has kernel
+  `2^(#components)` of the graph that joins a row group to a column group
+  whenever some observed cell carries that pair, so `build_flip_set()` takes
+  a new optional `cells` argument (the observed `(row, col)` ids) and
+  redraws the assignment until that graph is connected. On a complete array
+  the condition is implied by "every group used", so the draw -- and every
+  seeded complete-array result -- is bit-identical (`tests/test-signflip.R`
+  section 10 pins the identity, the distinctness on a diagonal-only array,
+  and the from-scratch Procedure 1 p-value on an incomplete one).
+  `mwperm(design = "dyadic_het")` and `mwperm_check()` accept incomplete
+  arrays accordingly, and the automatic route on an incomplete array
+  (`missing`) now also prints the one-line sign-flip offer.
+
+## Under the hood
+
+* The golden baseline has 30 entries (`irregular_random_nondefault` added).
+* `tests/README.md` and `inst/replication/README.md` were updated for the
+  new section and the new arm; the audit's simulation scripts and cached
+  results live outside the package.
+
 # mwperm 0.4.0
 
 Adds a second invariance group -- and with it a test for the case every
