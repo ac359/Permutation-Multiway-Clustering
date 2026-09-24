@@ -758,7 +758,7 @@
 #'
 #' @details Procedure 1, step 3 of GTW (2026): CI = {b : pval(b) > alpha},
 #'   exactly. Each component is reported closed, so an end point may itself be
-#'   rejected (see Details); the paper's set is open there.
+#'   rejected (see Details), i.e. need not belong to the paper's set.
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param alpha test level.
 #' @param agg cross-rep aggregation rule; see .agg_pvals().
