@@ -4,11 +4,13 @@
 ## The permutation designs need the error array to be exchangeable under
 ## relabelling of the clusters; that fails under heteroskedasticity. The
 ## sign-flip design replaces the permutation group by the group of joint
-## row-and-column sign changes, valid under symmetry of the errors about zero
-## and indifferent to their variances (Guo, Toulis & Wang 2026, Section 2:
-## the argument holds for any invariance group). Every group element is a
-## signed gather `list(g = NULL, s = +/-1)` applied through `.apply_op()`,
-## which is the one generalisation the engine needed.
+## row-and-column sign changes. It is valid under the revised paper's
+## Assumption 2, "double sign symmetry" (Guo, Toulis & Wang):
+## (eps_ij) =d (s_i t_j eps_ij) given X and D. That covers errors that are
+## independent across cells and symmetric, whatever their variances, but NOT
+## additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het). Every
+## group element is a signed gather `list(g = NULL, s = +/-1)` applied
+## through `.apply_op()`, which is the one generalisation the engine needed.
 ##
 ## Section 1 is the test that matters most: agreement with a corrected port of
 ## the author's research implementation (tests/helpers/signflip-reference.R).

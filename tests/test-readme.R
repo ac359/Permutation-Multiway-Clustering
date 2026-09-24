@@ -2,8 +2,9 @@
 ##
 ## README.md displays five transcripts -- the quick-start dyadic fit and its
 ## summary() data frame, the design diagnosis, and the panel and sign-flip fits
-## under "Extensions" -- as fenced blocks a reader is invited to reproduce. Nothing was checking them, and two of the
-## three silently went stale for a whole release: they still carried 0.2.0
+## under "Extensions" -- as fenced blocks a reader is invited to reproduce.
+## Nothing used to check them, and two of the three the README had at 0.3.0
+## silently went stale for a whole release: they still carried 0.2.0
 ## intervals after the 0.3.0 exact confidence set moved eight seeded end
 ## points. tests/golden/ pins the fitted OBJECTS, which is why it did not
 ## catch this; what rotted was the printed transcript.
