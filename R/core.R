@@ -1,5 +1,38 @@
-## Internal computational core for the invariant permutation test.
-## Not exported.
+## ============================================================================
+## R/core.R -- the computational core of Procedure 1
+##
+## Purpose. Everything that turns a group of transformations into numbers:
+##   * .cell_code(), .build_obs_perms(), .within_cell_slot(),
+##     .assert_bijection(): lift per-dimension permutations (Algorithm 1) to
+##     gather vectors over the observations, i.e. build y_{pi_k, sigma_k};
+##   * .apply_op(): apply one group element (permutation and/or sign flip);
+##   * .ipt_prepare(): Procedure 1, step 1 -- project D onto the orthogonal
+##     complement of col([X | X_k]) for every non-identity element k and
+##     cache the four cross products the statistic needs;
+##   * .ipt_eval(): Procedure 1, step 2 -- a_k(b), b_k(b) and the minorized
+##     p-value of Eq. (10) at any null b, from the cache.
+## Paper. Guo, Toulis & Wang (2026) ("GTW"), Section 3.1: model (7),
+##   Eq. (9), Procedure 1 steps 1-2 and Eq. (10); the residual-projection
+##   idea is Wen, Wang & Wang (2025), Algorithm 2 (V_k V_k' is the projector
+##   onto span(V_0) intersect span(P_k V_0) = col([X | X_k])^perp).
+## Notation (paper -> code, for one element k):
+##   X, X_k = X_{pi_k,sigma_k}  -> X, Xg = .apply_op(op, X)
+##   V_k V_k' D                 -> Dr   (D residualized on [X | X_k])
+##   D' V_k V_k' y              -> u[, k]  (a_k at b = 0)
+##   D' V_k V_k' y_k            -> v[, k]  (b_k at b = 0)
+##   D' V_k V_k' D, D' V_k V_k' D_k -> M[, , k], W[, , k] (slopes in b)
+##   a_k(b) = ||u_k - M_k b||,  b_k(b) = ||v_k - W_k b||
+## Deviation from the printed text. Procedure 1 gives V_k N - 2p columns,
+##   which assumes [X | X_k] has full column rank. It never does here: a
+##   permutation maps the intercept (and panel period dummies) to itself.
+##   The code projects with the numerical rank of the stack (eigenvalue cut
+##   1e-14 of the Gram matrix = 1e-7 on singular values), which satisfies
+##   the paper's defining conditions V_k' X = V_k' X_k = 0 exactly.
+## Pipeline. mwperm() -> dispatch -> design worker -> [permutation
+##   construction: .build_obs_perms] -> [projection engine: .ipt_prepare,
+##   .ipt_eval] -> median aggregation -> test inversion -> S3 methods.
+##   Called from .ipt_engine() in engine.R, once per repetition.
+## ============================================================================
 
 #' Residual maker via QR (rank robust) -- REFERENCE IMPLEMENTATION
 #'
@@ -18,6 +51,9 @@
 #' projector; keep the two in agreement, and do not delete this without
 #' relocating that test.
 #'
+#' @details Procedure 1, step 1 of GTW (2026): the residual maker I - P_[X |
+#'   X_k] = V_k V_k', written the obvious way. Reference only; the fit path
+#'   computes the same residuals in `.ipt_prepare()`.
 #' @param M numeric matrix, N x q.
 #' @param V numeric vector or N x d matrix.
 #' @return residuals, same shape as `V`.
@@ -35,6 +71,7 @@
 #' reduction: no arithmetic, so no reassociation to worry about) without
 #' copying the matrix. Names are dropped -- every caller indexes by position.
 #'
+#' @details Index arithmetic for `.cell_code()`; not a paper step.
 #' @param m numeric matrix.
 #' @return numeric vector of length `ncol(m)`.
 #' @keywords internal
@@ -51,6 +88,11 @@
 #' to a single numeric mixed-radix code, so cells can be matched with
 #' `match()`. Uses doubles to avoid 32-bit integer overflow.
 #'
+#' @details Index arithmetic behind y_{pi_k, sigma_k} (GTW 2026, Section 3.1).
+#'   The paper stacks cell (i, j) in row (i - 1) n + j; the package keys cells
+#'   by this code instead (first coordinate least significant) and never
+#'   relies on the row order, which the statistic of Procedure 1 does not
+#'   depend on.
 #' @param coords integer matrix, one row per observation, one column per
 #'   clustering coordinate. Values must be positive integers.
 #' @return numeric vector of codes, one per row.
@@ -73,6 +115,9 @@
                         "the mixed-radix cell encoding would not be exact. ",
                         "Too many clusters for this design."), prod(radix)),
          call. = FALSE)
+  ## code = (c_1 - 1) + n_1 (c_2 - 1) + n_1 n_2 (c_3 - 1) + ...: a one-to-one
+  ## key for each cell, with the FIRST coordinate least significant. (GTW
+  ## stack the other way, row (i - 1) n + j; nothing depends on the order.)
   code <- coords[, 1L] - 1             # least-significant digit (0-based)
   if (ncol(coords) > 1L) {
     mult <- 1                          # place value of the current digit
@@ -91,10 +136,12 @@
 #' holds one observation. Designs with replication inside a cell (two-way
 #' layouts) therefore need a third coordinate: the slot l = 1..ell_ij that an
 #' observation occupies inside its cell. `mwperm_layout()` permutes within a
-#' cell, so its slot is a within-cell RANK; `mwperm_irregular()` holds the
-#' slot fixed across cells, so its slot must be the `rep` LEVEL itself (the
-#' same period in every cell -- see `.irregular_design()`), and it calls this
-#' function only for the `rep = NULL` case, where the rank is the level.
+#' cell, so its slot is a within-cell RANK. `mwperm_irregular()` holds the
+#' slot fixed across cells and, since 0.4.2, also uses the within-cell rank:
+#' the rank of each survivor of that repetition's random cut, by `rep` (see
+#' `.irregular_design()`, which calls this with `ranked = TRUE`). A period
+#' index that must be the SAME level in every cell is the incomplete-panel
+#' design's slot instead (`.panel_missing_design()`).
 #'
 #' The ordering is the one `mwperm_layout()` has always used: by `rep` where
 #' supplied (as a factor, so labels of any type order consistently), by order
@@ -102,6 +149,9 @@
 #' `rank(ties.method = "first")` within each cell, computed as one stable
 #' sort.
 #'
+#' @details The replicate index l of GTW (2026): Section 6.3 (the layout
+#'   permutes it within each cell) and Section 6.4, step (i) (the irregular
+#'   design holds the survivors' rank fixed).
 #' @param cell integer vector of dense 1-based cell ids, one per observation.
 #' @param rep optional within-cell replication identifier; `NULL` means use
 #'   the order of appearance.
@@ -121,6 +171,8 @@
   ord_key <- if (is.null(rep)) seq_len(N)
              else if (ranked) rep
              else as.numeric(factor(rep))
+  ## Sort by (cell, key); within each cell the sorted positions get
+  ## l = 1, 2, ..., ell_c -- the replicate index l of GTW Sections 6.3-6.4.
   o <- order(cell, ord_key)
   slot[o] <- sequence(tabulate(cell, nbins = ncell))
   slot
@@ -152,6 +204,9 @@
 #' `.apply_op(op, M)` reads as "gather the rows, then flip them" and the
 #' composition rule is `(g2, s2) o (g1, s1) = (g1[g2], s1[g2] * s2)`.
 #'
+#' @details Applies one group element g_k of Procedure 1, step 1 (GTW 2026) to
+#'   the rows of X, y or D: the permuted data y_{pi_k, sigma_k} for a
+#'   permutation, S_k y for a sign flip (revised Assumption 2).
 #' @param op a group element: an integer gather vector, or a list with slots
 #'   `g` (integer gather vector or `NULL`) and `s` (numeric +/-1 vector of
 #'   length N or `NULL`).
@@ -199,6 +254,11 @@
 #' exact confidence set and `.invert_ci()` all run on a sign-flip prep object
 #' without knowing it is one.
 #'
+#' @details Procedure 1, step 1 of Guo, Toulis and Wang (2026): the projection
+#'   V_k V_k' onto the orthogonal complement of col([X | X_k]) for every
+#'   non-identity element k, cached as the four d-dimensional cross products
+#'   from which a_k(b) and b_k(b) follow for any null b. The paper gives V_k N
+#'   - 2p columns (the full-rank case); the rank of the stack is used instead.
 #' @param y numeric outcome, length N (the *unshifted* outcome).
 #' @param D numeric N x d matrix of covariate(s) of interest.
 #' @param X numeric N x p nuisance design (intercept already included).
@@ -302,6 +362,8 @@
     ## permuted and unpermuted outcomes enter as plain inner products against
     ## Dr. This is the statistic as Procedure 1 writes it,
     ## a_k(b) = ||Dr'(y - D b)||.
+    ## Dr = V_k V_k' D: D residualized on the stacked design [X | X_k]
+    ## (Procedure 1, step 1). With no nuisance columns V_k V_k' = I.
     Dr <- if (p == 0L) D else {
       Xg <- .apply_op(op, X)                          # X_k = Q_k X
       B <- tX %*% Xg                                  # = X'X_k, the only
@@ -313,8 +375,11 @@
       ## M_k, so the cut below at 1e-14 is the same relative tolerance on
       ## singular values (1e-7) that .lm.fit applies, squared.
       e <- eigen(rbind(cbind(A, B), cbind(t(B), A)), symmetric = TRUE)
-      pos <- e$values > 1e-14 * e$values[1L]
-      V <- e$vectors[, pos, drop = FALSE]
+      pos <- e$values > 1e-14 * e$values[1L]   # numerical rank of [X | X_k]
+      V <- e$vectors[, pos, drop = FALSE]      # (not 2p: see the file header)
+      ## cf = (M_k' M_k)^+ M_k' D, the least-squares coefficients of D on
+      ## M_k = [X | X_k] through the pseudo-inverse; D - M_k cf is then the
+      ## residual (I - P_{M_k}) D = V_k V_k' D.
       cf <- V %*% ((1 / e$values[pos]) *
                      crossprod(V, rbind(XtD, crossprod(Xg, D))))
       D - X %*% cf[seq_len(p), , drop = FALSE] -
@@ -351,16 +416,16 @@
     ## the identity rather than recompute it, so the answer is the same on
     ## every platform's BLAS. Non-degenerate slices never take this branch,
     ## and a non-identity sign flip cannot (it negates some row of Dr).
-    uu <- crossprod(Dr, y)                         # = Dr' y
-    MM <- crossprod(Dr)                            # = Dr' Dr
+    uu <- crossprod(Dr, y)       # = Dr' y = D' V_k V_k' y  (a_k at b = 0)
+    MM <- crossprod(Dr)          # = D' V_k V_k' D          (a_k's slope in b)
     if (identical(.apply_op(op, Dr), Dr))
       return(list(u = uu, v = uu, M = MM,
                   W = if (need_perm_D) MM))
     list(u = uu,
-         v = crossprod(Dr, .apply_op(op, y)),      # = Dr' y_k
+         v = crossprod(Dr, .apply_op(op, y)),      # = D' V_k V_k' y_k (b_k)
          M = MM,
-         W = if (need_perm_D)          # only for CI / non-zero null
-           crossprod(Dr, .apply_op(op, D)))
+         W = if (need_perm_D)          # = D' V_k V_k' D_k: b_k's slope in b;
+           crossprod(Dr, .apply_op(op, D)))  # only for CI / non-zero null
   }
   slices <- .plapply(seq_len(K), one_k, n_cores = n_cores, cl = cl)
 
@@ -389,6 +454,9 @@
 #' from `.ipt_prepare()`. Returns the minorized randomization p-value (1 +
 #' sum_k 1{ min_j a_j(b) <= b_k(b) }) / (K + 1).
 #'
+#' @details Procedure 1, step 2; Eq. (10) of Guo, Toulis and Wang (2026): pval
+#'   = (1 + sum_k 1{min_{1 <= j <= K} a_j <= b_k}) / (K + 1), at the null beta
+#'   = b (step 3: the procedure run on y - D b).
 #' @param prep a prep object from `.ipt_prepare()`.
 #' @param beta numeric null value(s); recycled to length `prep$d`.
 #' @return list with `pvalue`, and diagnostic vectors `a`, `b`.
@@ -400,6 +468,9 @@
               length.out = d)   # recycle scalar null to length d
   ## a[k], b[k]: the identity- and k-th-permutation residual norms at this beta,
   ## reconstructed from the cached cross products (affine in beta, no QR).
+  ## a_k(b) = ||D' V_k V_k' (y - D b)||           = ||u_k - M_k b||
+  ## b_k(b) = ||D' V_k V_k' (y - D b)_{pi_k,sigma_k}|| = ||v_k - W_k b||
+  ## (Procedure 1, step 1, on the shifted outcome y - D b of step 3)
   if (d == 1L) {                       # scalar fast path: norms reduce to abs()
     a <- abs(prep$u[1L, ] - prep$M[1L, 1L, ] * beta)
     b <- abs(prep$v[1L, ] - prep$W[1L, 1L, ] * beta)
@@ -412,9 +483,14 @@
       b[k] <- sqrt(sum((prep$v[, k] - prep$W[, , k] %*% beta)^2))
     }
   }
+  ## min_{1 <= j <= K} a_j: the minorized identity statistic of Eq. (10).
+  ## Only the K non-identity elements enter; the identity's own stack
+  ## [X | X] has rank p, not 2p, and is not part of the minimum.
   amin <- min(a)                       # minorizing identity statistic
   ## Minorized randomization p-value: fraction of permutations whose statistic
   ## is at least the (minorized) observed one, with the usual +1 correction.
+  ## Eq. (10): pval = (1 + sum_k 1{min_j a_j <= b_k}) / (K + 1). `b >= amin`
+  ## is the paper's `min_j a_j <= b_k`: a tie counts toward the p-value.
   list(pvalue = (1 + sum(b >= amin)) / prep$Kp1, a = a, b = b)
 }
 
@@ -425,6 +501,7 @@
 #' and testing; the engine uses prepare/eval separately so the QR work is
 #' shared across the confidence-interval search.
 #'
+#' @details Procedure 1, steps 1-2 of GTW (2026) at beta = 0.
 #' @inheritParams .ipt_prepare
 #' @return list with `pvalue`, and diagnostic vectors `a`, `b`.
 #' @keywords internal
@@ -447,6 +524,8 @@
 #' it indexes. The output is identical on either branch (asserted by
 #' `tests/lower-level-tests/test-obsperms.R`, which forces both).
 #'
+#' @details Implementation choice for the gather-vector builders; not a paper
+#'   step.
 #' @param n_cells size of the index space (product of the radices).
 #' @param N number of observations.
 #' @keywords internal
@@ -468,6 +547,11 @@
 #' many-to-one, silently computing the statistic on duplicated rows. Duplicate
 #' cell codes are therefore rejected up front as well.
 #'
+#' @details Eq. (9) of Guo, Toulis and Wang (2026) and their definition of
+#'   y_{pi, sigma} (Section 3.1), lifted to the observations: the entry of y_k
+#'   for cell (i, j) is the observation at cell (pi_k(i), sigma_k(j)). A NULL
+#'   group holds its coordinate fixed, which is condition InvB (Section 6.2)
+#'   for the panel's time index.
 #' @param coords integer matrix N x C of cluster ids (1-based, dense).
 #' @param groups list of length C; each element is either `NULL` (dimension
 #'   held fixed) or a list of K+1 image vectors permuting that dimension's
@@ -564,6 +648,9 @@
     }
     ## Translate permuted coordinates back to observation indices; an NA (or a
     ## zero table entry) means the permutation reached an unobserved cell.
+    ## The result g_k has g_k[r] = the row of cell (pi_k(i_r), sigma_k(j_r)),
+    ## so y[g_k] is GTW's y_{pi_k, sigma_k} (Section 3.1) and X[g_k, ] is
+    ## X_{pi_k, sigma_k}.
     g <- if (is.null(pos)) match(mapped_code, orig_code) else {
       gi <- pos[mapped_code + 1]
       gi[gi == 0L] <- NA_integer_
@@ -591,6 +678,8 @@
 #' cheap next to a single permutation's linear algebra (O(N) per element
 #' against O(N p^2)), so it runs unconditionally.
 #'
+#' @details Guards the premise of Theorem 1 of GTW (2026): every group element
+#'   acts on the stacked data as a permutation matrix.
 #' @param obs_perms list of integer gather-vectors.
 #' @param N expected length (the number of observations).
 #' @param design short label for the calling design, used in the message.

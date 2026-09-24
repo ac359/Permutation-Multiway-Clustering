@@ -1,3 +1,29 @@
+## ============================================================================
+## R/perm_set.R -- Algorithm 1: the random block-cyclic permutation group
+##
+## Purpose. build_perm_set() draws, for ONE clustering dimension, the K + 1
+##   permutations {psi_0 = Id, psi_1, ..., psi_K} that Procedure 1 of Guo,
+##   Toulis & Wang (2026) ("GTW") compares the data against; .save_seed() and
+##   .restore_seed() keep every seeded draw in the package off the caller's
+##   random stream.
+## Paper. GTW Algorithm 1 (Section 3.2) and Proposition 2 (closure under
+##   composition, which Theorem 1 needs). Adapted from Algorithm 1 of Wen,
+##   Wang & Wang (2025, "WWW"); like GTW, it omits WWW's repeat-until loop on
+##   the trace criterion, which serves power, not validity.
+## Two readings of the printed algorithm, both recorded in TESTING_PLAN.md:
+##   * the display's "i mod (K+1)" must be the 1-based residue
+##     ((i - 1) mod (K + 1)) + 1, or psi~_k is not a permutation (D1);
+##   * the worked example S_1^k lists the inverse of the displayed map (D2).
+##   The code follows the display, so element k + 1 of the returned list is
+##   psi_k; the example's ordering would give the same SET.
+## Pipeline. mwperm() -> dispatch -> design worker -> [permutation
+##   construction] -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods. Every permutation front end's perm_builder
+##   calls build_perm_set() once per permuted dimension (or cell, or block)
+##   per repetition, and the gather-vector builders in core.R, layout.R and
+##   missing.R lift the result to the observations.
+## ============================================================================
+
 #' Construct a random block-cyclic permutation group (Algorithm 1)
 #'
 #' Builds a set of `K + 1` permutations of `seq_len(n)` that form a cyclic
@@ -32,6 +58,12 @@
 #' per-dimension permutations continues to control size element-wise;
 #' simulation evidence therefore never certifies the group structure.
 #'
+#' @details Implements Algorithm 1 of Guo, Toulis and Wang (2026). The residue
+#'   in its display is read as 1-based, ((i - 1) mod (K + 1)) + 1, the reading
+#'   under which psi~_k is a permutation; element k + 1 of the list is
+#'   `psi_k = pi^{-1} o psi~_k o pi`, so the list is closed under composition
+#'   (their Proposition 2). The paper's worked example lists the same set in
+#'   the opposite order: its element k is element K + 1 - k here.
 #' @param n Integer, the number of indices to permute (the cluster count along
 #'   one dimension).
 #' @param K Integer, the number of *non-identity* permutations. The group has
@@ -82,7 +114,7 @@ build_perm_set <- function(n, K, seed = NULL) {
 
   ## Random relabelling pi (a permutation of 1..n) and its inverse. pi is what
   ## makes the test a *random* invariant test; different seeds give different
-  ## pi.
+  ## pi. Algorithm 1: "Generate a random one-to-one mapping pi : I -> [n]".
   pi_vec <- sample.int(n)           # pi_vec[i] = pi(i)
   pi_inv <- integer(n)              # pi_inv[pi(i)] = i  (the inverse map)
   pi_inv[pi_vec] <- seq_len(n)
@@ -90,6 +122,9 @@ build_perm_set <- function(n, K, seed = NULL) {
   ## Split 1..n into consecutive blocks of size B; any tail of < B leftover
   ## indices is held fixed (it cannot be cyclically shifted within a full
   ## block).
+  ## Algorithm 1, case 2 is i <= (K+1) floor(n/(K+1)): these are the indices
+  ## that are shifted. Case 1, i > (K+1) floor(n/(K+1)), is the tail that
+  ## psi~_k(i) = i leaves alone.
   nb <- n %/% B                     # number of full blocks
   in_block <- seq_len(nb * B)       # the indices that live in a full block
   pos0 <- (in_block - 1L) %% B      # 0-based position within the block
@@ -102,6 +137,9 @@ build_perm_set <- function(n, K, seed = NULL) {
   for (k in 0:K) {
     psit <- seq_len(n)              # psi-tilde_k image vector; identity
     if (k > 0L && nb > 0L) {
+      ## Algorithm 1's display: psi~_k(i) = i + k if the residue is <= K+1-k,
+      ## else i - (K+1-k). With the 1-based residue p = pos0 + 1 that is the
+      ## cyclic shift p -> ((p - 1 + k) mod (K+1)) + 1 of every block.
       new_pos0 <- (pos0 + k) %% B   # shifted position within the block
       psit[in_block] <- blk_start + new_pos0
     }
@@ -120,6 +158,8 @@ build_perm_set <- function(n, K, seed = NULL) {
 
 #' Snapshot the current global RNG state (or NULL if none has been
 #' initialised).
+#' @details RNG hygiene around the seeded draws of Algorithm 1 (and of every
+#'   other seeded step); not itself a paper step.
 #' @keywords internal
 #' @noRd
 .save_seed <- function() {
@@ -132,6 +172,8 @@ build_perm_set <- function(n, K, seed = NULL) {
 
 #' Restore a global RNG state previously captured by `.save_seed()`. A NULL
 #' snapshot means the RNG was uninitialised, so we remove the seed again.
+#' @details RNG hygiene around the seeded draws of Algorithm 1; not itself a
+#'   paper step.
 #' @keywords internal
 #' @noRd
 .restore_seed <- function(old) {
