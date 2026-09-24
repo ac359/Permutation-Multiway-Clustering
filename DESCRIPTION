@@ -39,7 +39,8 @@ Date: 2026-09-22
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel
-Suggests: knitr, rmarkdown, RhpcBLASctl
+Suggests: knitr, rmarkdown, RhpcBLASctl, testthat (>= 3.0.0)
+Config/testthat/edition: 3
 VignetteBuilder: knitr
 LazyData: true
 Roxygen: list(markdown = TRUE)
