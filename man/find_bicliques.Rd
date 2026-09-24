@@ -83,6 +83,12 @@ common column set below the column minimum are skipped, and the block is
 grown past the area optimum until the row minimum is met (and vice versa)
 -- so an asymmetric floor finds the tall/wide blocks it asks for. With a
 symmetric floor the behaviour is exactly the historical one.
+
+Implements Algorithm 2 (Appendix A) of Guo, Toulis and Wang (2026)
+with two changes that affect power only (their Remark 2): the
+largest-biclique problem (15) is solved greedily unless method = "exact",
+and the peeling stops at the first block smaller than min_block rather
+than when the mask is empty.
 }
 \examples{
 ## a 4x4 grid missing its diagonal

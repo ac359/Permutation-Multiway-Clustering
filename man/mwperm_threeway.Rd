@@ -132,6 +132,10 @@ Use this when all three dimensions are genuinely exchangeable (e.g.
 importer, exporter and product category). If one dimension is time with
 autocorrelation, use \code{\link{mwperm_panel}} instead. The data must form
 a complete balanced array.
+
+Implements Section 6.1 of Guo, Toulis and Wang (2026): Algorithm 1
+applied independently to each of the three dimensions, the elements
+applied jointly (condition InvA), then Procedure 1.
 }
 \examples{
 ## small balanced 3-way array with a random-effects error

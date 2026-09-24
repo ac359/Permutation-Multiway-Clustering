@@ -179,6 +179,11 @@ replicates per cell (cells with fewer are dropped, denser cells are
 uniformly downsampled). A uniform random subset of exchangeable replicates
 is itself exchangeable, so validity is preserved while the
 permutation-group order becomes the same (\code{L0}) in every cell.
+
+Implements Section 6.3 of Guo, Toulis and Wang (2026): Algorithm 1
+within every cell over the replicate index, the cell groups concatenated
+as in Procedure 2, then Procedure 1. The \code{L0} balancing borrows only the
+threshold of their Section 6.4.
 }
 \examples{
 ## 6 x 6 cells, 6 within-cell replicates, treatment varies within cell

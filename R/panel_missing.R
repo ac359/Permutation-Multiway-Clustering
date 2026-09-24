@@ -1,3 +1,21 @@
+## ============================================================================
+## R/panel_missing.R -- incomplete and unbalanced panels
+##
+## Purpose. mwperm_panel_missing() tests a panel whose (i, j) array has holes
+##   or pairs missing some periods: .panel_missing_design() builds the mask
+##   "pair observed in every period" (or, with L0, in every period of a
+##   common set S chosen by .choose_common_levels()), finds fully observed
+##   blocks in it, and returns a block-diagonal group that holds the period
+##   fixed.
+## Paper. Guo, Toulis & Wang (2026): Section 6.2 (condition InvB) combined
+##   with Section 5 (Assumption 4, Procedure 2, Algorithm 2) -- the extension
+##   their Section 9 leaves open. On a complete array the construction is
+##   exactly mwperm_panel()'s group (the gather vectors are identical).
+## Pipeline. mwperm() -> dispatch -> [design worker] -> [permutation
+##   construction, via .build_obs_perms_blocks() in missing.R] -> projection
+##   engine -> median aggregation -> test inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for incomplete panels
 #'
 #' Finite-sample valid test of H0: beta = b for a panel
@@ -24,6 +42,10 @@
 #' Holding the period fixed is the same device [mwperm_panel()] uses, and it is
 #' what keeps the test valid when the errors are autocorrelated over time.
 #'
+#' @details Combines Section 6.2 (condition InvB) with Procedure 2 of Guo,
+#'   Toulis and Wang (2026) for incomplete panels, the case their Section 9
+#'   leaves open: fully observed blocks of the every-period mask, Algorithm 1
+#'   on each block, and the period held fixed.
 #' @section Keeping L0 periods (`L0`): A pair that misses even one period
 #'   fails the every-period mask. When many pairs miss a few periods it is
 #'   often the better trade to keep fewer periods and more pairs: with an
@@ -302,6 +324,9 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
 #' (Moved unchanged from `R/irregular.R` in 0.4.2, where it served the retired
 #' `trim = "levels"` option.)
 #'
+#' @details Builds the L0 mask of the incomplete panel (a package extension).
+#'   It reads the observation pattern only, never y, so Assumption 4 of GTW
+#'   (2026) is untouched.
 #' @param inc logical matrix, one row per cell, one column per period.
 #' @param L0 the number of periods to retain.
 #' @return sorted integer vector of L0 column indices of `inc`, or
@@ -345,6 +370,8 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
 #' cell (i, j) in period s maps to cell (pi(i), sigma(j)) in the SAME period s
 #' -- condition InvB, blockwise.
 #'
+#' @details Procedure 2, steps 1-3 of GTW (2026) with the period as a slot
+#'   held fixed (condition InvB, blockwise).
 #' @param row,col,time identifiers, one per observation.
 #' @param L0 `NULL`, or the number of periods to retain (validated by the
 #'   caller as a single integer >= 2; refused here if above the period count).
@@ -421,6 +448,7 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
   }
 
   ## --- (ii) biclique search on the mask (Algorithm 2) -----------------------
+  ## Procedure 2, step 1 on the panel mask (Algorithm 2).
   blocks <- find_bicliques(ri[first[mask]], ci[first[mask]],
                            min_block = min_block, method = block_method)
   if (length(blocks) == 0L)
@@ -471,7 +499,7 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
   ## The slot is the period's rank within S (1..|S|): the period itself under
   ## L0 = NULL, where S is every period and match() is the identity on the
   ## dense ids.
-  slot <- match(ti_k, S)
+  slot <- match(ti_k, S)    # the period, held fixed: condition InvB
   perm_builder <- function(rep_seed, K)
     .build_obs_perms_blocks(rep_seed, K, blocks,
                             ri = ri_k, ci = ci_k, blk = blk_k,

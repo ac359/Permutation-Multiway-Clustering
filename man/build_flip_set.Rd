@@ -87,6 +87,10 @@ The randomness in the assignment is what makes the resulting test a
 p-values, and the \code{n_reps} argument of \code{\link{mwperm_dyadic_het}}
 aggregates several draws. The same reproducibility caveats apply (same
 \code{RNGkind()}; see \code{\link{build_perm_set}}).
+
+The sign-flip group under the revised paper's Assumption 2 (double
+sign symmetry), drawn at random as Algorithm 1 draws a random cyclic
+subgroup, with one representative per coset \verb{\{s, -s\}}.
 }
 \examples{
 F <- build_flip_set(n_row = 6, n_col = 5, n_flip = 4, seed = 1)

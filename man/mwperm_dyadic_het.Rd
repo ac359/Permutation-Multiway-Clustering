@@ -240,6 +240,10 @@ and its closure convention, the \code{aggregate = "median2"} guarantee and
 the numerical notes on the projection are all exactly as documented in
 \code{\link{mwperm_dyadic}}; the sign-flip element \code{S_k} simply takes
 the place of the permuted copy in the stacked design \code{[X | S_k X]}.
+
+Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
+sign flips in Step 1 in place of the permutation group, under the revised
+paper's Assumption 2 (double sign symmetry).
 }
 \examples{
 data(trade_dyadic)

@@ -217,6 +217,11 @@ Seeded results are reproducible only
 under the same \code{RNGkind()} (generator and sample kind) and, when
 cluster ids are character strings, the same collation locale; see
 \code{\link{build_perm_set}}.
+
+Implements Procedure 1 of Guo, Toulis and Wang (2026), Eq. (10),
+with the paired row and column group of their Eq. (9), each drawn by
+Algorithm 1; validity is their Theorem 1 under Assumption 1 (condition
+InvA).
 }
 \examples{
 data(trade_dyadic)

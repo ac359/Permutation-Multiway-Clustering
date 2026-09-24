@@ -1,3 +1,18 @@
+## ============================================================================
+## R/dyadic.R -- the two-way (dyadic) design: Procedure 1 under InvA
+##
+## Purpose. mwperm_dyadic() validates a complete n_row x n_col array with one
+##   observation per cell, fixes K, and hands the engine a builder of the
+##   paired row/column group.
+## Paper. Guo, Toulis & Wang (2026), Section 3: model (7), Assumption 1
+##   (double exchangeability), Eq. (9) (the group of pairs (pi_k, sigma_k)),
+##   Algorithm 1 (each margin's group), Procedure 1 and Eq. (10); validity
+##   is Theorem 1.
+## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for dyadic regression
 #'
 #' Finite-sample valid test of H0: beta = b in the dyadic regression model
@@ -71,6 +86,10 @@
 #' and sample kind) and, when cluster ids are character strings, the same
 #' collation locale; see [build_perm_set()].
 #'
+#' @details Implements Procedure 1 of Guo, Toulis and Wang (2026), Eq. (10),
+#'   with the paired row and column group of their Eq. (9), each drawn by
+#'   Algorithm 1; validity is their Theorem 1 under Assumption 1 (condition
+#'   InvA).
 #' @param y Numeric outcome vector, one entry per observed cell.
 #' @param d Numeric vector or matrix of the covariate(s) of interest (d_ij).
 #'   With a single covariate a confidence interval is produced; with several,
@@ -230,9 +249,12 @@ mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
   ## Per-rep permutations: draw an independent row group and column group and
   ## combine them into observation gather-vectors. Distinct sub-seeds (1, 2)
   ## keep the two dimensions' relabellings independent within a rep.
+  ## Eq. (9): G = {(pi_k, sigma_k)}, k = 0..K, with {pi_k} and {sigma_k}
+  ## each an Algorithm 1 group; element k pairs the k-th row permutation
+  ## with the k-th column permutation, so G is itself a cyclic group.
   perm_builder <- function(rep_seed) {
-    Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))
-    Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))
+    Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))  # pi_k
+    Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))  # sigma_k
     .build_obs_perms(coords, list(Grow, Gcol), design = "dyadic",
                      front_end = paste("mwperm_layout() (replication)",
                                        "or mwperm_panel() (time periods)"))

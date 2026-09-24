@@ -120,6 +120,11 @@ identically in every period, so cell (i, j) in period t maps to cell
 Holding the period fixed is the same device \code{\link{mwperm_panel}} uses,
 and it is what keeps the test valid when the errors are autocorrelated over
 time.
+
+Combines Section 6.2 (condition InvB) with Procedure 2 of Guo,
+Toulis and Wang (2026) for incomplete panels, the case their Section 9
+leaves open: fully observed blocks of the every-period mask, Algorithm 1
+on each block, and the period held fixed.
 }
 \section{Keeping L0 periods (\code{L0})}{
 

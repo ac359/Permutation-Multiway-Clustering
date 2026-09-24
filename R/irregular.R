@@ -1,3 +1,26 @@
+## ============================================================================
+## R/irregular.R -- irregular layouts: Section 6.4, step (i) as printed
+##
+## Purpose. mwperm_irregular() handles unequal cell sizes when permuting
+##   within cells is powerless (d constant within a cell): .irregular_design()
+##   masks the cells with at least L0 observations, finds fully observed
+##   blocks, and returns a builder that, in EVERY repetition, cuts each
+##   retained cell to L0 observations at random and builds the block-diagonal
+##   group over the survivors with their within-cell rank held fixed. The
+##   builder names the survivors in attr(, "rows"), which is how the engine
+##   runs that repetition on the subsample.
+## Paper. Guo, Toulis & Wang (2026), Section 6.4: the mask
+##   M_ij = 1{ell_ij >= L0}, step (i) (Algorithm 2 and the random drop of
+##   ell_ij - L0 observations), step (ii) (Procedure 2 on what remains), and
+##   the median over repeated runs (Remark 1; 100 runs in their Appendix B).
+##   Valid by the argument of Theorem 4 when the observations inside a cell
+##   are exchangeable replicates; periods with a common effect belong to
+##   mwperm_panel_missing(time =, L0 =) instead (each fit's first note says so).
+## Pipeline. mwperm() -> dispatch -> [design worker] -> [permutation
+##   construction, via .build_obs_perms_blocks() in missing.R] -> projection
+##   engine -> median aggregation -> test inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for irregular two-way layouts (Section 6.4)
 #'
 #' Finite-sample valid test of H0: beta = b for a two-way layout
@@ -36,6 +59,11 @@
 #' B used 100 repetitions; the package default is `n_reps = 500`, and a
 #' final run is worth 1000 (runtime is linear in `n_reps`).
 #'
+#' @details Implements Section 6.4 of Guo, Toulis and Wang (2026). Step (i):
+#'   the mask `M_ij = 1{ell_ij >= L0}`, Algorithm 2, and a random cut of every
+#'   retained cell to L0 observations, redrawn in every repetition. Step (ii):
+#'   Procedure 2 with the within-cell position held fixed. The median over
+#'   repetitions follows their Remark 1.
 #' @section Assumptions: This test does **not** assume within-cell
 #'   exchangeability. What it needs is exchangeability of the retained error
 #'   array across the cell indices (i, j) within each block, position by
@@ -319,6 +347,8 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
 #' cut this function carried as `trim = "levels"` until 0.4.1 is now
 #' `.panel_missing_design(L0 = )` in `R/panel_missing.R`.)
 #'
+#' @details Section 6.4, step (i) of GTW (2026), and the Procedure 2 group of
+#'   step (ii).
 #' @param row,col cell identifiers, one per observation.
 #' @param rep within-cell order identifier, or `NULL` for order of appearance.
 #' @param L0 number of observations retained per cell.
@@ -348,7 +378,7 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
                         "largest cell has %d), so the mask M_ij = 1{ell_ij ",
                         ">= L0} is empty. Lower `L0`."),
                  L0, max(ell)), call. = FALSE)
-  mask <- ell >= L0
+  mask <- ell >= L0                  # Section 6.4: M_ij = 1{ell_ij >= L0}
   ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))
   first <- match(seq_len(ncell), cell)                  # a row of each cell
 
@@ -415,6 +445,10 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
   ## The block builder's stride, so that sub-seed offset 1 here can never
   ## coincide with a block seed (offsets 4q - 1, 4q) of another repetition.
   stride <- max(1000, 4 * length(blocks) + 1)
+  ## Step (i)'s random cut, redrawn per repetition from that repetition's
+  ## seed, then step (ii)'s Procedure 2 group over the survivors, with the
+  ## within-cell rank as the slot held fixed: survivor l of cell (i, j) maps
+  ## to survivor l of cell (pi(i), sigma(j)).
   perm_builder <- function(rep_seed, K) {
     take <- .downsample_to_L0(cell_d, ell_d, L0,
                               seed = .sub_seed(rep_seed, 1L, stride))
