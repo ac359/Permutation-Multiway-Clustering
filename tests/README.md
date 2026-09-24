@@ -1,132 +1,211 @@
 # `mwperm` test suite
 
-The tests ship with the package: `tests/` is tracked in git, included in the
-built tarball, and run by `R CMD check`. There are two suites, and `R CMD
-check` runs both:
+Everything under `tests/` is tracked in git, ships in the package tarball and
+runs under `R CMD check`, so every file here is kept fast.
 
-* **the base-R suite** (`tests/test-*.R` and `tests/lower-level-tests/`):
-  plain `stopifnot()` scripts, one per user-facing function plus the
-  machinery underneath, with the seeded golden snapshot. Everything below
-  this list, up to *The testthat suite*, describes it.
-* **the testthat suite** (`tests/testthat/`, run by `tests/testthat.R`):
-  the paper-fidelity tests, which check that the code computes what Guo,
-  Toulis & Wang (2026) define -- against a deliberately naive Procedure 1,
-  the algebra of Algorithm 1, the exact invariances, test/interval duality,
-  every design's group, Monte Carlo validity, and every seeded output the
-  JSS draft prints. `testthat (>= 3.0.0)` is in `Suggests` for this suite
-  only; see *The testthat suite* at the end.
+## Two suites, two questions
 
-Both are deliberately kept fast, because they run on every check.
+| | Base-R suite | testthat suite |
+|---|---|---|
+| **Question it answers** | Does each exported function keep its contract, and do the seeded numbers stay put? | Does the code compute what the paper defines? |
+| **Where** | `tests/test-*.R` and `tests/lower-level-tests/` | `tests/testthat/` |
+| **Organised by** | exported function (one file each), then the machinery underneath | paper object (Algorithm 1, Procedure 1, Eq. 10, ...) |
+| **Checked against** | the package's own contract and the golden seeded snapshot | a naive Procedure 1 written from the paper (`helper-reference.R`), the paper's algebra, the JSS draft's printed output, Monte Carlo |
+| **Style** | plain `stopifnot()` scripts | testthat 3rd edition |
+| **Tests which copy of the package** | the **installed** one: reinstall first | the source tree (`test_local()`) |
+| **Time** | about 60 s | about 30 s, plus 2.5 min for the slow Monte Carlo tests |
 
-## Running them
+The base-R suite came first and is the package's regression contract. The
+testthat suite was added in 0.4.2 to show paper fidelity; it sits alongside
+the base-R suite rather than replacing it, so the contract was not rewritten.
+Where the two touch the same object they check it from different sides; the
+[crosswalk](#where-each-topic-is-tested) lists both. `testthat (>= 3.0.0)` is in
+`Suggests` for the second suite only.
 
-Install first, then run the top-level files:
+## Running
+
+From the package root:
 
 ```bash
+# base-R suite: install first, then run the top-level files
 R CMD INSTALL . && for f in tests/test-*.R; do Rscript "$f" || echo "FAILED: $f"; done
+
+# testthat suite (loads the package from source; no install needed)
+NOT_CRAN=true Rscript -e 'testthat::test_local()'
+
+# ... plus the slow Monte Carlo checks
+NOT_CRAN=true MWPERM_SLOW_TESTS=true Rscript -e 'testthat::test_local()'
+
+# golden identity gate on its own
+R CMD INSTALL . && Rscript tests/golden/make_baseline.R --check
+
+# everything, as CRAN and CI run it
+R CMD build . && R CMD check --as-cran mwperm_*.tar.gz
 ```
 
-Each file prints `<file>: all assertions passed` when it finishes.
+Each base-R file prints `<file>: all assertions passed`. To run one
+lower-level file: `Rscript tests/lower-level-tests/test-permset.R`. To run
+one testthat file: `testthat::test_local(filter = "algorithm1")`.
 
-> **Install first — this has cost real time twice.** Many files reach package
+> **Install before trusting a base-R result.** These files reach package
 > internals through `mwperm:::`, which resolves against the **installed**
-> package, never against the working tree. Running a test after editing `R/`
-> without reinstalling silently exercises the *old* code, or fails with a
-> confusing "object not found". `devtools::load_all()` and `source()`-ing `R/`
-> are fine for interactive poking at one function, not for trusting a result.
+> package, never the working tree. After editing `R/` without reinstalling,
+> they silently test the *old* code, or fail with a confusing "object not
+> found". This has cost real time twice. `devtools::load_all()` and
+> `source()`-ing `R/` are fine for poking at one function, not for trusting a
+> result.
 
-To run a single lower-level file on its own:
+Two environment variables widen the testthat suite:
 
-```bash
-Rscript tests/lower-level-tests/test-permset.R
-```
+* `MWPERM_SLOW_TESTS=true` runs `test-montecarlo.R` (Theorem 1 checked at
+  every atom of the p-value distribution). It never runs on CRAN.
+* `MWPERM_SHOW_DISCREPANCIES=true` runs the tests skipped with
+  `Discrepancy D<n>`. Each asserts what the paper or the JSS draft says where
+  the code deliberately does something else; setting the variable shows each
+  one failing. The entries are explained in the discrepancy log of
+  `TESTING_PLAN.md` at the repository root.
+
+## Where does a new test go?
+
+| You are testing... | Put it in |
+|---|---|
+| what an **exported function** promises: its seeded numbers, arguments, errors, notes | the base-R file named after that function (`test-dyadic.R` for `mwperm_dyadic()`, ...) |
+| a contract **shared by every front end**: scalar-argument validation, output labels, equivariance, parallel identity | base-R `test-validation.R`, `test-methods.R` or `test-equivariance.R` |
+| an **internal building block** (a group, the projector, the p-value, an inversion routine) against its own invariants | base-R `lower-level-tests/`, one file per object |
+| that the code **matches a paper object** (against the naive reference, the paper's algebra, or a printed draft output) | the testthat file named after that paper object |
+| a place where the code **deliberately differs** from the paper or the draft | a testthat test asserting the paper's version, skipped with `skip_discrepancy("D<n>", ...)`, plus an entry in the discrepancy log of `TESTING_PLAN.md` |
+| **size or power** by simulation | quick checks: `testthat/test-montecarlo.R` (gated by `MWPERM_SLOW_TESTS`); publication-scale tables: `inst/replication/`, which no check runs |
+
+**A new design** needs all of these:
+- a base-R `test-<design>.R` and a row in the table below;
+- an entry in `golden/make_baseline.R`, then a regenerated baseline;
+- a reference check in `testthat/test-designs.R`, comparing its p-values with
+  the naive Procedure 1 on the group rebuilt from the seed;
+- a size check in `testthat/test-montecarlo.R`;
+- a row in the traceability table of `TESTING_PLAN.md`.
+
+## Where each topic is tested
+
+`ll/` is `lower-level-tests/`.
+
+| Topic | Base-R suite | testthat suite |
+|---|---|---|
+| Algorithm 1, `build_perm_set()` | `ll/test-permset.R` | `test-algorithm1.R` |
+| each design's group, lifted to observations | `ll/test-obsperms.R`, `ll/test-bijection.R`, each design's file | `test-designs.R` |
+| Procedure 1: projection and statistic | `ll/test-projection.R` | `test-procedure1-reference.R` |
+| the p-value, Eq. 10 | `ll/test-pvalue.R` | `test-pvalue-properties.R` |
+| aggregation over repetitions (Remark 1) | `ll/test-aggregate.R` | `test-pvalue-properties.R` |
+| confidence sets by inversion | `ll/test-exact-ci.R`, `ll/test-invert-ci-grid.R` | `test-confidence-sets.R` |
+| invariance and equivariance | `test-equivariance.R` | `test-invariances.R` |
+| seeds, parallel equals serial, the caller's RNG | `test-equivariance.R`, each design's file | `test-reproducibility.R` |
+| `mwperm()` dispatch and `mwperm_check()` | `test-main.R` | `test-dispatch.R` |
+| S3 methods and output labels | `test-methods.R` | `test-s3-methods.R` |
+| input validation | `test-validation.R` (scalar arguments) | `test-data-validation.R` (data, interfaces) |
+| `find_bicliques()` | `test-missing.R` | `test-bicliques.R` |
+| the sign-flip test | `test-signflip.R` | `test-dispatch.R`, `test-reproducibility.R`, `test-pvalue-properties.R`, `test-draft-replication.R` |
+| seeded numbers people see | `test-golden.R`, `test-readme.R` | `test-draft-replication.R` |
+| validity by simulation | none (too slow; see `inst/replication/`) | `test-montecarlo.R` |
 
 ## Layout
 
 ```
 tests/
-  test-*.R              one file per user-facing entry point
-  lower-level-tests/    the machinery underneath
-  helpers/assertions.R  shared assertion helpers (sourced, never run as a test)
-  golden/               seeded reference snapshots and their generator
+  README.md                 this file
+  test-*.R                  base-R suite: one file per exported function,
+                              plus the shared contracts and the golden gate
+  test-lower-level.R        runs every file in lower-level-tests/
+  lower-level-tests/        base-R suite: the machinery underneath
+  helpers/                  sourced by base-R files, never run as tests
+  golden/                   the seeded snapshots and their generator
+  testthat.R                runner that R CMD check uses for testthat/
+  testthat/
+    helper-reference.R      the naive Procedure 1 and shared generators
+    test-*.R                testthat suite: one file per paper object
+    _snaps/                 expect_snapshot() records
 ```
 
-`R CMD check` runs only the `.R` files at the **top level** of `tests/`, so the
-lower-level suite is driven by `test-lower-level.R`, which sources every file in
-`lower-level-tests/` in a fresh environment. A failure down there is a failure
-here; nothing is skipped in a check.
+`R CMD check` runs only the `.R` files at the **top level** of `tests/`.
+That is why the lower-level files are driven by `test-lower-level.R`, which
+sources each in a fresh environment and lets any failure propagate, and why
+`helpers/` is a subdirectory: it keeps them from being mistaken for tests.
 
-### Top level — one file per method
+## Base-R suite: top level, one file per exported function
 
-Each file answers *"does this function do what its help page promises?"* and is
-named after the function it tests.
+Each file answers *"does this function do what its help page promises?"*,
+and opens with a header saying what it pins and why.
 
 | File | Covers |
 |---|---|
-| `test-main.R` | `mwperm()`, `mwperm_check()` — design detection, the printed diagnosis, forced-design validation, the assumption warnings, and **dispatch identity**: `mwperm()` must return exactly what the direct front-end call returns — including with `n_reps = NULL` (the front end's own default: 500 for irregular, 10 elsewhere; 0.4.2) and with `L0` forwarded to the incomplete-panel design |
-| `test-formula.R` | `mwperm_formula()` — the `y ~ d \| x` interface; an identity test, since it only assembles arguments |
-| `test-dyadic.R` | `mwperm_dyadic()` — the **two-way** (dyadic) design, condition InvA |
-| `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()` — the same two-way design under **sign symmetry** instead of exchangeability (the heteroskedasticity-robust sign-flip test, 0.4.0): agreement with a corrected port of the author's `RPT_signflip()` given the same flip-group assignment (`helpers/signflip-reference.R`), the group axioms and the `2^(n_flip-1)` order, the `.apply_op()` signed-gather contract, size under heteroskedasticity, the `n_flip >= 6` resolution guard, seed hygiene, the opt-in dispatcher route, that the permutation designs are untouched, and (0.4.1) incomplete arrays: the `cells` kernel guard of `build_flip_set()` is bit-identical on a complete array and gives `2^(n_flip-1)` distinct elements on a diagonal-only one, and the fit on an incomplete array equals a from-scratch Procedure 1 with an explicit orthonormal complement. Named for the *group* rather than the function because `build_flip_set()` is tested here too |
-| `test-threeway.R` | `mwperm_threeway()` — the three-way design, InvA in three dimensions |
-| `test-panel.R` | `mwperm_panel()` — the panel design, condition InvB, including invariance to an arbitrary common time trend |
-| `test-panel-missing.R` | `mwperm_panel_missing()` — incomplete panels; pins that on a complete array it builds permutations *identical* to `mwperm_panel()`. Section 8 (0.4.2) is `L0`, the same L0 periods in every cell: `L0 = n_t` equals `L0 = NULL` number for number, every gather vector of the front end's own builder preserves the period, every retained pair observes all of S, `L0 = 2` on a 4-period array equals the `L0 = NULL` fit on the data subset to those periods (these assertions moved here from the irregular file's retired `trim = "levels"` section) |
-| `test-layout.R` | `mwperm_layout()` — replicated two-way layouts, within-cell exchangeability, `L0` balancing |
-| `test-missing.R` | `mwperm_missing()` and `find_bicliques()` — incomplete arrays via fully observed blocks, one-sided permutation |
-| `test-irregular.R` | `mwperm_irregular()` — Section 6.4 step (i) as printed (the only path since 0.4.2; `n_reps` defaults to 500 and is passed explicitly throughout): on a balanced array with `L0 = T` the gather vectors equal the panel construction's; every repetition keeps exactly `L0` observations per retained cell, redrawn from the rep seed (and reproduced by the rep-parallel path); every element holds the within-cell position fixed; the `N > 2p` check counts `cells_used * L0`; `trim` is refused by `mwperm()` with the replacement named; every fit's first note states that the trim is exact only for exchangeable replicates and names `mwperm_panel_missing()`; a second note fires when `d` varies inside a retained cell and not otherwise. Section 8 pins the engine's per-repetition `"rows"` hook against `mwperm_dyadic()` on a subset |
-| `test-methods.R` | `print` / `summary` / `confint` / `coef` / `nobs` / `plot` / `mwperm_save` — the **output-label contract** (including the print header, which names the sign-flip group for `mwperm_dyadic_het()` fits) and every figure path |
-| `test-validation.R` | the input-validation contract shared by all front ends: bad input fails early naming the argument, degenerate input gets the exact answer, and no confidence set is reported that the design cannot support |
-| `test-equivariance.R` | properties every fit must have: row-order, nuisance (FWL), null-shift and scale/sign equivariance, and **parallel ≡ serial**, bit for bit (including the sign-flip, irregular and `L0` incomplete-panel builders) |
-| `test-readme.R` | the transcripts `README.md` shows are the ones the package prints |
-| `test-golden.R` | the seeded snapshot gate — 30 entries across all eight designs compared field by field against `golden/baseline.rds` |
+| `test-main.R` | `mwperm()`, `mwperm_check()`: design detection, the printed diagnosis, forced designs, the assumption warnings, and **dispatch identity** (`mwperm()` returns exactly what the direct front-end call returns) |
+| `test-formula.R` | `mwperm_formula()`: an identity test against the data interface, since it only assembles arguments |
+| `test-dyadic.R` | `mwperm_dyadic()`: the two-way design, condition InvA |
+| `test-threeway.R` | `mwperm_threeway()`: InvA in three dimensions |
+| `test-panel.R` | `mwperm_panel()`: condition InvB, including invariance to an arbitrary common time trend; `time_fe` |
+| `test-panel-missing.R` | `mwperm_panel_missing()`: incomplete panels; on a complete array its permutations are *identical* to `mwperm_panel()`'s; `L0` |
+| `test-layout.R` | `mwperm_layout()`: within-cell permutations, `rep`, `L0` balancing |
+| `test-missing.R` | `mwperm_missing()` and `find_bicliques()`: fully observed blocks, `permute`, `min_block` |
+| `test-irregular.R` | `mwperm_irregular()`: Section 6.4 step (i), the per-repetition subsample, its notes, and the engine's `"rows"` hook |
+| `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()`: agreement with a corrected port of the authors' `RPT_signflip()` (`helpers/signflip-reference.R`), the group's order `2^(n_flip-1)`, the `.apply_op()` contract, size under heteroskedasticity, incomplete arrays |
+| `test-methods.R` | `print`, `summary`, `confint`, `coef`, `nobs`, `plot`, `mwperm_save`: the **output-label contract** and every figure path |
+| `test-validation.R` | scalar-argument validation shared by all front ends: bad input fails early and names the argument; degenerate input gets the exact answer; no confidence set the design cannot support |
+| `test-equivariance.R` | row order, nuisance (FWL), null shift, scale and sign equivariance, and **parallel equals serial**, bit for bit |
+| `test-readme.R` | the transcripts `README.md` shows are what the package prints |
+| `test-golden.R` | the seeded snapshot gate: 30 entries across all eight designs, compared field by field with `golden/baseline.rds` |
 | `test-lower-level.R` | the runner for `lower-level-tests/` |
 
-Design-specific arguments are tested in that design's own file (`L0` and `rep`
-in `test-layout.R`, `permute` and `min_block` in `test-missing.R`, `time_fe` in
-`test-panel.R`); everything shared is in `test-validation.R`,
-`test-methods.R` or `test-equivariance.R`.
-
-`test-readme.R` is the one file that reaches outside the package: it locates
+`test-readme.R` is the one file that reaches outside the package. It finds
 `README.md` by content, because `tests/` has a README of its own. Under
-`R CMD check` the package README is not shipped alongside the tests, so that
-half skips; the half that pins the printed lines always runs.
+`R CMD check` the package README is not next to the tests, so that half
+skips; the half that pins the printed lines always runs.
 
-### `lower-level-tests/` — the machinery underneath
+## Base-R suite: `lower-level-tests/`, the machinery
 
 Each file answers *"is the mathematical object the method is built from
-correct?"*. These reach into package internals and are keyed to the equations
+correct?"*. They reach into package internals and are keyed to the equations
 of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
 
 | File | Covers |
 |---|---|
-| `test-permset.R` | `build_perm_set()` — GTW Algorithm 1: a cyclic group of order `K+1`, identity first, closed under composition, RNG-hygienic |
-| `test-obsperms.R` | the observation-level gather vectors for every design; the one-sided block subgroups; unobserved-cell detection; the `.cell_code` exactness guard |
-| `test-bijection.R` | every gather vector is a bijection — a duplicated cell would silently make it many-to-one |
-| `test-projection.R` | the FWL / partialling step (GTW Eq. 3) against an **independent** from-scratch projector that shares no code with `R/` |
-| `test-pvalue.R` | the minorized randomization p-value (GTW Eq. 10): the grid it lives on, conservative ties, the `1/(K+1)` floor |
+| `test-permset.R` | `build_perm_set()`, GTW Algorithm 1: a cyclic group of order `K+1`, identity first, closed under composition, RNG-hygienic |
+| `test-obsperms.R` | the observation-level gather vectors for every design; the one-sided block subgroups; unobserved-cell detection; the `.cell_code()` exactness guard |
+| `test-bijection.R` | every gather vector is a bijection; a duplicated cell would silently make it many-to-one |
+| `test-projection.R` | the partialling step (GTW Eq. 3) against an independent projector that shares no code with `R/` |
+| `test-pvalue.R` | the minorized p-value (GTW Eq. 10): its grid, conservative ties, the `1/(K+1)` floor |
 | `test-aggregate.R` | the cross-repetition rule (GTW Remark 1): one aggregation for the p-value *and* the confidence set |
-| `test-exact-ci.R` | the closed-form confidence set: breakpoints, disconnected components, and what the reported end points mean |
-| `test-invert-ci-grid.R` | the bracketing fallbacks: explicit-`grid` inversion, region budget guards, the disconnected-acceptance island guard |
+| `test-exact-ci.R` | the closed-form confidence set: breakpoints, disconnected components, what the reported end points mean |
+| `test-invert-ci-grid.R` | the fallbacks: explicit-`grid` inversion, region budget guards, the island guard |
 
-## Where does a new test go?
+## testthat suite: `tests/testthat/`, one file per paper object
 
-* Testing what an **exported function** does for a user → the top-level file
-  named after that function.
-* Testing an **internal** — a permutation group, a projector, a p-value, an
-  inversion routine → `lower-level-tests/`.
-* Adding a **new design** → a new top-level `test-<design>.R`, plus a row in
-  the table above. A new statistical feature also needs a null size check and a
-  power sanity check; those live in `inst/replication/`, not here, because they
-  are too slow for `R CMD check`.
+| File | Covers |
+|---|---|
+| `helper-reference.R` | shared code, loaded by testthat before every file, never a test: a naive Procedure 1 (QR residuals with numerical rank, then `a_k`, `b_k` and Eq. 10); each front end's group rebuilt from its seed by explicit key matching; data generators; Monte Carlo helpers; `skip_discrepancy()` |
+| `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
+| `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
+| `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), `median2`, ties counted (`<=`), `D` in `col(X)` |
+| `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, testing `b` versus `y - D b`, a common trend under `time_fe`; CI equivariance |
+| `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region |
+| `test-designs.R` | each design's group structure (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) and its p-values against the reference |
+| `test-bicliques.R` | fully observed, disjoint, `min_block`; the exact search against brute force; the diagonal-deleted 40 x 40 array |
+| `test-dispatch.R` | every row of the draft's Table 1; `mwperm()` identical to its worker; `mwperm_check()` snapshots |
+| `test-s3-methods.R` | the draft's Sec. 3.5 slots, `summary()`, `confint()`, `coef()`, `nobs()`, `print()` snapshots, `plot()` |
+| `test-data-validation.R` | lengths, missing and non-finite values, `N > 2p`, duplicate cells, the vector, column-name and formula interfaces, cluster-id types |
+| `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state |
+| `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the draft's negative control, and power |
+| `test-draft-replication.R` | every seeded output the JSS draft prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
+
+`_snaps/` holds the `expect_snapshot()` records for `test-dispatch.R` and
+`test-s3-methods.R`. They are skipped on CRAN. After an intended change to
+printed output, update them with `testthat::snapshot_accept()`.
 
 ## `helpers/`
 
-`assertions.R` holds `msg_of()`, `expect_err()`, `expect_warn()`, `warns_of()`,
-`msgs_of()`, `same_fit()`, `internal()` and `passed()`; `signflip-reference.R`
-holds the corrected port of the author's `RPT_signflip()` and the
-heteroskedastic gravity DGP that `test-signflip.R` checks the package
-against. They live in a subdirectory so `R CMD check` does not mistake them
-for tests, and every file loads what it needs with the same two-line idiom,
-which resolves both from the package root and from `tests/`:
+`assertions.R` holds `msg_of()`, `expect_err()`, `expect_warn()`,
+`warns_of()`, `msgs_of()`, `same_fit()`, `internal()` and `passed()`.
+`signflip-reference.R` holds the corrected port of the authors'
+`RPT_signflip()` and the heteroskedastic gravity DGP that `test-signflip.R`
+checks against. Every base-R file loads what it needs with the same two
+lines, which work from the package root and from `tests/`:
 
 ```r
 source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
@@ -135,56 +214,24 @@ source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
 
 ## `golden/`
 
-`baseline.rds` is the authoritative record of every seeded number the package
-produces; `baseline-0.4.0.rds` and `baseline-0.2.0.rds` are earlier releases'
-snapshots, kept so the change lists in `NEWS.md` can be re-derived
-(`make_baseline.R --check --against=baseline-0.4.0.rds`). Regenerate only after an intentional,
-documented change:
+`baseline.rds` is the authoritative record of every seeded number the
+package produces, and `make_baseline.R` generates and checks it.
+`baseline-0.4.1.rds`, `baseline-0.4.0.rds` and `baseline-0.2.0.rds` are
+earlier releases' snapshots, kept so the change lists in `NEWS.md` can be
+re-derived:
+
+```bash
+Rscript tests/golden/make_baseline.R --check --against=baseline-0.4.1.rds
+```
+
+Regenerate `baseline.rds` only after an intentional change that `NEWS.md`
+documents:
 
 ```bash
 R CMD INSTALL . && Rscript tests/golden/make_baseline.R
 ```
 
-A drift in `pvalue`, `estimate`, `conf_int` or `K` is a defect until proven
-otherwise — the paper's tables and the README's shown output are keyed to these
-numbers.
-
-## The testthat suite (`tests/testthat/`)
-
-Run it from the package root with
-
-```bash
-NOT_CRAN=true Rscript -e 'testthat::test_local()'
-```
-
-(`devtools::test()` is equivalent). It loads the package from source, so no
-install is needed. It takes about 30 seconds. Two environment variables widen it:
-
-* `MWPERM_SLOW_TESTS=true` runs the Monte Carlo checks of Theorem 1 in
-  `test-montecarlo.R` (about 2.5 minutes). They never run on CRAN.
-* `MWPERM_SHOW_DISCREPANCIES=true` runs the bodies of the tests that are
-  skipped with `Discrepancy D<n>`. Each such test asserts what the paper or
-  the JSS draft says. The code does something else on purpose, so the
-  test is skipped rather than edited. Setting the variable shows each one
-  failing, and each one names its entry in the discrepancy log.
-
-| File | Covers |
-|---|---|
-| `helper-reference.R` | shared code, sourced, never a test. It holds: a naive Procedure 1 (a QR residual maker with numerical rank, then `a_k`, `b_k` and Eq. 10); each front end's permutation group rebuilt from its seed, mapped to observations by explicit key matching; the data generators; the Monte Carlo helpers; and `skip_discrepancy()` |
-| `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
-| `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, moved-index count, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
-| `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, `beta = b` versus `y - D b`, a common trend under `time_fe`; CI equivariance |
-| `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), ties counted (`<=`), `D` in `col(X)` |
-| `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region |
-| `test-designs.R` | the group structure of each design (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) plus its p-values against the reference |
-| `test-bicliques.R` | fully observed, disjoint, `min_block`; exact search against brute force; the diagonal-deleted 40 x 40 array |
-| `test-dispatch.R` | every row of the draft's Table 1, `mwperm()` identical to its worker, `mwperm_check()` snapshots |
-| `test-s3-methods.R` | the draft's Sec. 3.5 slots, `summary()`, `confint()`, `print()` snapshots, `plot()` |
-| `test-validation.R` | data validation, `N > 2p`, the vector, column-name and formula interfaces, cluster-id types |
-| `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state |
-| `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the draft's negative control, and power |
-| `test-draft-replication.R` | every seeded output the JSS draft prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
-
-`_snaps/` holds the `expect_snapshot()` records. They are skipped on CRAN;
-update them with `testthat::snapshot_accept()` after an intended change to
-printed output.
+`--check` names the fields that differ. A difference only in `note` is a
+wording change. A drift in `pvalue`, `estimate`, `conf_int` or `K` is a
+defect until proven otherwise: the paper's tables and the README's shown
+output are keyed to these numbers.
