@@ -1,9 +1,22 @@
 # `mwperm` test suite
 
 The tests ship with the package: `tests/` is tracked in git, included in the
-built tarball, and run by `R CMD check`. They are plain base-R `stopifnot()`
-scripts — **`testthat` is not a dependency and is not used** — and they are
-deliberately kept fast, because every one of them runs on every check.
+built tarball, and run by `R CMD check`. There are two suites, and `R CMD
+check` runs both:
+
+* **the base-R suite** (`tests/test-*.R` and `tests/lower-level-tests/`):
+  plain `stopifnot()` scripts, one per user-facing function plus the
+  machinery underneath, with the seeded golden snapshot. Everything below
+  this list, up to *The testthat suite*, describes it.
+* **the testthat suite** (`tests/testthat/`, run by `tests/testthat.R`):
+  the paper-fidelity tests, which check that the code computes what Guo,
+  Toulis & Wang (2026) define -- against a deliberately naive Procedure 1,
+  the algebra of Algorithm 1, the exact invariances, test/interval duality,
+  every design's group, Monte Carlo validity, and every seeded output the
+  JSS draft prints. `testthat (>= 3.0.0)` is in `Suggests` for this suite
+  only; see *The testthat suite* at the end.
+
+Both are deliberately kept fast, because they run on every check.
 
 ## Running them
 
@@ -135,3 +148,43 @@ R CMD INSTALL . && Rscript tests/golden/make_baseline.R
 A drift in `pvalue`, `estimate`, `conf_int` or `K` is a defect until proven
 otherwise — the paper's tables and the README's shown output are keyed to these
 numbers.
+
+## The testthat suite (`tests/testthat/`)
+
+Run it from the package root with
+
+```bash
+NOT_CRAN=true Rscript -e 'testthat::test_local()'
+```
+
+(`devtools::test()` is equivalent). It loads the package from source, so no
+install is needed. It takes about 30 seconds. Two environment variables widen it:
+
+* `MWPERM_SLOW_TESTS=true` runs the Monte Carlo checks of Theorem 1 in
+  `test-montecarlo.R` (about 2.5 minutes). They never run on CRAN.
+* `MWPERM_SHOW_DISCREPANCIES=true` runs the bodies of the tests that are
+  skipped with `Discrepancy D<n>`. Each such test asserts what the paper or
+  the JSS draft says. The code does something else on purpose, so the
+  test is skipped rather than edited. Setting the variable shows each one
+  failing, and each one names its entry in the discrepancy log.
+
+| File | Covers |
+|---|---|
+| `helper-reference.R` | shared code, sourced, never a test. It holds: a naive Procedure 1 (a QR residual maker with numerical rank, then `a_k`, `b_k` and Eq. 10); each front end's permutation group rebuilt from its seed, mapped to observations by explicit key matching; the data generators; the Monte Carlo helpers; and `skip_discrepancy()` |
+| `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
+| `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, moved-index count, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
+| `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, `beta = b` versus `y - D b`, a common trend under `time_fe`; CI equivariance |
+| `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), ties counted (`<=`), `D` in `col(X)` |
+| `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region |
+| `test-designs.R` | the group structure of each design (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) plus its p-values against the reference |
+| `test-bicliques.R` | fully observed, disjoint, `min_block`; exact search against brute force; the diagonal-deleted 40 x 40 array |
+| `test-dispatch.R` | every row of the draft's Table 1, `mwperm()` identical to its worker, `mwperm_check()` snapshots |
+| `test-s3-methods.R` | the draft's Sec. 3.5 slots, `summary()`, `confint()`, `print()` snapshots, `plot()` |
+| `test-validation.R` | data validation, `N > 2p`, the vector, column-name and formula interfaces, cluster-id types |
+| `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state |
+| `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the draft's negative control, and power |
+| `test-draft-replication.R` | every seeded output the JSS draft prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
+
+`_snaps/` holds the `expect_snapshot()` records. They are skipped on CRAN;
+update them with `testthat::snapshot_accept()` after an intended change to
+printed output.
