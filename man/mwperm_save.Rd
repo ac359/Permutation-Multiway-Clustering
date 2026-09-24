@@ -45,6 +45,9 @@ Renders \code{\link{plot.mwperm}} to a file sized for a journal column,
 using only base \code{grDevices} devices. The device is always closed on
 exit, even if drawing fails.
 }
+\details{
+Figure export only; not a paper step.
+}
 \examples{
 data(trade_dyadic)
 fit <- with(trade_dyadic,

@@ -32,6 +32,9 @@ with the OLS point estimate, naive standard error, the IPT confidence
 limits, and the permutation p-value for H0:beta = b; see
 \emph{Value} for the exact meaning of each column.
 }
+\details{
+The quantities print() reports, as a data frame.
+}
 \examples{
 data(trade_dyadic)
 fit <- with(trade_dyadic,

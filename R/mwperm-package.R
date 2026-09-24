@@ -1,3 +1,15 @@
+## ============================================================================
+## R/mwperm-package.R -- package-level documentation and NAMESPACE imports
+##
+## Purpose. The ?mwperm-package page (the two group constructions and their
+##   assumptions) and the @importFrom directives that generate NAMESPACE.
+## Paper. Guo, Toulis & Wang (2026) as a whole; the revised paper's
+##   Assumption 2 for the sign-flip group.
+## Pipeline. mwperm() -> dispatch -> design worker -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods; see ARCHITECTURE.md at the repository root.
+## ============================================================================
+
 #' mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel
 #' Regression
 #'

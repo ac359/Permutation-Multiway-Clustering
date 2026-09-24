@@ -76,6 +76,11 @@ per-dimension cluster counts, N, the attainable p-value resolution
 \code{1/(K+1)}, the null value, the p-value, and the
 reject/do-not-reject decision at \code{alpha}.
 }
+\details{
+Draws only stored fields: the Procedure 1 result, the set of step
+3, and the per-repetition p-values of Remark 1 (Guo, Toulis and Wang
+2026). The test is never re-run.
+}
 \examples{
 data(trade_dyadic)
 fit <- with(trade_dyadic,

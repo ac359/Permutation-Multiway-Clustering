@@ -1,3 +1,13 @@
+## ============================================================================
+## R/data.R -- documentation of the bundled synthetic data sets
+##
+## Purpose. roxygen for trade_dyadic (a complete 40 x 40 dyadic array, two-way
+##   random effects, GTW Eq. 8) and trade_panel (a 22 x 22 x 6 panel with a
+##   common time trend, condition InvB). No code; data-raw/make_data.R makes
+##   both (the JSS draft, Section 4).
+## Pipeline. Not part of it: example inputs for every stage.
+## ============================================================================
+##
 ## Documentation for the bundled synthetic datasets. Both are generated
 ## reproducibly by data-raw/make_data.R (seeded; no external inputs).
 

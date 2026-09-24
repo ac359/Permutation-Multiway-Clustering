@@ -43,6 +43,10 @@ the formula is an error naming the term, never a silently dropped row --
 dropping a row would turn a complete array into an incomplete one without
 notice. Subset \code{data} to complete cases first.
 }
+\details{
+Argument assembly only: the test is the one mwperm() selects for
+the data.
+}
 \examples{
 data(trade_dyadic)
 fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
