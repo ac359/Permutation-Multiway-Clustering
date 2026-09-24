@@ -80,20 +80,20 @@ file is listed in `.Rbuildignore`, so it is not in the tarball.
 - [x] `test-draft-replication.R` (+ gravity-gated Sec. 7)
 
 ### Phase 4: Comments
-- [ ] Header comment on every `R/` file
-- [ ] roxygen block (with `@details` step citation) on every function
-- [ ] Inline method comments
-- [ ] `ARCHITECTURE.md` at root (+ `.Rbuildignore`)
-- [ ] Behavior-neutrality proof: `deparse(parse(keep.source = FALSE))` identical per file; roxygenise leaves NAMESPACE unchanged
+- [x] Header comment on every `R/` file
+- [x] roxygen block (with `@details` step citation) on every function
+- [x] Inline method comments
+- [x] `ARCHITECTURE.md` at root (+ `.Rbuildignore`)
+- [x] Behavior-neutrality proof: `deparse(parse(keep.source = FALSE))` identical per file; roxygenise leaves NAMESPACE unchanged
 
 ### Phase 5: Verify and report
-- [ ] `test_local()` passes with slow tests skipped
-- [ ] ... and with `MWPERM_SLOW_TESTS=true`
-- [ ] `R CMD check --as-cran`: no new ERROR/WARNING/NOTE
-- [ ] Coverage after
-- [ ] Mutation check (a)-(e), throwaway branch deleted
-- [ ] Commits: tests and comments separate, small
-- [ ] Final report
+- [x] `test_local()` passes with slow tests skipped
+- [x] ... and with `MWPERM_SLOW_TESTS=true`
+- [x] `R CMD check --as-cran`: no new ERROR/WARNING/NOTE
+- [x] Coverage after
+- [x] Mutation check (a)-(e), throwaway branch deleted
+- [x] Commits: tests and comments separate, small
+- [x] Final report
 
 ---
 
@@ -147,37 +147,36 @@ The uncovered lines that carry the method are:
 Legend. **T:** a testthat file in `tests/testthat/` (the quoted phrase is the
 test's name). **B:** a base-R file in `tests/`, with `ll/` for
 `lower-level-tests/` and § for the file's own numbered section. Locations are
-`file:first line` of the implementing code in the final tree (refreshed
-after Phase 4). A row with no test gives its reason.
+`file:line` in the final tree, commit `5ef3343` (after the comment pass). A row with no test gives its reason.
 
 ### IPT paper (Guo, Toulis & Wang 2026)
 
 | # | Paper object | Implementation | Tests |
 |---|---|---|---|
-| P1 | Eq. (7), stacking cell (i,j) in row (i-1)n+j | front ends build y, D, X (`.make_X` adds the intercept); cells are keyed by `.cell_code` (mixed radix, first coordinate least significant), **not** by lexicographic row order. This is immaterial because the statistic is invariant to a common reordering of the rows. | T: procedure1-reference "the lexicographic stacking of Eq. (7) is immaterial"; B: test-equivariance §1, test-panel §4, test-threeway §3 |
+| P1 | Eq. (7), stacking cell (i,j) in row (i-1)n+j | front ends build y, D, X (`.make_X`, engine.R:1230, adds the intercept); cells are keyed by `.cell_code` (core.R:101) (mixed radix, first coordinate least significant), **not** by lexicographic row order. This is immaterial because the statistic is invariant to a common reordering of the rows. | T: procedure1-reference "the lexicographic stacking of Eq. (7) is immaterial"; B: test-equivariance §1, test-panel §4, test-threeway §3 |
 | P2 | Assumption 1 (double exchangeability) | an assumption, not code; stated in `?mwperm_dyadic` | T: montecarlo t(3), Cauchy, Moulton (size under GTW Eq. 8 errors) |
-| P3 | Eq. (9): G = {(pi_k, sigma_k)}, paired by k | `mwperm_dyadic()` perm_builder pairs `Grow[[k]]` with `Gcol[[k]]`; `.build_obs_perms()` | T: procedure1-reference (all), designs; B: ll/test-obsperms §1 |
-| P4 | y_{pi,sigma}: entry (i,j) is y_{pi(i) sigma(j)} | `.build_obs_perms()` (gather = `match()` or position table on the mapped cell code) | T: procedure1-reference "the package builds y_{pi_k, sigma_k} as GTW define it" |
-| P5 | Proc. 1 step 1: V_k is an orthonormal basis of col([X, X_k])^perp | `.ipt_prepare()`: residualizes D on [X, X_k] with an eigen pseudo-inverse of the 2p x 2p Gram matrix, cut at 1e-14 (the rank, not 2p) | T: procedure1-reference (a_k, b_k to 1e-8; row/col FE rank deficiency), designs (panel time FE); B: ll/test-projection §1-4 |
-| P6 | a_k = norm(D' V_k V_k' y), b_k = norm(D' V_k V_k' y_k) | `.ipt_prepare()` caches u = Dr'y, v = Dr'y_k, M = Dr'Dr, W = Dr'D_k; `.ipt_eval()` evaluates a = abs(u - M b), b = abs(v - W b), or the norms when d > 1 | T: procedure1-reference; B: ll/test-projection §3 |
-| P7 | Eq. (10): minorized p-value, min over j = 1..K, indicator <= | `.ipt_eval()` `(1 + sum(b >= amin)) / Kp1`; `.pval_matrix()` (vectorised) | T: procedure1-reference (identical p-values; "min over the K non-identity elements"), pvalue-properties (grid, ties); B: ll/test-pvalue §1-5 |
-| P8 | testing beta = b means running Proc. 1 on y - D b | the affine form in `.ipt_eval()`; `beta0` in `.ipt_engine()` | T: procedure1-reference "a non-zero null ...", invariances "testing beta = b ..."; B: test-equivariance §3 |
-| P9 | Proc. 1 step 3: CI = {b : pval(b) > alpha} | `.invert_ci()` (exact via `.ci_breakpoints()` + `.exact_ci_set()`; grid; bisection), `.invert_region()` when d > 1 | T: confidence-sets (duality at every end point, grid and bisection versus exact, region); **D10**; B: ll/test-exact-ci, ll/test-invert-ci-grid |
-| P10 | Theorem 1: P(pval <= alpha given X, D) <= alpha, for p < N/2 | engine guard `N <= 2p` stops | T: validation "p >= N/2 is refused", montecarlo (ECDF at every atom) |
-| P11 | Remark 1: median over repetitions | `.agg_pvals()`, `.row_median()`; `pvalue` in `.ipt_engine()` | T: pvalue-properties (median, odd and even; median2); B: ll/test-aggregate |
-| P12 | Algorithm 1 | `build_perm_set()` | T: algorithm1 (all); **D1, D2**; B: ll/test-permset |
+| P3 | Eq. (9): G = {(pi_k, sigma_k)}, paired by k | `mwperm_dyadic()` perm_builder (dyadic.R:255) pairs `Grow[[k]]` with `Gcol[[k]]`; `.build_obs_perms()` (core.R:570) | T: procedure1-reference (all), designs; B: ll/test-obsperms §1 |
+| P4 | y_{pi,sigma}: entry (i,j) is y_{pi(i) sigma(j)} | `.build_obs_perms()` (core.R:570; gather = `match()` or position table on the mapped cell code) | T: procedure1-reference "the package builds y_{pi_k, sigma_k} as GTW define it" |
+| P5 | Proc. 1 step 1: V_k is an orthonormal basis of col([X, X_k])^perp | `.ipt_prepare()` (core.R:297; the eigen pseudo-inverse at core.R:377): residualizes D on [X, X_k], cut at 1e-14 (the rank, not 2p) | T: procedure1-reference (a_k, b_k to 1e-8; row/col FE rank deficiency), designs (panel time FE); B: ll/test-projection §1-4 |
+| P6 | a_k = norm(D' V_k V_k' y), b_k = norm(D' V_k V_k' y_k) | `.ipt_prepare()` (core.R:297) caches u = Dr'y, v = Dr'y_k, M = Dr'Dr, W = Dr'D_k; `.ipt_eval()` (core.R:465) evaluates a = abs(u - M b), b = abs(v - W b), or the norms when d > 1 | T: procedure1-reference; B: ll/test-projection §3 |
+| P7 | Eq. (10): minorized p-value, min over j = 1..K, indicator <= | `.ipt_eval()` `(1 + sum(b >= amin)) / Kp1` (core.R:494); `.pval_matrix()` (engine.R:661, vectorised) | T: procedure1-reference (identical p-values; "min over the K non-identity elements"), pvalue-properties (grid, ties); B: ll/test-pvalue §1-5 |
+| P8 | testing beta = b means running Proc. 1 on y - D b | the affine form in `.ipt_eval()` (core.R:465); `beta0` in `.ipt_engine()` (engine.R:204) | T: procedure1-reference "a non-zero null ...", invariances "testing beta = b ..."; B: test-equivariance §3 |
+| P9 | Proc. 1 step 3: CI = {b : pval(b) > alpha} | `.invert_ci()` (engine.R:873; exact via `.ci_breakpoints()` engine.R:719 + `.exact_ci_set()` engine.R:775; grid; bisection), `.invert_region()` (engine.R:1063) when d > 1 | T: confidence-sets (duality at every end point, grid and bisection versus exact, region); **D10**; B: ll/test-exact-ci, ll/test-invert-ci-grid |
+| P10 | Theorem 1: P(pval <= alpha given X, D) <= alpha, for p < N/2 | engine guard `N <= 2p` stops (engine.R:261) | T: validation "p >= N/2 is refused", montecarlo (ECDF at every atom) |
+| P11 | Remark 1: median over repetitions | `.agg_pvals()` (engine.R:561), `.row_median()`; `pvalue` (engine.R:381) | T: pvalue-properties (median, odd and even; median2); B: ll/test-aggregate |
+| P12 | Algorithm 1 | `build_perm_set()` (perm_set.R:93; psi_k at perm_set.R:148) | T: algorithm1 (all); **D1, D2**; B: ll/test-permset |
 | P13 | Proposition 2 (closure) | `build_perm_set()`: the elements are the powers of one generator | T: algorithm1 "closed under composition ...", "psi_k is psi_1 composed ..."; B: ll/test-permset §2, ll/test-obsperms (observation level) |
-| P14 | Definition 1 (fully observed, disjoint blocks) | `find_bicliques()` | T: bicliques "blocks are fully observed, disjoint ..."; B: test-missing §1 |
+| P14 | Definition 1 (fully observed, disjoint blocks) | `find_bicliques()` (missing.R:594) | T: bicliques "blocks are fully observed, disjoint ..."; B: test-missing §1 |
 | P15 | Assumption 4 (mask independent of errors) | an assumption; `.choose_common_levels()` reads the mask only | T: montecarlo MCAR |
-| P16 | Procedure 2, steps 1-4 | `mwperm_missing()`, `.build_obs_perms_blocks()` | T: designs "missing: Procedure 2 on the pooled blocks ...", "... never mixed"; B: test-missing, ll/test-obsperms §5 |
+| P16 | Procedure 2, steps 1-4 | `mwperm_missing()` (missing.R:152), `.build_obs_perms_blocks()` (missing.R:352) | T: designs "missing: Procedure 2 on the pooled blocks ...", "... never mixed"; B: test-missing, ll/test-obsperms §5 |
 | P17 | Theorem 4 | -- | T: montecarlo MCAR (ECDF, conditional on one mask) |
-| P18 | Algorithm 2 (App. A) | `find_bicliques()` (`.grow_biclique()` greedy default, `.max_biclique_exact()` branch and bound); documented deviations below | T: bicliques (brute-force maximum, validity, fallback) |
-| P19 | Sec. 6.1, InvA, three-way | `mwperm_threeway()` | T: designs three-way; B: test-threeway |
-| P20 | Sec. 6.2, InvB, panel | `mwperm_panel()` (time's group is NULL, i.e. held fixed) | T: designs panel (x2), invariances trend, montecarlo panel and negative control; B: test-panel |
-| P21 | Sec. 6.3, layout | `mwperm_layout()`, `.build_obs_perms_layout()`, `.within_cell_slot()`, `.downsample_to_L0()` | T: designs layout (x3); **D7**; B: test-layout |
-| P22 | Sec. 6.4, irregular | `mwperm_irregular()`, `.irregular_design()` | T: designs irregular, draft-replication Sec. 6.5; B: test-irregular |
-| P23 | Sec. 9 (open): incomplete panels | `mwperm_panel_missing()`, `.panel_missing_design()`, `.choose_common_levels()` | T: designs incomplete panel; B: test-panel-missing |
-| P24 | revised Assumption 2 (double sign symmetry) and its Section E procedure | `mwperm_dyadic_het()`, `build_flip_set()`, `.build_obs_flips()`, `.apply_op()` | B: test-signflip (against the authors' port); T: pvalue-properties (grid 2^(n_flip-1)), dispatch, reproducibility. **Gap:** Section E is not available, so fidelity to the paper's own procedure is unchecked |
+| P18 | Algorithm 2 (App. A) | `find_bicliques()` (missing.R:594; `.grow_biclique()` missing.R:723 greedy default, `.max_biclique_exact()` missing.R:849 branch and bound); documented deviations below | T: bicliques (brute-force maximum, validity, fallback) |
+| P19 | Sec. 6.1, InvA, three-way | `mwperm_threeway()` (threeway.R:91) | T: designs three-way; B: test-threeway |
+| P20 | Sec. 6.2, InvB, panel | `mwperm_panel()` (panel.R:120; perm_builder panel.R:164, time's group is NULL, i.e. held fixed) | T: designs panel (x2), invariances trend, montecarlo panel and negative control; B: test-panel |
+| P21 | Sec. 6.3, layout | `mwperm_layout()` (layout.R:146), `.build_obs_perms_layout()` (layout.R:290), `.within_cell_slot()` (core.R:167), `.downsample_to_L0()` (layout.R:265) | T: designs layout (x3); **D7**; B: test-layout |
+| P22 | Sec. 6.4, irregular | `mwperm_irregular()` (irregular.R:192), `.irregular_design()` (irregular.R:363) | T: designs irregular, draft-replication Sec. 6.5; B: test-irregular |
+| P23 | Sec. 9 (open): incomplete panels | `mwperm_panel_missing()` (panel_missing.R:186), `.panel_missing_design()` (panel_missing.R:387), `.choose_common_levels()` (panel_missing.R:336) | T: designs incomplete panel; B: test-panel-missing |
+| P24 | revised Assumption 2 (double sign symmetry) and its Section E procedure | `mwperm_dyadic_het()` (signflip.R:523), `build_flip_set()` (signflip.R:170), `.build_obs_flips()` (signflip.R:318), `.apply_op()` (core.R:217) | B: test-signflip (against the authors' port); T: pvalue-properties (grid 2^(n_flip-1)), dispatch, reproducibility. **Gap:** Section E is not available, so fidelity to the paper's own procedure is unchecked |
 | P25 | Theorems 2, 3, 5 and Proposition 1 (power; asymptotic) | -- | **No test, by nature:** asymptotic statements with no finite-sample assertion. T: montecarlo "power ..." is a sanity check only |
 
 ### RPT paper (Wen, Wang & Wang 2025)
@@ -194,9 +193,9 @@ after Phase 4). A row with no test gives its reason.
 | J1 | Sec. 2.2, Eq. vk: rank form; eigen cut 1e-14 | `.ipt_prepare()` | T: procedure1-reference rank-deficient case, designs panel time FE |
 | J2 | Sec. 2.3, Eq. aggset: one aggregation rule for the p-value and the set | `.agg_pvals()`, used in `.ipt_engine()` and on every inversion path | T: confidence-sets "the reported p-value is the one the set inverts"; B: ll/test-aggregate |
 | J3 | Sec. 2.4, Eq. breaks; closure convention | `.ci_breakpoints()`, `.exact_ci_set()` | T: confidence-sets (end points are roots; duality); **D10** |
-| J4 | Sec. 2.5: resolution 1/(K+1) <= alpha; median2 doubles the floor; default K = min - 1, capped at 199; an even-rep median can leave the grid | `.default_K()`, `p_floor` in `.ipt_engine()`, the notes | T: confidence-sets "resolution guard", pvalue-properties "median ..."; B: test-validation §5 |
+| J4 | Sec. 2.5: resolution 1/(K+1) <= alpha; median2 doubles the floor; default K = min - 1, capped at 199; an even-rep median can leave the grid | `.default_K()` (engine.R:1262), `p_floor` in `.ipt_engine()`, the notes | T: confidence-sets "resolution guard", pvalue-properties "median ..."; B: test-validation §5 |
 | J5 | Sec. 2.7: extensions | front ends | T: designs |
-| J6 | Sec. 3.2, Table 1: dispatch | `mwperm_check()`, `mwperm()` | T: dispatch (one test per row); B: test-main §4 |
+| J6 | Sec. 3.2, Table 1: dispatch | `mwperm_check()` (unified.R:240), `mwperm()` (unified.R:1046) | T: dispatch (one test per row); B: test-main §4 |
 | J7 | Sec. 3.2, Table 2: negative control | -- | T: montecarlo "negative control" |
 | J8 | Sec. 3.2: forcing threeway warns on a time-like index | `mwperm_check()` | B: test-main §3c |
 | J9 | Sec. 3.3: `mwperm_check()` printed output | `mwperm_check()`, `print.mwperm_design()` | T: draft-replication Sec. 3.3, dispatch snapshots |
@@ -204,7 +203,7 @@ after Phase 4). A row with no test gives its reason.
 | J11 | Sec. 3.5: slots and the six methods | the `structure()` in `.ipt_engine()`, methods.R, formula.R | T: s3-methods; B: test-methods |
 | J12 | Sec. 3.6: `build_perm_set()`/`build_flip_set()` printed output; the prose | `build_perm_set()`, `build_flip_set()` | T: draft-replication Sec. 3.6, algorithm1; **D3** |
 | J13 | Sec. 3.7: conf_set, ci_method, empty set, root budget, `confint()` error | `.ipt_engine()`, `.invert_ci()`, `confint.mwperm()` | T: confidence-sets, draft-replication Sec. 3.7; **D6**; B: test-validation §5-6 |
-| J14 | Sec. 3.8: seed + r - 1; rep_seed x stride + offset; RNG restored; parallel identical to serial | `.ipt_engine()` (`seeds`), `.sub_seed()`, `.plapply()`, `.save_seed()`/`.restore_seed()` | T: reproducibility |
+| J14 | Sec. 3.8: seed + r - 1; rep_seed x stride + offset; RNG restored; parallel identical to serial | `.ipt_engine()` (`seeds`, engine.R:330), `.sub_seed()` (engine.R:1436), `.plapply()` (engine.R:56), `.save_seed()`/`.restore_seed()` (perm_set.R:165) | T: reproducibility |
 | J15 | Sec. 3.9: biclique finder | `find_bicliques()` | T: bicliques |
 | J16 | Sec. 4: the synthetic data sets | data/, data-raw/ | T: draft-replication Sec. 4 |
 | J17 | Sec. 5.1: Moulton design (Table 3) | -- | T: montecarlo Moulton. **Table 3's numbers are not asserted:** they are not reproducible from the printed snippet (prior audit, finding P3) |
@@ -371,7 +370,10 @@ median can leave the grid.)
   and `.irregular_design()`, or a `keep_groups = TRUE` debug field. The
   tests currently rebuild the groups from the documented seed scheme
   (`seed + r - 1`, `rep_seed * stride + j`), which duplicates that scheme in
-  `helper-reference.R`.
+  `helper-reference.R`. The mutation check shows the cost. A
+  fresh (pi, sigma) per panel period (mutation d) was caught only by the two
+  p-value comparisons, because the structural test "one (pi, sigma) in every
+  period" had to build its own group.
 * **F-2.** Optionally keep the per-repetition cross products (`u, v, M, W`)
   on the fit, e.g. `keep_prep = TRUE`. The reference comparison could then
   use the fit itself, not `.ipt_prepare()` on a rebuilt group. This would
@@ -386,3 +388,188 @@ median can leave the grid.)
   (D7), to quantify what the documentation now says qualitatively.
 * **F-6.** Replicate draft Sec. 7.4 once the CEPII database can be supplied
   locally.
+
+---
+
+## Final report (2026-09-24)
+
+Written for a reader who saw none of the work. The evidence (scripts, logs,
+raw tables) is cached locally under the session's simulation-cache
+directory, so every number can be re-derived without re-running anything.
+
+### What was done
+
+* **Test suite.** A testthat 3e suite, `tests/testthat/`: 13 test files, one
+  helper, two snapshot files, 111 tests. It was added *alongside* the
+  existing base-R suite (16 top-level scripts plus 8 lower-level ones),
+  which is untouched and still runs.
+  * The heart of it is `helper-reference.R`: a deliberately naive
+    Procedure 1 (a QR residual maker with numerical rank, then a_k, b_k
+    and Eq. 10), written from the paper.
+  * The package's statistics are compared with it on the same group, and
+    so is every per-repetition p-value, the group being rebuilt from the
+    seed. This covers the dyadic, three-way, panel, layout, missing,
+    incomplete-panel and irregular designs, d > 1, non-zero nulls, and
+    rank-deficient [X | X_k] (intercept, row and column fixed effects,
+    time fixed effects).
+* **Comments.**
+  * Every `R/` file opens with a header: its purpose, its paper sections,
+    and its pipeline stage.
+  * All 84 functions carry an `@details` line citing the paper step they
+    implement, or saying they are not one.
+  * Inline comments name the paper symbol on every line that carries the
+    method.
+  * `ARCHITECTURE.md` gives the pipeline, a notation table and a
+    file-to-paper map.
+  * The pass fixed four stale comments and one wrong help sentence
+    (`?mwperm_check`, on `design = "dyadic_het"`).
+* **Behavior-neutrality.** Both checks hold:
+  * `deparse(parse(f, keep.source = FALSE))` is `identical()` before and
+    after for all 17 files;
+  * roxygen2 7.3.2 regenerates a `NAMESPACE` identical to the shipped one,
+    both before and after.
+
+  The only `man/` change is the new `@details` paragraph on the exported
+  pages (hand-applied exactly as roxygen appends it; `checkRd()` clean),
+  plus the one corrected sentence.
+
+### Results at a glance
+
+| Check | Result |
+|---|---|
+| base-R suite (16 top-level files) | 16/16 pass, before and after (about 60 s) |
+| testthat, default (`NOT_CRAN=true`) | 111 tests, 0 failed, 17 skipped (7 slow, 9 discrepancy, 1 CEPII), about 30 s |
+| testthat, `MWPERM_SLOW_TESTS=true` | 111 tests, 0 failed, 10 skipped (9 discrepancy, 1 CEPII), 185 s wall with other jobs running (the Monte Carlo alone: 140 s) |
+| `R CMD check --as-cran` | 0 ERROR, 0 WARNING, 3 NOTEs, the same three as the baseline (new submission; clock; HTML-manual tidy). `testthat.R` runs in 26 s under check |
+| coverage (covr, both suites under check conditions) | 94.5% -> 95.3% |
+
+Monte Carlo (Theorem 1). One repetition per test, which is what the theorem
+covers; the empirical CDF is checked at every atom j/(K+1) against
+atom + 3 SE. Every design passes at every atom.
+
+| Design | Sims | Size at 0.05 (or at the 0.04 atom) |
+|---|---:|---|
+| dyadic, two-way random effects, t_3 errors | 1000 | 0.033 |
+| dyadic, two-way random effects, Cauchy errors | 1000 | 0.035 |
+| draft Sec. 5.1 Moulton design (node-level d) | 1000 | 0.031 (atom 0.04; naive OLS rejects > 20% there, as asserted) |
+| MCAR mask, Procedure 2, K = 19 | 1000 | 0.044 |
+| panel with a random-walk trend and AR(1) errors | 1000 | 0.045 |
+
+Negative control (draft Sec. 3.2), 200 simulations at alpha = 0.05: the
+three-way test rejects 0.690 and the panel test 0.060 (its bound is
+0.096). Power at beta = 0.6 is 1.000.
+
+### Coverage per file (covr lines; before = base-R suite only, after = both suites)
+
+| File | before | after |
+|---|---:|---:|
+| R/core.R | 95.2 | 95.2 |
+| R/dyadic.R | 100.0 | 100.0 |
+| R/engine.R | 91.7 | 93.0 |
+| R/formula.R | 100.0 | 100.0 |
+| R/irregular.R | 92.7 | 92.7 |
+| R/layout.R | 100.0 | 100.0 |
+| R/methods.R | 100.0 | 100.0 |
+| R/missing.R | 95.7 | 97.3 |
+| R/panel.R | 100.0 | 100.0 |
+| R/panel_missing.R | 97.9 | 97.9 |
+| R/perm_set.R | 100.0 | 100.0 |
+| R/plot.R | 97.7 | 97.7 |
+| R/signflip.R | 91.0 | 91.0 |
+| R/threeway.R | 100.0 | 100.0 |
+| R/unified.R | 91.3 | 92.9 |
+| **total** | **94.5** | **95.3** |
+
+The "after" figure runs under R CMD check conditions, where the slow and
+snapshot tests are skipped. The coverable-line counts are identical before
+and after, as they must be if the comment pass changed no code.
+
+### Traceability gaps
+
+See *Gaps (with reasons)* above. In short:
+* asymptotic power theorems (untestable in finite samples);
+* the revised paper's Section E (not available);
+* the disconnected-set note and the island guard (no natural fixture;
+  seam F-3);
+* the draft's Table 3 (not reproducible from its snippet);
+* the CEPII panel (data not distributed).
+
+### Discrepancies
+
+None is a code bug, and no finding changes a number. Details and evidence
+are in the *Discrepancy log* above.
+
+| ID | Where | Who should change |
+|---|---|---|
+| D1 | GTW Alg. 1 display, "i mod (K+1)" (0-based reading is not a permutation) | paper |
+| D2 | GTW Alg. 1 worked example lists the inverse map (same set) | paper |
+| D3 | draft Sec. 3.6 prose (the seed-1 relabelling is not the identity; the orbits are {1,3,5}, {2,4,6}) | draft |
+| D4 | draft Sec. 6.7 sign-flip print header | draft (0.4.2 text) |
+| D5 | draft Secs. 2.7, 3.2, 6.5: `trim = "levels"` and the old irregular note | draft (0.4.2 text) |
+| D6 | draft Secs. 2.7, 3.7, 6.7: default n_flip = 8 (now 6) | draft (0.4.2 text) |
+| D7 | GTW Sec. 6.3 (and the draft): layout validity under a shared zeta_l | paper and draft; the package docs already hedge |
+| D10 | CI end points are closures (documented, conservative) | none needed; any change is numeric and needs sign-off |
+
+The four "known leads" in the task brief were all verified:
+* Algorithm 1's mod: D1, and the example's inverse order: D2;
+* draft Sec. 3.6: D3. `block_size` is K + 1, the block length in
+  relabelled coordinates and the group order;
+* rank instead of N - 2p: the code uses the numerical rank, confirmed
+  against the reference on rank-deficient designs;
+* the even-rep median: the reported value can leave the grid. The draft
+  (Sec. 2.5) and `print()` both say so, so this is not a discrepancy.
+
+### Mutation check
+
+| Mutation | testthat tests failing | base-R files failing | caught by (testthat, examples) |
+|---|---:|---|---|
+| (a) `<=` becomes `<` in Eq. (10) (`.ipt_eval()` and `.pval_matrix()`) | 3 | test-golden.R, test-irregular.R, test-lower-level.R, test-validation.R | test-draft-replication.R :: Sec. 6.5: the irregular example's numbers; test-pvalue-properties.R :: ties count toward the p-value (<=, not <); test-pvalue-properties.R :: D in col(X): p = 1 exactly, as Eq. (10) gives (and a warning) |
+| (b) min_j a_j becomes a_1 (both places) | 15 | test-dyadic.R, test-golden.R, test-lower-level.R, test-panel.R, test-readme.R, test-signflip.R | test-designs.R :: three-way: independent groups per dimension, applied jointly; test-designs.R :: panel: p-values match Procedure 1 with period dummies in X; test-draft-replication.R :: Sec. 3.4: the first example prints as in the draft; +12 more |
+| (c) project out col(X) only, not col([X, X_k]) | 19 | test-dyadic.R, test-equivariance.R, test-golden.R, test-lower-level.R, test-panel.R, test-readme.R, test-signflip.R | test-designs.R :: three-way: independent groups per dimension, applied jointly; test-designs.R :: panel: p-values match Procedure 1 with period dummies in X; test-designs.R :: irregular (Section 6.4): each repetition cuts cells to L0 at random; +16 more |
+| (d) a fresh (pi, sigma) in every panel period | 2 | test-golden.R, test-panel.R, test-readme.R | test-designs.R :: panel: p-values match Procedure 1 with period dummies in X; test-draft-replication.R :: Sec. 6.2: the panel fit, with and without time effects |
+| (e) K independent random permutations in place of Algorithm 1's cyclic group | 17 | test-dyadic.R, test-golden.R, test-lower-level.R, test-panel.R, test-readme.R, test-signflip.R | test-algorithm1.R :: closed under composition and inverses (Proposition 2); test-algorithm1.R :: psi_k is psi_1 composed with itself k times; test-algorithm1.R :: every non-identity element moves (K+1) floor(n/(K+1)) indices; +14 more |
+
+Each mutation was applied alone to a throwaway worktree on branch `mutation-tmp`. The testthat suite ran from source, and the base-R suite against a private install of the mutant. The file was restored before the next mutation. The worktree and the branch were then deleted. Every mutation is caught by both suites.
+
+Two notes on the pattern:
+
+* Mutation (a) is caught only where ties are real (y = 0, a cell-constant d, D in col(X), and the irregular example, whose cell-constant d gives exact ties). The reference comparisons avoid near-ties on purpose.
+* Mutation (d) is caught by the two p-value comparisons with the shared-(pi, sigma) reference, and by the golden and panel base files, but not by the structural test. That test cannot reach the front end's own group; see F-1.
+
+### Runtimes
+
+About 30 s for the default testthat suite; 140 s for the slow Monte Carlo
+tests alone; about 60 s for the base-R suite; 155 s for
+`R CMD check --as-cran` (all tests included).
+
+### Decisions made without the maintainer (please review)
+
+1. **A new branch, and a snapshot commit of your uncommitted 0.4.2 work.**
+   The brief asked for small commits on a new branch. The 0.4.2 changes
+   sat uncommitted in the same files, so they were committed unchanged as
+   `1b62733` ("Snapshot: ...") on `test-suite-paper-fidelity`;
+   `release/0.4.1` is untouched.
+   * To undo while keeping everything uncommitted:
+     `git switch test-suite-paper-fidelity && git reset --soft 4d166c9`.
+   * Nothing was pushed.
+2. **testthat is alongside, not instead.** The base-R suite was kept rather
+   than converted: converting means deleting files this session did not
+   create.
+3. **gravity is not declared.** The Sec. 7 test holds the package name in a
+   variable, so R CMD check does not demand it in Suggests (which would make
+   every CI leg install it). If you prefer it declared, add
+   `gravity` to Suggests and use the literal name.
+4. **Sources.**
+   * The JSS draft read was the 2026-09-18 build, outside the repository,
+     located from the session notes. Its section numbering differs from
+     the brief's by one after Sec. 6.4.
+   * The RPT paper was read from page images, since its text layer is
+     letter-shifted.
+5. **Tools.** devtools is not installed. `testthat::test_local()`,
+   `R CMD check --as-cran` and `roxygen2::roxygenise()` stood in for it.
+   covr and roxygen2 7.3.2 came from an existing local tool library, so
+   nothing was downloaded.
+
+### Follow-ups
+
+See *Follow-ups (testing seams, not implemented)* above: F-1 to F-6.
