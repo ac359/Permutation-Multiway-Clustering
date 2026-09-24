@@ -15,8 +15,10 @@
 ##     looks informative.
 ##
 ## Argument checks that belong to a single design -- `L0`, `rep`, `permute`,
-## the one-observation-per-cell rules -- are in that design's own file. See
-## tests/README.md.
+## the one-observation-per-cell rules -- are in that design's own file. The
+## data-side checks (lengths, `N > 2p`, the vector, column-name and formula
+## interfaces, cluster-id types) are in tests/testthat/test-data-validation.R.
+## See tests/README.md.
 library(mwperm)
 source(if (file.exists("helpers/assertions.R")) "helpers/assertions.R"
        else file.path("tests", "helpers", "assertions.R"))

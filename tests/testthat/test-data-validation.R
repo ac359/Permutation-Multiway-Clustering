@@ -1,10 +1,11 @@
-## Input validation, and the equivalence of the calling interfaces.
+## Data validation, and the equivalence of the calling interfaces.
 ##
 ## Theorem 1 of Guo, Toulis & Wang (2026) is stated for p < N/2 (Procedure 1
 ## needs an (N - 2p)-column V_k); the engine refuses N <= 2p. Every other
 ## check here guards the data contract: bad input must fail early, naming the
-## argument, rather than inside a factorization. tests/test-validation.R
-## (base R) covers the scalar-argument checks; this file covers the data.
+## argument, rather than inside a factorization. The base-R file
+## tests/test-validation.R covers the scalar-argument checks; this file
+## covers the data. (It was named test-validation.R too until 2026-09-24.)
 
 dy <- make_dyadic(8, 8, seed = 121)
 
