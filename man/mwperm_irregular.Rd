@@ -179,6 +179,12 @@ group, and the reported p-value and confidence set aggregate over both (see
 paper's Appendix B used 100 repetitions; the package default is
 \code{n_reps = 500}, and a final run is worth 1000 (runtime is linear in
 \code{n_reps}).
+
+Implements Section 6.4 of Guo, Toulis and Wang (2026). Step (i):
+the mask \verb{M_ij = 1\{ell_ij >= L0\}}, Algorithm 2, and a random cut of every
+retained cell to L0 observations, redrawn in every repetition. Step (ii):
+Procedure 2 with the within-cell position held fixed. The median over
+repetitions follows their Remark 1.
 }
 \section{Assumptions}{
 

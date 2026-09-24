@@ -1,3 +1,19 @@
+## ============================================================================
+## R/threeway.R -- the three-way design: Section 6.1, condition InvA
+##
+## Purpose. mwperm_threeway() validates a complete m x n x ell array and
+##   hands the engine a builder of three independent Algorithm 1 groups
+##   applied jointly.
+## Paper. Guo, Toulis & Wang (2026), Section 6.1: model (12), condition
+##   InvA (full three-way exchangeability, e.g. three-way random effects);
+##   step (i) Algorithm 1 three times, step (ii) Procedure 1. Not for a time
+##   index with autocorrelation -- that is Section 6.2 (panel.R), and
+##   mwperm() never picks this design unless asked.
+## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test under three-way clustering
 #'
 #' Finite-sample valid test of H0: beta = b in the three-way model
@@ -19,6 +35,9 @@
 #' autocorrelation, use [mwperm_panel()] instead. The data must form a
 #' complete balanced array.
 #'
+#' @details Implements Section 6.1 of Guo, Toulis and Wang (2026): Algorithm 1
+#'   applied independently to each of the three dimensions, the elements
+#'   applied jointly (condition InvA), then Procedure 1.
 #' @inheritParams mwperm_dyadic
 #' @param id1,id2,id3 Cluster identifiers for the three dimensions.
 #' @param K Number of non-identity permutations; defaults to `min(m, n, ell) -
@@ -102,6 +121,8 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
   ## sub-seeds 1, 2, 3) and applied jointly: full three-way exchangeability
   ## (InvA).
   perm_builder <- function(rep_seed) {
+    ## Section 6.1, step (i): Algorithm 1 applied three times, one group per
+    ## dimension; element k acts as (psi^1_k, psi^2_k, psi^3_k) jointly.
     G1 <- build_perm_set(m,   K, seed = .sub_seed(rep_seed, 1L))
     G2 <- build_perm_set(n,   K, seed = .sub_seed(rep_seed, 2L))
     G3 <- build_perm_set(ell, K, seed = .sub_seed(rep_seed, 3L))

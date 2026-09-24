@@ -1,3 +1,24 @@
+## ============================================================================
+## R/layout.R -- the replicated two-way layout: Section 6.3
+##
+## Purpose. mwperm_layout() orders the replicates inside each (i, j) cell,
+##   optionally balances the cells to L0 replicates, and hands the engine a
+##   builder of independent within-cell groups; .build_obs_perms_layout()
+##   lifts them to observations; .downsample_to_L0() is the balancing draw.
+## Paper. Guo, Toulis & Wang (2026), Section 6.3: step (i) Algorithm 1 on
+##   [ell_ij] for every cell, step (ii) Procedure 1 with the concatenated
+##   group, valid under exchangeability over l within each cell. The L0
+##   threshold is borrowed from Section 6.4 (irregular.R has that procedure).
+## Paper vs code. Section 6.3 also cites eps_ijl = eta_ij + zeta_l + u_ijl
+##   with a zeta_l SHARED across cells as a covered case. With independent
+##   per-cell draws, as step (i) prescribes and this file does, that law is
+##   not invariant (the cells are permuted differently); the roxygen below
+##   says so (discrepancy D7 in TESTING_PLAN.md).
+## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for two-way layouts (within-cell replication)
 #'
 #' Finite-sample valid test of H0: beta = b for a two-way layout
@@ -29,6 +50,10 @@
 #' exchangeable, so validity is preserved while the permutation-group order
 #' becomes the same (`L0`) in every cell.
 #'
+#' @details Implements Section 6.3 of Guo, Toulis and Wang (2026): Algorithm 1
+#'   within every cell over the replicate index, the cell groups concatenated
+#'   as in Procedure 2, then Procedure 1. The `L0` balancing borrows only the
+#'   threshold of their Section 6.4.
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest. Must
 #'   vary within cells (see Details). With a single covariate a confidence
@@ -204,6 +229,9 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   ## relabelling (see .sub_seed). Layouts below that keep their old seeds
   ## exactly.
   seed_stride <- max(1000, ncell + 1)
+  ## Section 6.3, step (i): an Algorithm 1 group over [ell_c] in every cell c,
+  ## all of order K + 1, each from its own sub-seed; step (ii) concatenates
+  ## them (element k applies the k-th element of every cell's group).
   perm_builder <- function(rep_seed) {
     cell_groups <- vector("list", ncell)
     for (c in seq_len(ncell))
@@ -230,6 +258,8 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
 #' Keeps cells with at least `L0` observations and, within each, draws a
 #' uniform random subset of size `L0`. Reproducible via `seed` with the usual
 #' RNG-state hygiene (the global stream is left untouched).
+#' @details Section 6.4, step (i) of GTW (2026): drop ell_ij - L0 observations
+#'   from every retained cell uniformly at random.
 #' @keywords internal
 #' @noRd
 .downsample_to_L0 <- function(cell, ell, L0, seed = NULL) {
@@ -238,6 +268,8 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
     on.exit(.restore_seed(old), add = TRUE)
     set.seed(seed)
   }
+  ## Section 6.4, step (i): keep cells with ell_ij >= L0 and drop ell_ij - L0
+  ## observations from each, uniformly at random.
   dense <- which(ell >= L0)            # cells big enough to keep
   per_cell <- split(seq_along(cell),
                     cell)   # observation indices grouped by cell
@@ -251,6 +283,8 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
 }
 
 #' Within-cell observation permutations for two-way layouts.
+#' @details Section 6.3, step (ii) of GTW (2026): the group G formed by
+#'   concatenating the per-cell groups (G_ij).
 #' @keywords internal
 #' @noRd
 .build_obs_perms_layout <- function(cell, widx, cell_groups) {
@@ -268,11 +302,13 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   ## by (cell, widx) land exactly in their flat slots).
   pos_flat <- order(cell, widx)
   base <- off[cell]                              # per-observation flat offset
+  ## Observation (c, l) goes to (c, pi^c_k(l)): the same cell, the replicate
+  ## the k-th element of cell c's Algorithm 1 group assigns (Section 6.3).
   obs_perms <- vector("list", Kp1)
   for (k in seq_len(Kp1)) {
     ## flat image vectors of the k-th element, all cells concatenated in order
     Pk <- unlist(lapply(cell_groups, `[[`, k), use.names = FALSE)
-    img <- Pk[base + widx]                       # permuted within-cell indices
+    img <- Pk[base + widx]           # pi^c_k(l): permuted within-cell index
     obs_perms[[k]] <- pos_flat[base + img]  # back to global obs indices
   }
   .assert_bijection(obs_perms, N, "two-way layout (within-cell)")

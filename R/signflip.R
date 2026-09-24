@@ -1,3 +1,22 @@
+## ============================================================================
+## R/signflip.R -- the sign-flip group: Procedure 1 under double sign symmetry
+##
+## Purpose. mwperm_dyadic_het() runs Procedure 1 with a random group of
+##   joint row-and-column sign changes in place of the permutation group;
+##   build_flip_set() draws that group and .build_obs_flips() lifts it to the
+##   observations as signed gathers list(g = NULL, s = +/-1).
+## Paper. The revised Guo, Toulis & Wang paper, Assumption 2 (double sign
+##   symmetry: (eps_ij) =d (s_i t_j eps_ij) | X, D) and its Section E, where
+##   Procedure 1 is unchanged "except for the application of random sign
+##   flips in Step 1". Section E is not public yet, so whether
+##   build_flip_set() matches its construction is an open fidelity check
+##   (see TESTING_PLAN.md); the construction does match the authors'
+##   research script (tests/test-signflip.R).
+## Pipeline. mwperm(design = "dyadic_het") -> [design worker] ->
+##   [permutation construction: sign flips] -> projection engine -> median
+##   aggregation -> test inversion -> S3 methods.
+## ============================================================================
+##
 ## Sign-flip (Rademacher) invariant test for dyadic regression: IPT-Het.
 ##
 ## The permutation designs rest on exchangeability of the error array under
@@ -96,6 +115,9 @@
 #' The same reproducibility caveats apply (same `RNGkind()`; see
 #' [build_perm_set()]).
 #'
+#' @details The sign-flip group under the revised paper's Assumption 2 (double
+#'   sign symmetry), drawn at random as Algorithm 1 draws a random cyclic
+#'   subgroup, with one representative per coset `{s, -s}`.
 #' @param n_row,n_col Integer cluster counts along the two dimensions.
 #' @param n_flip Integer, the number of flip groups, at least 2 and at most
 #'   `n_row + n_col` (so that every group can be reached). Group order is
@@ -220,6 +242,9 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
   ## the remaining n_flip - 1 coordinates run over {+1, -1}. expand.grid()
   ## varies its first factor fastest and starts at the first level, so with
   ## levels c(1, -1) row 1 is all +1: the identity comes first.
+  ## The group: sign vectors s in {-1, +1}^n_flip act on cell (i, j) by
+  ## s[g1(i)] * s[g2(j)]; s and -s act identically, so one representative
+  ## per coset (s_1 = +1) gives the 2^(n_flip - 1) distinct elements.
   S <- cbind(1, as.matrix(expand.grid(rep(list(c(1, -1)), n_flip - 1L),
                                       KEEP.OUT.ATTRS = FALSE)))
   dimnames(S) <- NULL
@@ -248,6 +273,8 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' the condition under which the sign action on the observed cells has
 #' kernel exactly `{s, -s}` (see `build_flip_set()`).
 #'
+#' @details Keeps the sign-flip group's order at 2^(n_flip - 1) on an
+#'   incomplete array (a package extension).
 #' @param n_flip number of groups (nodes).
 #' @param a,b integer vectors of equal length, the edge end points.
 #' @keywords internal
@@ -280,6 +307,8 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' the analogue of `.assert_bijection()` here is that every `s` has length N
 #' and entries in `{-1, +1}`, asserted below.
 #'
+#' @details The sign-flip elements S_k acting on the observations (revised
+#'   Assumption 2 of GTW), the analogue of `.build_obs_perms()`.
 #' @param coords integer matrix N x 2 of dense (row, col) cluster ids.
 #' @param flips a flip set from [build_flip_set()].
 #' @param design short label for the calling design, used in error messages.
@@ -293,7 +322,8 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
   ci <- coords[, 2L]
   ops <- vector("list", length(flips))
   for (k in seq_along(flips)) {
-    s <- flips[[k]]$row[ri] * flips[[k]]$col[ci]   # sign of observation (i, j)
+    s <- flips[[k]]$row[ri] * flips[[k]]$col[ci]   # s_i t_j for obs (i, j):
+                                                   # S_k of Assumption 2
     if (length(s) != N || anyNA(s) || !all(s == 1 | s == -1))
       stop(sprintf(paste0("Internal error: element %d of the %s sign-flip ",
                           "group is not a +1/-1 vector over the %d ",
@@ -428,6 +458,9 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' [mwperm_dyadic()]; the sign-flip element `S_k` simply takes the place of
 #' the permuted copy in the stacked design `[X | S_k X]`.
 #'
+#' @details Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
+#'   sign flips in Step 1 in place of the permutation group, under the revised
+#'   paper's Assumption 2 (double sign symmetry).
 #' @inheritParams mwperm_dyadic
 #' @param n_flip Number of flip groups. The group has order `2^(n_flip - 1)`,
 #'   so the smallest attainable p-value is `1 / 2^(n_flip - 1)` and a 95%

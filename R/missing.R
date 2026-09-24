@@ -1,3 +1,26 @@
+## ============================================================================
+## R/missing.R -- incomplete arrays: Procedure 2 and Algorithm 2
+##
+## Purpose. mwperm_missing() restricts an incomplete two-way array to fully
+##   observed, disjoint blocks and permutes within them;
+##   .build_obs_perms_blocks() builds that block-diagonal group (it is shared
+##   with the incomplete-panel and irregular designs, which add a held-fixed
+##   within-cell slot); find_bicliques() and its helpers find the blocks.
+## Paper. Guo, Toulis & Wang (2026), Section 5: Assumption 4 (mask
+##   independent of the errors given X, D), Definition 1 (fully observed,
+##   disjoint blocks), Procedure 2 (steps 1-4) and Theorem 4 (validity);
+##   Appendix A: Algorithm 2 (biclique search) and Remark 2 (an approximate
+##   maximum keeps validity, only power is lost).
+## Paper vs code (power only, never validity). Algorithm 2 loops "while M has
+##   nonzero entries" and solves the maximum-biclique problem (15) at each
+##   step; find_bicliques() solves (15) greedily by default (exactly, with a
+##   node budget, on request) and stops at the first block below min_block,
+##   since a block too small to permute adds no information.
+## Pipeline. mwperm() -> dispatch -> [design worker] -> [permutation
+##   construction: blocks, then the block-diagonal group] -> projection
+##   engine -> median aggregation -> test inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for dyadic regression with missing cells
 #'
 #' Finite-sample valid test of H0: beta = b in the dyadic model when the
@@ -38,6 +61,11 @@
 #' so when both sides are large enough for `permute = "both"`, the default is
 #' the better choice.
 #'
+#' @details Implements Procedure 2 of Guo, Toulis and Wang (2026): fully
+#'   observed, disjoint blocks (Definition 1; Algorithm 2, via
+#'   find_bicliques()), Algorithm 1 on each block's rows and columns with a
+#'   common K, and Procedure 1 on the stacked retained data with the
+#'   concatenated group. Validity is their Theorem 4 under Assumption 4.
 #' @inheritParams mwperm_dyadic
 #' @param row,col Cluster identities of each observed cell. Cells that are
 #'   absent from the data are treated as missing.
@@ -160,6 +188,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
            rows = c(as.integer(min_block), 1L),
            cols = c(1L, as.integer(min_block)))
   } else min_block
+  ## Procedure 2, step 1: the fully observed blocks F_M = {I_q x J_q}
+  ## (Definition 1), found by Algorithm 2.
   blocks <- find_bicliques(ri, ci, min_block = mb, method = block_method)
   if (length(blocks) == 0L)
     stop(sprintf(paste0("No fully observed block with both sides >= ",
@@ -175,6 +205,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
     both = function(b) min(length(b$rows), length(b$cols)),
     rows = function(b) length(b$rows),
     cols = function(b) length(b$cols))
+  ## Procedure 2 uses ONE K for every block (step 2(b)), so K + 1 cannot
+  ## exceed the smallest permuted block side (Algorithm 1 needs K + 1 <= n).
   min_side <- min(vapply(blocks, side_of, integer(1)))
   K_was_null <- is.null(K)
   K <- .default_K(K, min_side)
@@ -216,6 +248,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
     lrow[sel] <- match(ri[sel], b$rows)
     lcol[sel] <- match(ci[sel], b$cols)
   }
+  ## Procedure 2, step 2(a): subset the data to the blocks. They are then
+  ## stacked (step 4) simply by keeping the retained rows of y, D, X.
   ## Subset every per-observation vector to the retained cells (suffix _k).
   idx <- which(keep)
   yk <- y[idx]
@@ -249,6 +283,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   )
 
   ## --- per-rep observation-permutation builder (block-diagonal) --------------
+  ## Procedure 2, steps 2(b)-3; step 4 is the engine running Procedure 1 on
+  ## the stacked retained data with this group.
   perm_builder <- function(rep_seed)
     .build_obs_perms_blocks(rep_seed, K, blocks,
                             ri = ri_k, ci = ci_k, blk = blk_k,
@@ -279,6 +315,9 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' the group-closure tests exercise the SAME code the fit runs;
 #' behaviour-identical to the old inline version, same seed offsets.
 #'
+#' @details Procedure 2, steps 2(b)-3 of GTW (2026): an Algorithm 1 group on
+#'   each block's rows and columns, concatenated into one group over the
+#'   retained observations.
 #' @param rep_seed rep-level seed (or NULL); block q draws its row/col groups
 #'   at `.sub_seed(rep_seed, 4q - 1)` / `.sub_seed(rep_seed, 4q)` (each drawn
 #'   only when that dimension is permuted, so the `"both"` stream is unchanged
@@ -298,10 +337,11 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   keyed by (row, col, slot) and the slot is HELD FIXED, so cell (i, j) slot
 #'   l maps to cell (pi(i), sigma(j)) slot l -- the structure mwperm_panel()
 #'   uses for time. The caller decides what the slot MEANS, and that decides
-#'   validity: mwperm_panel_missing() passes the period, and
-#'   mwperm_irregular() passes the `rep` level re-indexed over the common
-#'   level set (see `.irregular_design()`), so that slot l is the same period
-#'   in every cell. A within-cell rank would not be.
+#'   validity: mwperm_panel_missing() passes the period (its rank within the
+#'   retained period set S), so slot l is the same period in every cell;
+#'   mwperm_irregular() passes the within-cell rank of each repetition's
+#'   survivors, which is valid only when the replicates are exchangeable
+#'   (see `.irregular_design()`).
 #' @param pos_table `NULL` (default) lets `.use_pos_table()` choose between
 #'   the position-table and `match()` translations from the size of the index
 #'   space; `TRUE`/`FALSE` forces one. Identical output either way (the tests
@@ -358,6 +398,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   seed_stride <- max(1000, 4 * length(blocks) + 1)
   rowG <- vector("list", length(blocks))
   colG <- vector("list", length(blocks))
+  ## Procedure 2, step 2(b): Algorithm 1 on I_q (rows) and on J_q (columns)
+  ## of every block q, all with the same K.
   for (q in seq_along(blocks)) {
     if (do_rows)
       rowG[[q]] <- build_perm_set(length(blocks[[q]]$rows), K,
@@ -397,6 +439,9 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
     pos <- integer(n_cells)                          # 0 = cell not retained
     pos[code + 1L] <- seq_along(code)
   }
+  ## Procedure 2, step 3: element k concatenates the k-th element of every
+  ## block's groups, pi_k = (pi_{k,1} : ... : pi_{k,Q}); each retained cell
+  ## (i, j) of block q goes to (pi_{k,q}(i), sigma_{k,q}(j)), inside block q.
   ops <- vector("list",
                 Kp1)          # one observation gather-vector per element
   for (k in seq_len(Kp1)) {
@@ -505,6 +550,11 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' an asymmetric floor finds the tall/wide blocks it asks for. With a
 #' symmetric floor the behaviour is exactly the historical one.
 #'
+#' @details Implements Algorithm 2 (Appendix A) of Guo, Toulis and Wang (2026)
+#'   with two changes that affect power only (their Remark 2): the
+#'   largest-biclique problem (15) is solved greedily unless method = "exact",
+#'   and the peeling stops at the first block smaller than min_block rather
+#'   than when the mask is empty.
 #' @param row,col Integer (or factor-coercible) cluster ids of the observed
 #'   cells; the two vectors have equal length, one entry per observed cell.
 #' @param min_block Minimum block side(s). A single integer applies to both
@@ -590,6 +640,10 @@ find_bicliques <- function(row, col, min_block = 2L,
   blocks <- list()
   budget_hit <- FALSE                  # exact search exhausted its budget?
 
+  ## Algorithm 2: repeatedly solve the largest-biclique problem (15) on what
+  ## is left, add the block to F_M, and remove its rows and columns (the
+  ## paper removes their edges; the effect is the same). Stops when no block
+  ## meeting min_block remains (the paper stops when M is empty).
   repeat {
     rrows <- which(avail_row)
     rcols <- which(avail_col)   # still-available clusters
@@ -660,6 +714,8 @@ find_bicliques <- function(row, col, min_block = 2L,
 }
 
 #' Grow one large all-ones submatrix from a logical matrix (greedy)
+#' @details Algorithm 2, problem (15) of GTW (2026), approximately: a greedy
+#'   seed-and-intersect search.
 #' @param A logical matrix.
 #' @return list(rows, cols) of local indices forming an all-ones submatrix.
 #' @keywords internal
@@ -713,6 +769,8 @@ find_bicliques <- function(row, col, min_block = 2L,
 #' skipped, and rows are added past the area optimum until `mb_r` is reached
 #' (after which the usual non-shrinking-area rule resumes). Returns an empty
 #' block when no seed satisfies the floor.
+#' @details Algorithm 2, problem (15) of GTW (2026), approximately, under an
+#'   asymmetric min_block floor.
 #' @param A logical matrix.
 #' @param mb_r,mb_c minimum row / column count of the returned block.
 #' @return list(rows, cols) of local indices; empty vectors if none found.
@@ -781,18 +839,9 @@ find_bicliques <- function(row, col, min_block = 2L,
 #' budget and fell back to the greedy block, it can now finish and return the
 #' true maximum. Those are the only cases whose output moves.
 #'
+#' @details Algorithm 2, problem (15) of GTW (2026), exactly: the maximum-edge
+#'   biclique by branch and bound.
 #' @param A logical matrix.
-#' @param retry_peels Number of extra attempts, under `method = "greedy"`
-#'   only, to find a conforming block after one peel returned a block below
-#'   `min_block`. Each attempt slides the heuristic's seed window eight rows
-#'   further down the degree order. The greedy search seeds from the
-#'   highest-degree available rows, so a small block there is not proof that
-#'   no larger conforming block remains elsewhere in the mask, and stopping
-#'   immediately forfeits every later block too. Retrying can only add blocks,
-#'   never change or remove one already found, and the added blocks are
-#'   ordinary disjoint bicliques -- so this affects power only, never
-#'   validity. Set to `0L` for the pre-0.3.0 behaviour. Ignored for `method =
-#'   "exact"`, where a sub-floor block *is* proof.
 #' @param node_budget integer cap on the number of search nodes.
 #' @return list(rows, cols, area, exact); rows/cols are local indices.
 #' @keywords internal
