@@ -1,3 +1,279 @@
+# mwperm 0.4.2
+
+Three decisions taken by the package's advisors on 2026-09-22, implemented as
+one release: the sign-flip test's default `n_flip` now follows the package's
+resolution rule (6 at alpha = 0.05, was a fixed 8); `mwperm_irregular()`
+implements Section 6.4 step (i) only -- the paper's random per-cell trim --
+and defaults to 500 repetitions (was 10); and the case that needs the *same*
+periods in every cell moves to `mwperm_panel_missing()`, which gains `L0`.
+The sign-flip test is also now attributed to the revised paper's Assumption
+2 ("double sign symmetry") rather than to a licence in its Section 2. Against
+the 0.4.1 golden baseline (`tests/golden/baseline-0.4.1.rds`) exactly two
+entries move (`dyadic_het_default`, `irregular_default`), one is retired
+(`irregular_nondefault`), one is new (`panel_missing_L0`), and one loses a
+field and rewords its note with every number intact
+(`irregular_random_nondefault`, the removed `trim`); the other 25 are
+`identical()`. An audit on 2026-09-23 found the documentation overstating when
+the random trim is exact and when the sign-flip test applies; those
+corrections are below, and they change text only.
+
+## The sign-flip default `n_flip` follows the resolution rule
+
+* **`mwperm_dyadic_het()`'s default `n_flip` is the smallest number of flip
+  groups whose reported p-value floor is at most `alpha`** -- the rule every
+  permutation design already lives by (`K + 1 >= 1/alpha`), applied to a
+  group of order `2^(n_flip - 1)`: the smallest `n_flip >= 2` with
+  `2^(n_flip - 1) >= m/alpha`, `m = 1` under `aggregate = "median"` and
+  `m = 2` under `"median2"` (whose floor is doubled), then capped at
+  `min(n_row, n_col)` and at 20 exactly as before. At `alpha = 0.05` that is
+  **6** (order 32, floor 1/32, 31 projections per repetition) under
+  `"median"` and 7 (order 64) under `"median2"`; at `alpha = 0.01`, 8 and 9.
+  0.4.0-0.4.1 used a fixed 8 (order 128, 127 projections). 6-8 are the
+  useful range, and the cost doubles with each extra group. `.default_n_flip()`
+  therefore takes `alpha` and `aggregate`; `mwperm_check(design =
+  "dyadic_het")` reports the same default the fit will use. An explicit
+  `n_flip` is honoured exactly as before, including `n_flip < 6` with the
+  resolution note and `conf_int = NULL`.
+* **The default fit's confidence set is now the exact one.** At `n_flip = 6`
+  and `n_reps = 10` the exact inversion evaluates `2 * 31^2 * 10 = 19,220`
+  candidates, under the engine's `2e5` budget, so `ci_method` is `"exact"`
+  (at the old default it was `"bisection"`).
+* **Numbers that move:** the golden entry `dyadic_het_default`
+  (`trade_dyadic`, `log_dist`, seed 1): p-value 0.0078125 (= 1/128) ->
+  **0.03125** (= 1/32), every per-repetition p-value 1/32, CI
+  [-1.16183, -0.59897] by bisection -> **[-1.16053, -0.62513]** exact, `K`
+  127 -> 31, `n_perm` 128 -> 32, `resolution`/`p_floor` 0.0078 -> 0.0312,
+  `n_flip` 8 -> 6; the estimate (-0.8985) is unchanged. `dyadic_het_nondefault`
+  and `flipset` pass an explicit `n_flip` and are `identical()`. The README
+  and man example (`n_flip = 6`, `n_reps = 3`) already passed `n_flip` and
+  print exactly what they did. `inst/replication/07_size_signflip.R` passes
+  `n_flip = 6L` explicitly and its expected output does not move.
+
+## `mwperm_irregular()` is step (i) only, at 500 repetitions; `trim` is retired
+
+* **`n_reps` defaults to 500 in `mwperm_irregular()`** (every other front end
+  keeps 10). The paper's Appendix B repeated the test 100 times; the
+  advisors consider that the low end and recommend 500-1000. Runtime is
+  linear in `n_reps`, and the docs say to use 1000 for a final run. At the
+  default the exact confidence set is out of budget once `K > 14` (`2 K^2
+  n_reps > 2e5`, and its cost grows like `K^3 n_reps^2`), so the interval is
+  found by the bracket-and-bisect fallback, which the fit records in
+  `ci_method = "bisection"` and in a note that names `K` and `n_reps`; the
+  budget is unchanged. The man example (8 x 8, `L0 = 4`, K = 2, 100
+  observations per repetition) takes about 3 s at 500 repetitions and stays
+  at the default.
+* **`mwperm()` and `mwperm_formula()` no longer impose `n_reps = 10` on every
+  design.** `mwperm()`'s signature now has `n_reps = NULL`, meaning the
+  dispatched front end's own default, and it forwards `n_reps` only when
+  given; `mwperm_formula()` passes `...` and inherits this. Pinned in
+  `tests/test-main.R`: the dispatched irregular fit without `n_reps` has
+  `n_reps == 500` and is `identical()` to the direct call, a dyadic fit
+  still has 10.
+* **`trim` is removed.** `mwperm_irregular()` implements the paper's step
+  (i) -- the 0.4.1 `trim = "random"` path, bit for bit -- and nothing else:
+  the argument, the `trim` and `rep_levels` fields of the fit (`rep_levels`
+  was always `NULL` on that path) and the level-aligned cut are gone from
+  it. A direct call with `trim =` now hits R's "unused argument" error;
+  `mwperm()` keeps a `trim = NULL` slot for one release and stops with
+  "`trim` was removed in 0.4.2: for periods with a common effect use
+  `mwperm_panel_missing(time = <rep>, L0 = <L0>)`" when it is supplied.
+  The level-aligned cut lives on as `mwperm_panel_missing(L0 = )` (next
+  section), and **the retired option is `mwperm_panel_missing(L0 = ,
+  time_fe = FALSE)` exactly**: on the inputs of the 0.4.1 golden entry
+  `irregular_nondefault` (40 x 20 cells, periods 1-2 in rows 1-20 and 2-3 in
+  rows 21-40, staggered `d`, `L0 = 2`, `min_block = 2`, `beta_null = 0.4`,
+  `n_reps = 9`, seed 1) the panel call reproduces every numeric field of the
+  0.4.1 fit -- p = 0.65, all nine per-repetition p-values, estimate
+  0.462717, CI [0.18935, 0.71912] and its exact set, K = 19, `n_obs` 800,
+  `cells_used` 400 of 800, one block -- and the gather vectors of every
+  repetition seed 1..9 are `identical()`; the retained rows and the blocks
+  are the same objects. Only the labels differ (`type`, `note`,
+  `n_clusters` gains `time = 2`, `periods_used` replaces `rep_levels`).
+* **The random trim is exact only for exchangeable replicates, and every
+  fit says so.** The first note of every `mwperm_irregular()` fit now states
+  that the trim is exact only when the observations inside a cell are
+  exchangeable replicates, and that if the within-cell index is a period, or
+  anything else with an effect shared across cells, the test can over-reject
+  even with a cell-constant `d`, naming `mwperm_panel_missing(time = <rep>,
+  L0 = <L0>)`; it replaces "The discarded observations are what buys exact
+  validity under an unequal design". A period effect cannot be seen in the
+  data, and the case below triggers no other note. Measured with staggered
+  observation windows (30 x 30 cells, rows 1-15 observed in periods 1-5 and
+  rows 16-30 in 4-8, a period effect of 0.5 per period, a cell-constant `d`
+  correlated with the row cohort, `L0 = 3`, true null): size 0.393 at
+  nominal 0.05 (`n_reps = 1`, 400 simulations) and 0.375 at the default
+  `n_reps = 500` (160); 0.054 and 0.105 at a period effect of 0.1 and 0.2;
+  `mwperm_panel_missing(time = , L0 = 2)` on the same data 0.028. An earlier
+  check with the authors' `RPT()` (0.043 with a cell-constant `d`, 0.051 with
+  an i.i.d. one) held only because every cell observed the same periods, so
+  the claim built on it -- exact "whenever `d` carries no information about
+  which observations were kept" -- is withdrawn from the help pages, the
+  README and `mwperm_check()`, and the 0.4.1 warning about a common effect
+  indexed by l stands.
+* **A second note when `d` varies within cells.** After the mask, if any
+  retained cell has a `d` column that is not constant within the cell (the
+  diagnostic `mwperm_layout()` computes for its no-power warning, read the
+  other way round), `mwperm_irregular()` adds that for a period index the
+  test is NOT valid and that a `d` varying over the periods makes its
+  over-rejection severe (size 1.000 under staggered adoption, against 0.040
+  for the aligned cut), and names the same route. A note, not a warning --
+  the fit is valid for exchangeable replicates.
+* **Numbers that move:** the golden entry `irregular_default` (8 x 8,
+  `L0 = 4`, `min_block = 2`, seed 1) now runs 500 repetitions: `n_reps` 10 ->
+  500, `pvalues_rep` length 10 -> 500 (480 at 1/3, 20 at 2/3), the note's
+  "median over 500" and its last sentence (above); its p-value stays 0.3333 (K = 2, so the median cannot
+  move), `conf_int` stays `NULL` (K = 2 is too coarse for a set) and the
+  estimate 0.7701 is unchanged by construction. `irregular_random_nondefault`
+  passes `n_reps = 9L` and is `identical()` apart from the removed `trim`
+  field and that sentence of its note. `irregular_nondefault` is retired and replaced by `panel_missing_L0`.
+  `tests/test-irregular.R` passes `n_reps` explicitly everywhere.
+
+## `mwperm_panel_missing()` gains `L0`: the same L0 periods in every cell
+
+* **`mwperm_panel_missing(..., time, L0 = NULL, ...)`.** With `L0 = NULL` the
+  mask is "pair observed in EVERY period" and the fit is bit-identical to
+  0.4.1 (golden `panel_missing_default` and `panel_missing_nondefault`
+  `identical()`; on a complete array the construction is still exactly
+  `mwperm_panel()`'s, `tests/test-panel-missing.R` section 1). With an
+  integer `2 <= L0 <= n_t`, the common period set S of size L0 is chosen by
+  `.choose_common_levels()` -- moved unchanged from `R/irregular.R`; it
+  reads the observation mask and never `y`, which is what Assumption 4
+  needs -- the mask becomes "pair observed in every period of S",
+  observations outside S are dropped, the period dummies are built on S
+  (`time_fe`), and the existing block builder runs with the period as the
+  slot. `L0 = n_t` equals `L0 = NULL` number for number. S is reported in a
+  new field `periods_used` (labels; `NULL` when `L0` is `NULL`), in the note,
+  and in `n_clusters[["time"]]`; `n_obs`, `cells_used`, `cells_total` keep
+  their meaning. The "No (row, col) pair is observed in all %d periods"
+  error now ends with "or pass `L0 =` to keep the best-covered L0 periods".
+  `L0` is validated as `mwperm_irregular()` validates it (a single integer
+  `>= 2`; above the period count is refused by name). The mask, blocks and
+  builder are factored into `.panel_missing_design()` so the structural
+  claims -- every gather vector preserves the period, every retained pair
+  observes all of S -- are asserted on the front end's own builder
+  (`tests/test-panel-missing.R` section 8, moved there from the irregular
+  file's level-aligned section). Advisors' rationale: an incomplete panel
+  is the special case of the irregular design with one observation per cell
+  and period, so the periods case belongs here.
+* **Dispatcher.** `mwperm()` forwards `L0` to `panel_missing` (`check_arg`
+  lists it), so `mwperm(..., time = , L0 = )` on an incomplete array is the
+  direct call (pinned in `tests/test-main.R`). `design = "irregular"` with a
+  `time =` index now runs `mwperm_panel_missing()` too, identical to the
+  direct call; before, `time` was dropped without a warning and the random
+  trim ran on the order of appearance -- the case it can over-reject in.
+  Passing both `time =` and `rep =` with `design = "irregular"` is an
+  error. `mwperm_check()`'s incomplete-panel note and its "Would run" line
+  mention `L0`; the layout
+  no-power warning points to `design = "irregular"` for exchangeable
+  replicates and to `time =` for periods.
+* **New golden entry `panel_missing_L0`** (the retired `irregular_nondefault`
+  fixture under `mwperm_panel_missing(L0 = 2, time_fe = FALSE)`): p = 0.65,
+  estimate 0.462717, CI [0.18935, 0.71912], K = 19, `periods_used`
+  `c("1", "2")` -- the 0.4.1 numbers, as the identity above says.
+* `inst/replication/06_size_by_design.R`: the second irregular arm (22 x 22
+  x 4, staggered `d`, period effect (0, 0, 0, 20), `L0 = 2`, `min_block =
+  20`, `n_reps = 1`, 1000 simulations) is now `mwperm_panel_missing(time =
+  t, L0 = 2L)` at the default `time_fe = TRUE`: size **0.041** at K = 21
+  (attainable, super-uniformity clean; the 0.4.1 arm gave 0.043 without
+  period dummies). Expected output regenerated; only that arm's lines
+  changed.
+
+## Attribution of the sign-flip test
+
+* The revised paper states the assumption behind `mwperm_dyadic_het()` as
+  its Assumption 2, *double sign symmetry*: `(eps_ij) =d (s_i t_j eps_ij) |
+  X, D` for all sign vectors `s, t`, under which "Procedure 1 would remain
+  unchanged except for the application of random sign flips in Step 1", with
+  the parameterisation `eps_ij = h(X_ij) u_i v_j`, `u_i, v_j` i.i.d.
+  symmetric, `h` unknown. `R/signflip.R`, `man/mwperm_dyadic_het.Rd`,
+  `man/build_flip_set.Rd`, the README and `DESCRIPTION` now say so instead of
+  "Section 2 licenses any invariance group" or "the authors' revision
+  material"; no section number is cited (the section is not public yet).
+  The 0.4.1 statement of scope is kept word for word: independent symmetric
+  errors, or dependence only through symmetric multiplicative factors; NOT
+  additive cluster effects. The group construction is untouched -- whether
+  it matches the paper's own procedure is a pending fidelity check that
+  needs that section.
+* The revised paper is not public yet, and in arXiv:2601.08610v1 "Assumption
+  2" is the Section 4 random-effects model; `?mwperm_dyadic_het` and the
+  README now say so where they cite it.
+* Figures attributed to the authors' own runs -- a permutation-test size of
+  0.13 against 0.05 for the sign-flip test, and power 0.98 against 0.90 --
+  are removed from the README and `?mwperm_dyadic_het`: the authors' shared
+  script gives a size of at most 0.08, and their source is unconfirmed. The
+  package's own measurements remain.
+
+## Faster `mwperm_irregular()`, bit for bit
+
+Every seeded result is `identical()` to before (golden baseline, the 29-fit
+battery, and a 52-fit battery that forces every design onto the bisection
+path). Three changes, none on the statistic:
+
+* The Procedure 2 builder's duplicate-cell check runs on the mixed-radix cell
+  code rather than on the (row, col, slot) matrix. The code is an exact
+  one-to-one map of the key, so the check finds the same row; on the matrix,
+  `anyDuplicated()` split it into one vector per row, which was about 40% of
+  each irregular repetition. Also used by `mwperm_missing()` and
+  `mwperm_panel_missing()`.
+* The irregular builder no longer passes its within-cell key through
+  `factor()` in every repetition; the key is already a rank, so the order is
+  the same.
+* The bisection fallback's check for accepted estimates outside the interval
+  evaluates all of them in one call instead of one call each (up to
+  `K * n_reps` of them, each of which looped over every repetition). The
+  p-value at each candidate is computed exactly as before.
+
+On 40 x 40 cells with `L0 = 3` (K = 35), a default fit (500 repetitions, with
+a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
+
+## Documentation and output corrections (audit 2026-09-23)
+
+* **What "exact" covers, in the README's opening.** Theorem 1 covers a single
+  repetition (`n_reps = 1`); several are covered with `aggregate =
+  "median2"`. The default median over repetitions follows the paper's Remark
+  1 and sits at or below nominal in simulations, but the theorem does not
+  cover it. The help pages already said so; the README's headline did not.
+  The default is unchanged.
+* **The sign-flip test on an incomplete array needs the mask to be
+  independent of the errors** given X and D (the analogue of Assumption 4).
+  Dropping zero trade flows because log(0) is undefined violates it.
+  `?mwperm_dyadic_het`, the README's sign-flip and missing-cells text and the
+  incomplete-array note now say so, and that running on incomplete arrays is
+  this package's extension: the paper states Assumption 2 for a complete
+  array.
+* **The `n_flip` trade-off is documented** (default unchanged). At 25 x 25
+  with independent heteroskedastic symmetric errors and `n_reps = 10`, power
+  at beta = 0.10 was 0.27 / 0.34 / 0.37 for `n_flip` = 6 / 7 / 8 (300
+  simulations each), at 1 / 2 / 4 times the projections; under the paper's
+  own model `eps_ij = h(X_ij) u_i v_j` the size was 0.014 at `n_reps = 1`
+  and 0.002 at the default.
+* **`print()` names the sign-flip group.** A `mwperm_dyadic_het()` fit prints
+  "Invariant sign-flip test (mwperm)"; every permutation fit's header is
+  unchanged byte for byte.
+* **Periods are routed to the panel designs everywhere.** The package help
+  page, `?mwperm_layout` (`L0`), the README's layout section, and the
+  duplicate-cell errors of `mwperm_missing()` and `mwperm_panel_missing()`
+  sent repeats that are time periods to `mwperm_irregular()`; they now name
+  `mwperm_panel()` / `mwperm_panel_missing()`.
+
+## Tests
+
+* `tests/test-signflip.R` pins `.default_n_flip()` at four `(alpha,
+  aggregate)` pairs, the default fit's `n_flip = 6` / `ci_method = "exact"`,
+  and `mwperm_check()`'s matching default. `tests/test-main.R` pins
+  `n_reps = NULL` dispatch (section 7) and `L0` forwarding to
+  `panel_missing` (section 4). `tests/test-panel-missing.R` gains section 8
+  (`L0`). `tests/test-irregular.R` pins the `trim` removal error, the
+  within-cell `d` note (fires with a within-cell-varying `d`, absent with a
+  cell-constant one, absent when `d` varies only in cells the mask drops),
+  and keeps the random-trim assertions, and that every fit's first note
+  states the exchangeable-replicates condition. `tests/test-equivariance.R`
+  pins parallel == serial (`n_cores = 2`, rep axis) for `mwperm_dyadic_het()`,
+  `mwperm_irregular()` and `mwperm_panel_missing(L0 = )`; `tests/test-methods.R`
+  pins both print headers; `tests/test-signflip.R` pins the mask condition in
+  the incomplete-array note. `tests/golden/baseline-0.4.1.rds` is the previous
+  snapshot.
+
 # mwperm 0.4.1
 
 A correction release from an independent audit of 0.4.0 against Guo, Toulis

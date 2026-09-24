@@ -161,4 +161,134 @@ expect_err(with(tp2, mwperm_panel_missing(log_trade, fta, row = importer,
                                           min_block = 3, alpha = 0)),
            "`alpha`")
 
+## ---- 8. L0: keep the best-covered L0 periods, the SAME ones in every cell --
+## (0.4.2; the level-aligned cut that mwperm_irregular(trim = "levels") did
+## in 0.4.1 now lives here, and these assertions moved with it.) Condition
+## InvB is (eps_ijt) =d (eps_[pi(i)][sigma(j)]t) with the SAME t on both
+## sides: what the permutation holds fixed must be the period itself, and
+## every retained cell must carry the same set of periods. With L0 = NULL that
+## set is every period; with an integer L0 it is the L0 periods jointly
+## observed by the most pairs, chosen from the observation pattern alone
+## (never from y -- Assumption 4), and the fit reports it in `periods_used`.
+bare <- function(op) { attributes(op) <- NULL; op }
+stopifnot(identical(names(formals(mwperm_panel_missing))[1:7],
+                    c("y", "d", "x", "row", "col", "time", "L0")),
+          is.null(formals(mwperm_panel_missing)$L0))
+
+## L0 = n_t is the default mask, number for number (only the note and the
+## reported period set differ)
+f2L <- with(tp2, mwperm_panel_missing(log_trade, fta,
+                                      x = cbind(log_gdp_i, log_gdp_j),
+                                      row = importer, col = exporter,
+                                      time = year, L0 = TT, min_block = 3,
+                                      conf_int = FALSE, n_reps = 2, seed = 1))
+stopifnot(isTRUE(same_fit(f2, f2L, skip = c("call", "note", "periods_used"))),
+          is.null(f2$periods_used),
+          identical(f2L$periods_used, as.character(sort(unique(tp2$year)))),
+          any(grepl("L0 = 6", f2L$note, fixed = TRUE)))
+
+## Design B: rows 1-6 are observed in periods {1, 2}, rows 7-12 in {2, 3}, so
+## the pairs do not share a period set and NO pair clears the default mask;
+## d = 1{t >= start_ij} varies within each cell. The common set of L0 = 2
+## periods observed by the most pairs is {1, 2} (tied with {2, 3}; the lower
+## periods win), and only rows 1-6 clear it.
+set.seed(3)
+mB <- 12L; nB <- 12L
+B <- do.call(rbind, lapply(seq_len(mB), function(i)
+  do.call(rbind, lapply(seq_len(nB), function(j)
+    data.frame(i = i, j = j, t = if (i <= mB / 2) 1:2 else 2:3)))))
+startB <- matrix(sample(1:4, mB * nB, TRUE), mB, nB)
+B$d <- as.numeric(B$t >= startB[cbind(B$i, B$j)])
+B$y <- rnorm(mB)[B$i] + rnorm(nB)[B$j] + c(0, 0, 20)[B$t] + rnorm(nrow(B))
+stopifnot(any(tapply(B$d, paste(B$i, B$j), function(v) diff(range(v)) > 0)))
+expect_err(with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t,
+                                        min_block = 2L)),
+           "pass `L0 =`")                       # the way out is named
+fB <- with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t, L0 = 2L,
+                                   min_block = 2L, time_fe = FALSE,
+                                   conf_int = FALSE, n_reps = 1L, seed = 1))
+## only the pairs observing BOTH retained periods survive: rows 1-6, all cols
+stopifnot(fB$cells_used == (mB / 2) * nB, fB$n_obs == fB$cells_used * 2L,
+          fB$cells_total == mB * nB, identical(fB$periods_used, c("1", "2")),
+          identical(unname(fB$n_clusters[["time"]]), 2L),
+          any(grepl("periods", fB$note, fixed = TRUE)))
+
+## the front end's OWN retained set and permutation builder: every gather
+## vector maps an observation to one with the SAME period
+pdB <- with(B, internal(".panel_missing_design")(row = i, col = j, time = t,
+                                                 L0 = 2L, min_block = 2L,
+                                                 block_method = "greedy"))
+stopifnot(identical(pdB$S_labels, c("1", "2")),
+          setequal(pdB$idx, which(B$i <= mB / 2)),
+          length(pdB$idx) == fB$n_obs)
+levB <- B$t[pdB$idx]
+cellB <- paste(B$i, B$j)[pdB$idx]
+opsB <- pdB$perm_builder(1L, fB$K)
+stopifnot(length(opsB) == fB$K + 1L,
+          identical(bare(opsB[[1L]]), seq_along(levB)),
+          is.null(attr(opsB, "rows")))          # the cut is fixed, not per rep
+for (g in lapply(opsB, bare)) stopifnot(identical(levB[g], levB))  # period kept
+## ... and the check is not vacuous: every non-identity element moves cells
+for (g in lapply(opsB[-1L], bare)) stopifnot(any(cellB[g] != cellB))
+## every retained cell observes ALL of S
+stopifnot(all(tapply(levB, cellB, function(v) identical(sort(v), 1:2))))
+
+## Design A: a rectangular 8 x 8 array observed in periods 1..4 with L0 = 2.
+## The retained periods are {1, 2} in EVERY cell, every gather vector
+## preserves the period -- and the fit is exactly the L0 = NULL fit on the
+## data subset to those two periods, which is what "keep the best-covered
+## periods" means.
+A <- expand.grid(t = 1:4, j = seq_len(8), i = seq_len(8))[, c("i", "j", "t")]
+set.seed(8)
+A$d <- rnorm(nrow(A))
+A$y <- rnorm(8)[A$i] + rnorm(8)[A$j] + c(0, 1, 5, 2)[A$t] + 0.3 * A$d +
+  rnorm(nrow(A))
+pdA <- with(A, internal(".panel_missing_design")(row = i, col = j, time = t,
+                                                 L0 = 2L, min_block = 2L,
+                                                 block_method = "greedy"))
+stopifnot(identical(pdA$S_labels, c("1", "2")),
+          setequal(pdA$idx, which(A$t <= 2L)),
+          length(pdA$idx) == 2L * 64L)
+levA <- A$t[pdA$idx]
+for (g in lapply(pdA$perm_builder(7L, 7L), bare))
+  stopifnot(identical(levA[g], levA))
+fA2 <- with(A, mwperm_panel_missing(y, d, row = i, col = j, time = t, L0 = 2L,
+                                    min_block = 2L, conf_int = FALSE,
+                                    n_reps = 2L, seed = 1))
+fAs <- with(A[A$t <= 2L, ],
+            mwperm_panel_missing(y, d, row = i, col = j, time = t,
+                                 min_block = 2L, conf_int = FALSE,
+                                 n_reps = 2L, seed = 1))
+stopifnot(isTRUE(same_fit(fA2, fAs, skip = c("call", "note", "periods_used"))),
+          identical(fA2$periods_used, c("1", "2")), is.null(fAs$periods_used))
+
+## seeded reproducibility and parallel == serial survive the cut
+stopifnot(isTRUE(same_fit(fB, with(B, mwperm_panel_missing(
+  y, d, row = i, col = j, time = t, L0 = 2L, min_block = 2L,
+  time_fe = FALSE, conf_int = FALSE, n_reps = 1L, seed = 1)), skip = "call")))
+fB3 <- with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t, L0 = 2L,
+                                    min_block = 2L, time_fe = FALSE,
+                                    conf_int = FALSE, n_reps = 3L, seed = 1))
+stopifnot(isTRUE(same_fit(fB3, with(B, mwperm_panel_missing(
+  y, d, row = i, col = j, time = t, L0 = 2L, min_block = 2L,
+  time_fe = FALSE, conf_int = FALSE, n_reps = 3L, seed = 1, n_cores = 2L)),
+  skip = "call")))
+
+## validation: L0 is an integer in [2, number of periods]
+expect_err(with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t,
+                                        L0 = 1L, min_block = 2L)),
+           "`L0` must be a single integer >= 2")
+expect_err(with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t,
+                                        L0 = c(2L, 3L), min_block = 2L)),
+           "`L0` must be a single integer >= 2")
+expect_err(with(B, mwperm_panel_missing(y, d, row = i, col = j, time = t,
+                                        L0 = 4L, min_block = 2L)),
+           "`L0`")                              # only 3 periods exist
+## L0 periods exist but no pair observes L0 of them
+one_each <- B[B$t == ifelse(B$i <= mB / 2, 1L, 3L), ]
+expect_err(with(one_each, mwperm_panel_missing(y, d, row = i, col = j,
+                                               time = t, L0 = 2L,
+                                               min_block = 2L)),
+           "L0 = 2")
+
 passed("test-panel-missing.R")

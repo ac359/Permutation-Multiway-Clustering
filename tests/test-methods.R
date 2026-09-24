@@ -42,6 +42,15 @@ stopifnot(grepl("OLS estimate =", out1, fixed = TRUE),
 out2 <- paste(capture.output(print(fit2)), collapse = "\n")
 stopifnot(grepl("% IPT region [", out2, fixed = TRUE))
 
+## the header names the group: a sign-flip fit relabels nothing, and every
+## permutation fit keeps its line byte for byte
+fith <- mwperm_dyadic_het(y1, d1, row = g$i, col = g$j, seed = 3, n_reps = 1,
+                          conf_int = FALSE)
+stopifnot(identical(capture.output(print(fit1))[2],
+                    "Invariant permutation test (mwperm)"),
+          identical(capture.output(print(fith))[2],
+                    "Invariant sign-flip test (mwperm)"))
+
 ## a vector null prints ONE coherent H0 line listing the whole vector
 fitj <- mwperm_dyadic(y2, D2, row = g$i, col = g$j, seed = 7,
                       beta_null = c(0.4, -0.2), conf_int = FALSE)

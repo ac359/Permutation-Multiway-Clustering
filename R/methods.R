@@ -60,7 +60,9 @@ print.mwperm <- function(x, digits = 4L, ...) {
     cat(strwrap(txt, initial = initial, prefix = prefix,
                 width = 0.9 * getOption("width", 80)), sep = "\n")
 
-  cat("\nInvariant permutation test (mwperm)\n")
+  ## A sign-flip fit relabels nothing, so its header names its own group.
+  cat(if (is.null(x$n_flip)) "\nInvariant permutation test (mwperm)\n"
+      else "\nInvariant sign-flip test (mwperm)\n")
   cat(strrep("-", 36), "\n", sep = "")
   cat("Design       : ", x$type, "\n", sep = "")
   if (!is.null(x$auto))                 # dispatched via mwperm(): say why

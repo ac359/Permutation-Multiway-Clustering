@@ -11,6 +11,7 @@ mwperm_panel_missing(
   row,
   col,
   time,
+  L0 = NULL,
   K = NULL,
   min_block = 3L,
   block_method = c("greedy", "exact"),
@@ -40,6 +41,11 @@ for example importer and exporter. Any type; recoded to dense ids.}
 
 \item{time}{Period identifier. Held fixed by the permutation -- the errors
 are never assumed exchangeable across it.}
+
+\item{L0}{\code{NULL} (the default) keeps the pairs observed in \emph{every}
+period. An integer between 2 and the number of periods keeps instead the L0
+periods jointly observed by the most pairs, the same ones in every cell,
+and the pairs observed in all of them; see \emph{Keeping L0 periods}.}
 
 \item{K}{Number of non-identity permutations; defaults to
 \code{min(smallest block side) - 1} capped at 199. Must satisfy
@@ -82,7 +88,8 @@ any larger value.}
 \value{
 An object of class \code{"mwperm"}. Beyond the usual fields it carries
 \code{n_blocks}, \code{cells_used} and \code{cells_total}, the block
-accounting.
+accounting, and \code{periods_used}, the labels of the L0 retained periods
+(\code{NULL} when \code{L0} is \code{NULL}).
 }
 \description{
 Finite-sample valid test of H0: beta = b for a panel
@@ -99,7 +106,8 @@ their Section 9 leaves open.
 The construction is:
 \enumerate{
 \item form the mask \code{M_ij = 1} if pair (i, j) is observed in EVERY
-period, and 0 otherwise;
+period, and 0 otherwise (with \code{L0}, in every period of a common set S
+of L0 periods; see \emph{Keeping L0 periods});
 \item run the biclique search (\code{\link{find_bicliques}}, Algorithm 2) on
 that mask to obtain disjoint fully observed blocks \code{I_q} by \code{J_q};
 \item discard every observation outside the selected blocks;
@@ -113,6 +121,35 @@ Holding the period fixed is the same device \code{\link{mwperm_panel}} uses,
 and it is what keeps the test valid when the errors are autocorrelated over
 time.
 }
+\section{Keeping L0 periods (\code{L0})}{
+
+A pair that misses even one period fails the every-period mask. When many
+pairs miss a few periods it is often the better trade to keep fewer periods
+and more pairs: with an integer \code{L0} the mask becomes "pair observed in
+every period of S", where S is the set of L0 periods jointly observed by the
+most pairs, chosen greedily from the observation pattern alone (the period
+observed by the most pairs first, then the period that keeps the most pairs
+observing the whole set; ties to the earlier period), and observations
+outside S are dropped. S is a function of the mask and never of the outcome,
+which is what Assumption 4 needs, so the cut costs no validity; the period
+dummies are built on S. Period s is the \emph{same} period in every cell,
+and the permutation holds it fixed -- exactly condition InvB. \code{L0}
+equal to the number of periods reproduces the default; the fit reports S in
+\code{periods_used} and in \code{note}.
+
+This is also the incomplete-panel reading of the irregular design of Section
+6.4 -- one observation per cell and period -- and it is the route for any
+repeats that are \emph{periods}: \code{\link{mwperm_irregular}}'s random
+per-cell trim keeps different periods in different cells, is exact only for
+exchangeable replicates, and can over-reject under a period effect even with
+a cell-constant \code{d} (0.39 at nominal 0.05 with staggered observation
+windows, against 0.028 here; 1.000 against 0.040 when \code{d} also varies
+over the periods). Until 0.4.1 this cut was
+\code{mwperm_irregular(trim = "levels")};
+\code{mwperm_panel_missing(time = <rep>, L0 = <L0>, time_fe = FALSE)}
+reproduces it exactly.
+}
+
 \section{Assumptions}{
 
 Two conditions, and neither is within-period independence. The first is
@@ -140,10 +177,10 @@ A pair observed in some periods but not all fails the mask and is dropped
 whole, and pairs that clear the mask are still dropped if the biclique
 search cannot place them in a block. That loss is the price of exactness
 under missingness, and it is reported in \code{note}, \code{cells_used} and
-\code{cells_total}. Dropping \emph{periods} instead -- keeping only the
-years in which every pair is observed -- is often the better trade and is
-done by subsetting the data before calling this function; there is no free
-lunch, and which side to cut depends on the panel.
+\code{cells_total}. Dropping \emph{periods} instead -- keeping the L0 years
+observed by the most pairs -- is often the better trade and is what
+\code{L0 =} does; there is no free lunch, and which side to cut depends on
+the panel.
 }
 
 \examples{
@@ -164,7 +201,16 @@ fit
 ## because a block must be complete in BOTH margins. With 22 clusters per
 ## side an incomplete panel rarely supports a 95\% interval -- K + 1 >= 20
 ## needs a fully observed 20 x 20 block. Dropping the sparsest periods
-## before calling is usually the better trade.
+## is usually the better trade, and `L0 =` does it: when the thinned pairs
+## miss only the LAST year, keeping the 5 best-covered years keeps them all
+tp5 <- trade_panel[!(pair \%in\% thin &
+                       trade_panel$year == max(trade_panel$year)), ]
+fit5 <- with(tp5, mwperm_panel_missing(y = log_trade, d = fta,
+                                       x = cbind(log_gdp_i, log_gdp_j),
+                                       row = importer, col = exporter,
+                                       time = year, L0 = 5, min_block = 5,
+                                       seed = 1))
+fit5$periods_used
 }
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
@@ -174,5 +220,6 @@ Procedure 2 and Assumption 4 are Section 5. arXiv:2601.08610.
 \seealso{
 \code{\link{mwperm_panel}} for a complete balanced panel,
 \code{\link{mwperm_missing}} for an incomplete array with no time dimension,
-and \code{\link{find_bicliques}} for the block search.
+\code{\link{mwperm_irregular}} for several exchangeable replicates per
+cell, and \code{\link{find_bicliques}} for the block search.
 }
