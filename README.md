@@ -954,6 +954,19 @@ If you use this package, please cite the method paper:
   regression coefficient testing.* Annals of Statistics 53(2), 724–748.
   <doi:10.1214/24-AOS2479>
 
+## Working on the package
+
+To change the code, start with `ARCHITECTURE.md`. It maps each step of the
+method to the code, lists the conventions a correct change must keep, and
+gives a reading order and a repository map. Then:
+
+- `tests/README.md` describes the two test suites, how to run them, and
+  where a new test goes;
+- `TESTING_PLAN.md` traces each object in the papers to the function and
+  tests behind it, and logs where the code deliberately differs;
+- `inst/replication/` reproduces the size, power and coverage claims by
+  simulation.
+
 ## License
 
 MIT. See `LICENSE` for the copyright year and holders, and `LICENSE.md` for the

@@ -1,10 +1,24 @@
-# TESTING_PLAN.md: paper-fidelity test suite and source-comment pass
+# TESTING_PLAN.md: paper-to-code traceability and discrepancy log
 
-Working checklist for the session that adds (a) a testthat suite showing that
-`mwperm` computes what Guo, Toulis & Wang (2026) and Wen, Wang & Wang (2025)
-define, and (b) source comments that map every step of the method to its
-code. It is kept current so the work can resume after a context reset. The
-file is listed in `.Rbuildignore`, so it is not in the tarball.
+This file records which code implements each object of Guo, Toulis & Wang
+(2026) and Wen, Wang & Wang (2025), and which tests check it. It also logs
+every place where the code differs from those papers or from the JSS draft,
+whether on purpose or not. It is listed in `.Rbuildignore`, so it is not in
+the tarball. The name is historical: the file began as the working plan of
+the session that built the testthat suite, and that session's record is kept
+as an appendix.
+
+| Section | Use it to |
+|---|---|
+| [Traceability table](#traceability-table) | find the function and the tests behind a paper object (P: IPT paper, R: RPT paper, J: JSS draft) |
+| [Documented deviations](#documented-deviations-the-code-differs-from-the-printed-text-on-purpose-not-discrepancies) | see where the code departs from the printed text on purpose, and why |
+| [Gaps](#gaps-with-reasons) | see which paper objects have no test, and why |
+| [Discrepancy log](#discrepancy-log) | look up a `Discrepancy D<n>` skip: inputs, expected and observed values, verdict |
+| [Follow-ups](#follow-ups-testing-seams-not-implemented) | testing seams worth adding (F-1 to F-6) |
+| [Appendix](#appendix-the-session-that-built-the-suite-2026-09-24) | the 2026-09-24 session: its conventions, baseline and final report, including the decisions awaiting the maintainer's review |
+
+How the two test suites are organised, and how to run them, is in
+`tests/README.md`.
 
 **Sources.**
 
@@ -22,127 +36,9 @@ file is listed in `.Rbuildignore`, so it is not in the tarball.
 * **Code under test:** package 0.4.2, the working tree on branch
   `test-suite-paper-fidelity`.
 
-**Conventions adopted (decisions made without the maintainer).**
-
-1. **testthat 3e was added *alongside* the existing base-R suite.** It was not
-   converted: rewriting the 16 base-R files would delete files this session
-   did not create. The brief makes deletions sign-off-only, and the base-R
-   suite is the maintainer's documented contract (`tests/README.md`).
-   `testthat (>= 3.0.0)` is in `Suggests`. The reason: it is a test-only
-   dependency that the new suite needs. `R CMD check` runs both suites, the
-   base-R scripts and `tests/testthat.R`.
-2. **Existing assertions are cited rather than duplicated.** The traceability
-   table below names both suites.
-3. **Tools.** devtools is not installed. The equivalents used are
-   `testthat::test_local()` for `devtools::test()`,
-   `R CMD check --as-cran` for `devtools::check()`, and
-   `roxygen2::roxygenise()` 7.3.2 for `devtools::document()`. covr 3.6.4 and
-   roxygen2 7.3.2 come from a local tool library, so nothing was downloaded.
-   withr is used only through testthat's own dependency and is never called
-   directly.
-4. **Branch.** The session works on `test-suite-paper-fidelity`. Its first
-   commit, `1b62733`, is a snapshot of the uncommitted 0.4.2 working tree
-   exactly as found. `release/0.4.1` is untouched.
-
 ---
 
-## Checklist
-
-### Phase 1: Orientation
-- [x] Read every file in `R/` (17 files) and `tests/` (16 top level, 8 lower level, 2 helpers, golden)
-- [x] Read DESCRIPTION and NAMESPACE
-- [x] Read the IPT paper: Procedures 1-2, Algorithms 1-2, Theorems 1 and 4, Proposition 2, Remark 1, Sections 5-6
-- [x] Read the RPT paper: Algorithms 1-2 (page images)
-- [x] Read the JSS draft: Sections 2-7
-- [x] Baseline base-R tests (see below)
-- [x] Baseline coverage (see below)
-- [x] Baseline `R CMD check --as-cran` (see below)
-
-### Phase 2: Traceability
-- [x] Table: paper/draft object -> function:lines -> tests
-- [x] Gaps identified
-
-### Phase 3: Tests (testthat 3e, `tests/testthat/`)
-- [x] Infrastructure: `tests/testthat.R`, DESCRIPTION `Suggests`/`Config/testthat/edition`
-- [x] `helper-reference.R`: naive Procedure 1, seam reconstruction of each front end's group, DGPs, ECDF checker
-- [x] `test-procedure1-reference.R`
-- [x] `test-algorithm1.R`
-- [x] `test-invariances.R`
-- [x] `test-pvalue-properties.R`
-- [x] `test-confidence-sets.R`
-- [x] `test-designs.R`
-- [x] `test-bicliques.R`
-- [x] `test-dispatch.R` (+ snapshots)
-- [x] `test-s3-methods.R` (+ snapshots)
-- [x] `test-validation.R`
-- [x] `test-reproducibility.R`
-- [x] `test-montecarlo.R` (slow, gated)
-- [x] `test-draft-replication.R` (+ gravity-gated Sec. 7)
-
-### Phase 4: Comments
-- [x] Header comment on every `R/` file
-- [x] roxygen block (with `@details` step citation) on every function
-- [x] Inline method comments
-- [x] `ARCHITECTURE.md` at root (+ `.Rbuildignore`)
-- [x] Behavior-neutrality proof: `deparse(parse(keep.source = FALSE))` identical per file; roxygenise leaves NAMESPACE unchanged
-
-### Phase 5: Verify and report
-- [x] `test_local()` passes with slow tests skipped
-- [x] ... and with `MWPERM_SLOW_TESTS=true`
-- [x] `R CMD check --as-cran`: no new ERROR/WARNING/NOTE
-- [x] Coverage after
-- [x] Mutation check (a)-(e), throwaway branch deleted
-- [x] Commits: tests and comments separate, small
-- [x] Final report
-
----
-
-## Phase 1 baseline (2026-09-24, package 0.4.2)
-
-**Base-R suite:** 16/16 top-level files pass (`Rscript tests/test-*.R` after
-`R CMD INSTALL .`). `test-lower-level.R` runs the 8 lower-level files. Wall
-times in seconds: dyadic 1, equivariance 3, formula 0, golden 9, irregular 0,
-layout 1, lower-level 16, main 9, methods 1, missing 1, panel-missing 1,
-panel 1, readme 1, signflip 14, threeway 1, validation 1. Total about 60 s.
-
-**Coverage (covr, `type = "tests"`, base-R suite only):** 94.5% overall.
-
-| File | coverable lines | covered | % |
-|---|---:|---:|---:|
-| R/core.R | 186 | 177 | 95.2 |
-| R/dyadic.R | 36 | 36 | 100.0 |
-| R/engine.R | 660 | 605 | 91.7 |
-| R/formula.R | 44 | 44 | 100.0 |
-| R/irregular.R | 177 | 164 | 92.7 |
-| R/layout.R | 99 | 99 | 100.0 |
-| R/methods.R | 154 | 154 | 100.0 |
-| R/missing.R | 373 | 357 | 95.7 |
-| R/panel.R | 36 | 36 | 100.0 |
-| R/panel_missing.R | 194 | 190 | 97.9 |
-| R/perm_set.R | 38 | 38 | 100.0 |
-| R/plot.R | 386 | 377 | 97.7 |
-| R/signflip.R | 134 | 122 | 91.0 |
-| R/threeway.R | 32 | 32 | 100.0 |
-| R/unified.R | 688 | 628 | 91.3 |
-
-The uncovered lines that carry the method are:
-
-* the disconnected-set note on the exact path (`engine.R` 394-403);
-* the bisection fallback's rejected-centre restart and its island-guard
-  widening (`engine.R` 901-904, 954-959);
-* the unbounded-bracket return (`engine.R` 918);
-* the blockwise `.row_median()` path (`engine.R` 576-585);
-* the joint-region budget guards (`engine.R` 1038-1064);
-* `.ipt_pvalue()` (`core.R` 433-434);
-* the `.cell_code()` 2^53 guard (`core.R` 72-75);
-* the exact-biclique budget fallback in `find_bicliques()` (`missing.R` 603);
-* the greedy retry-peel success path (`missing.R` 631-638).
-
-**R CMD check --as-cran (baseline):** 0 ERROR, 0 WARNING, 3 NOTEs: "New submission" (CRAN incoming), "unable to verify current time", and HTML-manual tidy warnings from R 4.3.2's Rd2HTML template. The same three NOTEs as the maintainer's documented gate. Check time 118 s. The tarball contains no private or root-level planning files.
-
----
-
-## Phase 2: Traceability table
+## Traceability table
 
 Legend. **T:** a testthat file in `tests/testthat/` (the quoted phrase is the
 test's name). **B:** a base-R file in `tests/`, with `ll/` for
@@ -162,7 +58,7 @@ test's name). **B:** a base-R file in `tests/`, with `ll/` for
 | P7 | Eq. (10): minorized p-value, min over j = 1..K, indicator <= | `.ipt_eval()` `(1 + sum(b >= amin)) / Kp1` (core.R:494); `.pval_matrix()` (engine.R:661, vectorised) | T: procedure1-reference (identical p-values; "min over the K non-identity elements"), pvalue-properties (grid, ties); B: ll/test-pvalue §1-5 |
 | P8 | testing beta = b means running Proc. 1 on y - D b | the affine form in `.ipt_eval()` (core.R:465); `beta0` in `.ipt_engine()` (engine.R:204) | T: procedure1-reference "a non-zero null ...", invariances "testing beta = b ..."; B: test-equivariance §3 |
 | P9 | Proc. 1 step 3: CI = {b : pval(b) > alpha} | `.invert_ci()` (engine.R:873; exact via `.ci_breakpoints()` engine.R:719 + `.exact_ci_set()` engine.R:775; grid; bisection), `.invert_region()` (engine.R:1063) when d > 1 | T: confidence-sets (duality at every end point, grid and bisection versus exact, region); **D10**; B: ll/test-exact-ci, ll/test-invert-ci-grid |
-| P10 | Theorem 1: P(pval <= alpha given X, D) <= alpha, for p < N/2 | engine guard `N <= 2p` stops (engine.R:261) | T: validation "p >= N/2 is refused", montecarlo (ECDF at every atom) |
+| P10 | Theorem 1: P(pval <= alpha given X, D) <= alpha, for p < N/2 | engine guard `N <= 2p` stops (engine.R:261) | T: data-validation "p >= N/2 is refused", montecarlo (ECDF at every atom) |
 | P11 | Remark 1: median over repetitions | `.agg_pvals()` (engine.R:561), `.row_median()`; `pvalue` (engine.R:381) | T: pvalue-properties (median, odd and even; median2); B: ll/test-aggregate |
 | P12 | Algorithm 1 | `build_perm_set()` (perm_set.R:93; psi_k at perm_set.R:148) | T: algorithm1 (all); **D1, D2**; B: ll/test-permset |
 | P13 | Proposition 2 (closure) | `build_perm_set()`: the elements are the powers of one generator | T: algorithm1 "closed under composition ...", "psi_k is psi_1 composed ..."; B: ll/test-permset §2, ll/test-obsperms (observation level) |
@@ -391,13 +287,133 @@ median can leave the grid.)
 
 ---
 
-## Final report (2026-09-24)
+## Appendix: the session that built the suite (2026-09-24)
+
+A record of how the testthat suite and the source-comment pass were
+produced. The numbers here describe the tree as it was that day; the
+sections above are the part kept current.
+
+### Conventions adopted (decisions made without the maintainer)
+
+1. **testthat 3e was added *alongside* the existing base-R suite.** It was not
+   converted: rewriting the 16 base-R files would delete files this session
+   did not create. The brief makes deletions sign-off-only, and the base-R
+   suite is the maintainer's documented contract (`tests/README.md`).
+   `testthat (>= 3.0.0)` is in `Suggests`. The reason: it is a test-only
+   dependency that the new suite needs. `R CMD check` runs both suites, the
+   base-R scripts and `tests/testthat.R`.
+2. **Existing assertions are cited rather than duplicated.** The traceability
+   table below names both suites.
+3. **Tools.** devtools is not installed. The equivalents used are
+   `testthat::test_local()` for `devtools::test()`,
+   `R CMD check --as-cran` for `devtools::check()`, and
+   `roxygen2::roxygenise()` 7.3.2 for `devtools::document()`. covr 3.6.4 and
+   roxygen2 7.3.2 come from a local tool library, so nothing was downloaded.
+   withr is used only through testthat's own dependency and is never called
+   directly.
+4. **Branch.** The session works on `test-suite-paper-fidelity`. Its first
+   commit, `1b62733`, is a snapshot of the uncommitted 0.4.2 working tree
+   exactly as found. `release/0.4.1` is untouched.
+
+### Checklist
+
+#### Phase 1: Orientation
+- [x] Read every file in `R/` (17 files) and `tests/` (16 top level, 8 lower level, 2 helpers, golden)
+- [x] Read DESCRIPTION and NAMESPACE
+- [x] Read the IPT paper: Procedures 1-2, Algorithms 1-2, Theorems 1 and 4, Proposition 2, Remark 1, Sections 5-6
+- [x] Read the RPT paper: Algorithms 1-2 (page images)
+- [x] Read the JSS draft: Sections 2-7
+- [x] Baseline base-R tests (see below)
+- [x] Baseline coverage (see below)
+- [x] Baseline `R CMD check --as-cran` (see below)
+
+#### Phase 2: Traceability
+- [x] Table: paper/draft object -> function:lines -> tests
+- [x] Gaps identified
+
+#### Phase 3: Tests (testthat 3e, `tests/testthat/`)
+- [x] Infrastructure: `tests/testthat.R`, DESCRIPTION `Suggests`/`Config/testthat/edition`
+- [x] `helper-reference.R`: naive Procedure 1, seam reconstruction of each front end's group, DGPs, ECDF checker
+- [x] `test-procedure1-reference.R`
+- [x] `test-algorithm1.R`
+- [x] `test-invariances.R`
+- [x] `test-pvalue-properties.R`
+- [x] `test-confidence-sets.R`
+- [x] `test-designs.R`
+- [x] `test-bicliques.R`
+- [x] `test-dispatch.R` (+ snapshots)
+- [x] `test-s3-methods.R` (+ snapshots)
+- [x] `test-data-validation.R` (named `test-validation.R` until 2026-09-24; renamed so it no longer shares a name with the base-R file)
+- [x] `test-reproducibility.R`
+- [x] `test-montecarlo.R` (slow, gated)
+- [x] `test-draft-replication.R` (+ gravity-gated Sec. 7)
+
+#### Phase 4: Comments
+- [x] Header comment on every `R/` file
+- [x] roxygen block (with `@details` step citation) on every function
+- [x] Inline method comments
+- [x] `ARCHITECTURE.md` at root (+ `.Rbuildignore`)
+- [x] Behavior-neutrality proof: `deparse(parse(keep.source = FALSE))` identical per file; roxygenise leaves NAMESPACE unchanged
+
+#### Phase 5: Verify and report
+- [x] `test_local()` passes with slow tests skipped
+- [x] ... and with `MWPERM_SLOW_TESTS=true`
+- [x] `R CMD check --as-cran`: no new ERROR/WARNING/NOTE
+- [x] Coverage after
+- [x] Mutation check (a)-(e), throwaway branch deleted
+- [x] Commits: tests and comments separate, small
+- [x] Final report
+
+### Phase 1 baseline (2026-09-24, package 0.4.2)
+
+**Base-R suite:** 16/16 top-level files pass (`Rscript tests/test-*.R` after
+`R CMD INSTALL .`). `test-lower-level.R` runs the 8 lower-level files. Wall
+times in seconds: dyadic 1, equivariance 3, formula 0, golden 9, irregular 0,
+layout 1, lower-level 16, main 9, methods 1, missing 1, panel-missing 1,
+panel 1, readme 1, signflip 14, threeway 1, validation 1. Total about 60 s.
+
+**Coverage (covr, `type = "tests"`, base-R suite only):** 94.5% overall.
+
+| File | coverable lines | covered | % |
+|---|---:|---:|---:|
+| R/core.R | 186 | 177 | 95.2 |
+| R/dyadic.R | 36 | 36 | 100.0 |
+| R/engine.R | 660 | 605 | 91.7 |
+| R/formula.R | 44 | 44 | 100.0 |
+| R/irregular.R | 177 | 164 | 92.7 |
+| R/layout.R | 99 | 99 | 100.0 |
+| R/methods.R | 154 | 154 | 100.0 |
+| R/missing.R | 373 | 357 | 95.7 |
+| R/panel.R | 36 | 36 | 100.0 |
+| R/panel_missing.R | 194 | 190 | 97.9 |
+| R/perm_set.R | 38 | 38 | 100.0 |
+| R/plot.R | 386 | 377 | 97.7 |
+| R/signflip.R | 134 | 122 | 91.0 |
+| R/threeway.R | 32 | 32 | 100.0 |
+| R/unified.R | 688 | 628 | 91.3 |
+
+The uncovered lines that carry the method are:
+
+* the disconnected-set note on the exact path (`engine.R` 394-403);
+* the bisection fallback's rejected-centre restart and its island-guard
+  widening (`engine.R` 901-904, 954-959);
+* the unbounded-bracket return (`engine.R` 918);
+* the blockwise `.row_median()` path (`engine.R` 576-585);
+* the joint-region budget guards (`engine.R` 1038-1064);
+* `.ipt_pvalue()` (`core.R` 433-434);
+* the `.cell_code()` 2^53 guard (`core.R` 72-75);
+* the exact-biclique budget fallback in `find_bicliques()` (`missing.R` 603);
+* the greedy retry-peel success path (`missing.R` 631-638).
+
+**R CMD check --as-cran (baseline):** 0 ERROR, 0 WARNING, 3 NOTEs: "New submission" (CRAN incoming), "unable to verify current time", and HTML-manual tidy warnings from R 4.3.2's Rd2HTML template. The same three NOTEs as the maintainer's documented gate. Check time 118 s. The tarball contains no private or root-level planning files.
+
+### Final report (2026-09-24)
 
 Written for a reader who saw none of the work. The evidence (scripts, logs,
 raw tables) is cached locally under the session's simulation-cache
 directory, so every number can be re-derived without re-running anything.
 
-### What was done
+#### What was done
 
 * **Test suite.** A testthat 3e suite, `tests/testthat/`: 13 test files, one
   helper, two snapshot files, 111 tests. It was added *alongside* the
@@ -433,7 +449,7 @@ directory, so every number can be re-derived without re-running anything.
   pages (hand-applied exactly as roxygen appends it; `checkRd()` clean),
   plus the one corrected sentence.
 
-### Results at a glance
+#### Results at a glance
 
 | Check | Result |
 |---|---|
@@ -459,7 +475,7 @@ Negative control (draft Sec. 3.2), 200 simulations at alpha = 0.05: the
 three-way test rejects 0.690 and the panel test 0.060 (its bound is
 0.096). Power at beta = 0.6 is 1.000.
 
-### Coverage per file (covr lines; before = base-R suite only, after = both suites)
+#### Coverage per file (covr lines; before = base-R suite only, after = both suites)
 
 | File | before | after |
 |---|---:|---:|
@@ -484,7 +500,7 @@ The "after" figure runs under R CMD check conditions, where the slow and
 snapshot tests are skipped. The coverable-line counts are identical before
 and after, as they must be if the comment pass changed no code.
 
-### Traceability gaps
+#### Traceability gaps
 
 See *Gaps (with reasons)* above. In short:
 * asymptotic power theorems (untestable in finite samples);
@@ -494,7 +510,7 @@ See *Gaps (with reasons)* above. In short:
 * the draft's Table 3 (not reproducible from its snippet);
 * the CEPII panel (data not distributed).
 
-### Discrepancies
+#### Discrepancies
 
 None is a code bug, and no finding changes a number. Details and evidence
 are in the *Discrepancy log* above.
@@ -519,7 +535,7 @@ The four "known leads" in the task brief were all verified:
 * the even-rep median: the reported value can leave the grid. The draft
   (Sec. 2.5) and `print()` both say so, so this is not a discrepancy.
 
-### Mutation check
+#### Mutation check
 
 | Mutation | testthat tests failing | base-R files failing | caught by (testthat, examples) |
 |---|---:|---|---|
@@ -536,13 +552,13 @@ Two notes on the pattern:
 * Mutation (a) is caught only where ties are real (y = 0, a cell-constant d, D in col(X), and the irregular example, whose cell-constant d gives exact ties). The reference comparisons avoid near-ties on purpose.
 * Mutation (d) is caught by the two p-value comparisons with the shared-(pi, sigma) reference, and by the golden and panel base files, but not by the structural test. That test cannot reach the front end's own group; see F-1.
 
-### Runtimes
+#### Runtimes
 
 About 30 s for the default testthat suite; 140 s for the slow Monte Carlo
 tests alone; about 60 s for the base-R suite; 155 s for
 `R CMD check --as-cran` (all tests included).
 
-### Decisions made without the maintainer (please review)
+#### Decisions made without the maintainer (please review)
 
 1. **A new branch, and a snapshot commit of your uncommitted 0.4.2 work.**
    The brief asked for small commits on a new branch. The 0.4.2 changes
@@ -570,6 +586,6 @@ tests alone; about 60 s for the base-R suite; 155 s for
    covr and roxygen2 7.3.2 came from an existing local tool library, so
    nothing was downloaded.
 
-### Follow-ups
+#### Follow-ups
 
 See *Follow-ups (testing seams, not implemented)* above: F-1 to F-6.
