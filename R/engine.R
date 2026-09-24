@@ -1,4 +1,36 @@
-## Shared internals for all mwperm_* front ends. Not exported.
+## ============================================================================
+## R/engine.R -- the shared driver: repetitions, aggregation, test inversion
+##
+## Purpose. .ipt_engine() is the single function every front end calls. Given
+##   the data and a design-specific builder of the group, it
+##   1. validates the inputs (the N > 2p premise of Theorem 1 among them);
+##   2. runs Procedure 1 once per repetition r = 1..n_reps, each on a fresh
+##      random group drawn from seed + r - 1 (.ipt_prepare/.ipt_eval in
+##      core.R);
+##   3. aggregates the per-repetition p-values by the median of Remark 1
+##      (.agg_pvals) -- ONE rule, used for the reported p-value and for the
+##      confidence set alike;
+##   4. inverts the aggregated test into the confidence set of Procedure 1,
+##      step 3: exactly for one coefficient (.ci_breakpoints,
+##      .exact_ci_set), by an explicit grid, by bracketing and bisection
+##      above a budget (.invert_ci), and on a grid for several coefficients
+##      (.invert_region);
+##   5. assembles the "mwperm" object the S3 methods read.
+##   The rest of the file is shared front-end plumbing: validation, the
+##   default K (Algorithm 1 needs K + 1 <= n), the per-repetition seed
+##   stream, the OLS reference estimate and the parallel map.
+## Paper. Guo, Toulis & Wang (2026): Procedure 1 (steps 2-3), Eq. (10),
+##   Theorem 1 (p < N/2), Remark 1 (median of repetitions). The JSS draft:
+##   Section 2.3 (one aggregation rule), 2.4 (the closed-form set and its
+##   closure convention), 2.5 (resolution) and 3.7-3.8 (budget, seeds).
+## Deviation from the printed text. The paper's set is {b : pval(b) > alpha};
+##   the exact route reports each connected component CLOSED, so an end
+##   point can be a rejected jump while every interior point is accepted
+##   (outward, i.e. conservative; discrepancy D10 in TESTING_PLAN.md).
+## Pipeline. mwperm() -> dispatch -> design worker -> permutation
+##   construction -> [projection engine] -> [median aggregation] -> [test
+##   inversion] -> S3 methods. Called by every mwperm_* front end.
+## ============================================================================
 
 #' Parallel lapply with a serial default and a Windows PSOCK fallback.
 #'
@@ -16,6 +48,9 @@
 #' where RhpcBLASctl is installed, workers pin BLAS to one thread. `n_cores`
 #' beyond the detected core count is clamped silently here (the engine warns
 #' once per fit, naming the argument).
+#' @details Execution helper; not a paper step. Every task it runs is seeded
+#'   or RNG-free, so parallel output is bit-identical to serial (JSS draft,
+#'   Section 3.8).
 #' @keywords internal
 #' @noRd
 .plapply <- function(X, FUN, n_cores = 1L, method = c("auto", "fork", "psock"),
@@ -58,6 +93,7 @@
 #' package honours the standard throttle. Inf when detection fails and no
 #' option is set, so the clamp becomes a no-op rather than blocking a
 #' legitimate request.
+#' @details Execution helper; not a paper step.
 #' @keywords internal
 #' @noRd
 .n_cores_max <- function() {
@@ -69,6 +105,8 @@
 
 #' OLS reference estimate of the coefficient(s) of interest and a naive SE
 #' (used only as a centre/scale for the confidence-interval search).
+#' @details Not a paper step: the OLS estimate the package reports beside the
+#'   test, and a centre and scale for the confidence-set search.
 #' @keywords internal
 #' @noRd
 .ols_reference <- function(y, D, X) {
@@ -108,13 +146,17 @@
 #' one for the confidence set, and it is the same rule, so the reported
 #' decision and the reported set are guaranteed consistent:
 #'
-#' confidence set = { b : agg_r p_r(b) > alpha } p-value = agg_r
-#' p_r(beta_null)
+#' \preformatted{  confidence set = { b : agg_r p_r(b) > alpha }
+#'   p-value        = agg_r p_r(beta_null)}
 #'
 #' What is REPORTED for d = 1 is the closure of that set (.exact_ci_set()), so
 #' an end point may itself be rejected while every interior point is accepted;
 #' the direction is outward, and nothing the test accepts is ever left out.
 #'
+#' @details Procedure 1 of Guo, Toulis and Wang (2026) run n_reps times, each
+#'   repetition on a fresh random group (Algorithm 1, or the sign-flip group),
+#'   aggregated by the median of Remark 1 (`.agg_pvals()`), and inverted to
+#'   the confidence set of step 3 (`.invert_ci()`, `.invert_region()`).
 #' @param y,D,X numeric outcome, covariate(s) of interest, and nuisance design
 #'   (intercept already included), all with N rows.
 #' @param perm_builder function(rep_seed) -> list of K+1 group elements over
@@ -122,7 +164,7 @@
 #'   `y`. **An element is either a bare integer gather vector or a signed
 #'   gather `list(g = , s = )`** -- see `.apply_op()` in core.R for the
 #'   contract and `.ipt_prepare()` for why the engine can treat both alike.
-#'   The five permutation front ends return gather vectors;
+#'   The seven permutation front ends return gather vectors;
 #'   `mwperm_dyadic_het()` returns sign-flip elements (`g = NULL`); a design
 #'   that permutes and flips would return both slots filled. Whatever kind it
 #'   returns, the list must be a group closed under composition with the
@@ -214,6 +256,8 @@
   conf_level <- 1 - alpha            # always the complement of the test level
   ## Need more observations than the stacked projection [X | X_k] consumes; with
   ## p nuisance columns that projection has up to 2p columns.
+  ## Theorem 1 of GTW assumes p < N/2: Procedure 1's V_k has N - 2p columns
+  ## in the full-rank case, so the stacked projection must leave room.
   if (N <= 2L * p) {
     stop(sprintf(paste0("Need N > 2p for the projection to exist: N = %d, ",
                         "p = %d nuisance columns (incl. intercept). Drop ",
@@ -301,10 +345,12 @@
     psock_cl <- parallel::makePSOCKcluster(n_cores)
     on.exit(parallel::stopCluster(psock_cl), add = TRUE)
   }
+  ## One repetition = one random group (Algorithm 1, or the sign-flip group)
+  ## + Procedure 1 step 1 (the cached projections) + Eq. (10) at the null.
   one_rep <- function(s) {
     op <- perm_builder(s)               # K+1 gather-vectors for this rep
     ## A builder may confine this repetition to a subset of the rows: the
-    ## Section 6.4 random trim (mwperm_irregular(trim = "random")) redraws
+    ## Section 6.4 random trim (mwperm_irregular()) redraws
     ## the retained observations from the rep seed, so the group elements it
     ## returns index a subsample, named in `attr(op, "rows")`. Every
     ## inversion path consumes only the cached cross products of the prep
@@ -330,6 +376,8 @@
   ## value the test accepts can fall outside the reported set (the set's end
   ## points are its closure -- see .exact_ci_set()). With ci_agg = "median" (the
   ## default) and any n_reps this is exactly stats::median(pv), bit for bit.
+  ## Remark 1 of GTW: the reported p-value is the median of the n_reps
+  ## per-repetition p-values (min(1, 2 x median) under "median2").
   pvalue <- .agg_pvals(matrix(pv, nrow = 1L), ci_agg)[1L]
   Kp1 <- prep_list[[1L]]$Kp1            # realised group order (K + 1)
 
@@ -497,6 +545,9 @@
 #' grid path took a UNION over reps (systematically wider, and growing with
 #' `n_reps`). Neither inverted the same function as the reported p-value.
 #'
+#' @details Remark 1 of Guo, Toulis and Wang (2026): the median of the
+#'   per-repetition p-values. "median2" (twice the median) is the package's
+#'   level-alpha variant.
 #' @param P numeric matrix, one row per candidate `b`, one column per rep.
 #' @param agg "median" (Guo, Toulis and Wang 2026, Remark 1 -- the default,
 #'   and the rule the reported p-value uses), "median2" (min(1, 2 * median), a
@@ -515,6 +566,8 @@
 }
 
 #' Row medians of one block of rows. Helper for .row_median(); see there.
+#' @details Remark 1 of GTW (2026): the median over repetitions, bit-identical
+#'   to median().
 #' @keywords internal
 #' @noRd
 .row_median_block <- function(P) {
@@ -568,6 +621,8 @@
 #' .pval_matrix() chunks; each row is independent, so the block size cannot
 #' change a result.
 #'
+#' @details Remark 1 of GTW (2026): the median over repetitions, bit-identical
+#'   to median().
 #' @param P numeric matrix with at least one column.
 #' @return numeric vector of length nrow(P).
 #' @keywords internal
@@ -596,6 +651,8 @@
 #' instead of one R-level call per candidate. Chunked so a large candidate set
 #' cannot blow up memory.
 #'
+#' @details Eq. (10) of GTW (2026) at many null values b at once (Procedure 1,
+#'   step 3).
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param b numeric vector of candidate null values.
 #' @return numeric matrix, length(b) rows x length(prep_list) columns.
@@ -624,7 +681,8 @@
       ## never allocates them (measured 1.4-1.9x on this block).
       amin <- abs(u[1L] - M[1L] * bb)
       if (K > 1L) for (j in 2L:K) amin <- pmin(amin, abs(u[j] - M[j] * bb))
-      ## same comparison and tie direction as .ipt_eval(): b_k >= min_j a_j
+      ## same comparison and tie direction as .ipt_eval(): b_k >= min_j a_j,
+      ## i.e. Eq. (10)'s indicator 1{min_j a_j <= b_k}
       cnt <- integer(length(bb))
       for (k in seq_len(K)) cnt <- cnt + (abs(v[k] - W[k] * bb) >= amin)
       P[ii, r] <- (1 + cnt) / pr$Kp1
@@ -644,14 +702,16 @@
 #' Dropping the absolute values, a crossing solves v_k - W_k b = +/- (u_j -
 #' M_j b), giving the two root families
 #'
-#' b = (u_j - v_k) / (M_j - W_k) [the + branch] b = (u_j + v_k) / (M_j + W_k)
-#' [the - branch]
+#' \preformatted{  b = (u_j - v_k) / (M_j - W_k)   [the + branch]
+#'   b = (u_j + v_k) / (M_j + W_k)   [the - branch]}
 #'
 #' over all (j, k) in 1..K. Non-finite roots (a zero denominator: the two
 #' lines are parallel and never cross) are discarded. Between consecutive
 #' roots the p-value is exactly constant, which is what makes the confidence
 #' set computable in closed form rather than by search.
 #'
+#' @details Procedure 1, step 3 of GTW (2026): the jumps of b -> pval(b),
+#'   where |v_k - W_k b| = |u_j - M_j b| (JSS draft, Section 2.4).
 #' @param prep_list list of per-rep prep objects.
 #' @return sorted numeric vector of distinct finite roots, pooled over reps.
 #' @keywords internal
@@ -664,6 +724,7 @@
     M <- pr$M[1L, 1L, ]
     v <- pr$v[1L, ]
     W <- pr$W[1L, 1L, ]
+    ## all K x K crossings of |v_k - W_k b| with |u_j - M_j b|, both signs
     b <- c(outer(u, v, `-`) / outer(M, W, `-`),   # v_k - W_k b = +(u_j - M_j b)
            outer(u, v, `+`) / outer(M, W, `+`))   # v_k - W_k b = -(u_j - M_j b)
     out[[r]] <- b[is.finite(b)]
@@ -695,6 +756,9 @@
 #' accepted value. Reporting the attained side instead is a different object
 #' and would move published end points; see the 0.3.0 section of NEWS.md.
 #'
+#' @details Procedure 1, step 3 of GTW (2026): CI = {b : pval(b) > alpha},
+#'   exactly. Each component is reported closed, so an end point may itself be
+#'   rejected (see Details), i.e. need not belong to the paper's set.
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param alpha test level.
 #' @param agg cross-rep aggregation rule; see .agg_pvals().
@@ -738,6 +802,8 @@
   lower <- c(-Inf, rep(roots, each = 2L))
   upper <- c(rep(roots, each = 2L), Inf)
 
+  ## Procedure 1, step 3: accepted where the AGGREGATED p-value exceeds alpha
+  ## (strict >, so a p-value exactly at alpha rejects, as in the test)
   acc <- .agg_pvals(.pval_matrix(prep_list, cand), agg) > alpha
   acc[is.na(acc)] <- FALSE             # a degenerate rep cannot leak in
   idx <- which(acc)
@@ -782,6 +848,8 @@
 #'   Accepted per-permutation estimates outside the bracket flag a
 #'   disconnected set and widen the interval to the hull.
 #'
+#' @details Procedure 1, step 3 of GTW (2026) for a single coefficient (d =
+#'   1).
 #' @param prep_list list of per-rep prep objects (each with `has_perm_D =
 #'   TRUE`).
 #' @param alpha,centre,scale test level, and the OLS estimate / naive SE used
@@ -932,13 +1000,24 @@
   ## per-permutation estimate outside the bracketed interval certifies a
   ## disconnected set; the interval is then extended to the boundary of the
   ## outlying component (a conservative hull, never narrower) and flagged.
+  ##
+  ## The candidates are screened in ONE .pval_matrix() call rather than one
+  ## pval_at() each: there are up to K * n_reps of them (17,500 for
+  ## mwperm_irregular() at its default 500 reps), and each separate call
+  ## looped over every rep. The values are the same -- .pval_matrix() is
+  ## elementwise in the candidates (per element one multiply and one
+  ## subtract, then a min and an integer count over j and k, with no
+  ## reduction across candidates) and .agg_pvals() is row-independent -- which
+  ## is what the exact path already relies on when it evaluates every
+  ## breakpoint at once.
+  accepted <- function(b)
+    if (!length(b)) b
+    else b[.agg_pvals(.pval_matrix(prep_list, b), agg) > alpha]
   lo_r <- one_side(-1)
   up_r <- one_side(+1)
   disconnected <- FALSE
-  out_lo <- bhat_all[bhat_all < lo_r]
-  out_hi <- bhat_all[bhat_all > up_r]
-  out_lo <- out_lo[vapply(out_lo, function(b) pval_at(b) > alpha, logical(1))]
-  out_hi <- out_hi[vapply(out_hi, function(b) pval_at(b) > alpha, logical(1))]
+  out_lo <- accepted(bhat_all[bhat_all < lo_r])
+  out_hi <- accepted(bhat_all[bhat_all > up_r])
   if (length(out_lo)) {
     disconnected <- TRUE
     lo_r <- one_side(-1, start = min(out_lo))
@@ -964,6 +1043,8 @@
 #' the grid). Cheap because every evaluation reuses the cached `prep` objects
 #' via `.ipt_eval()` (no QR refactorisation).
 #'
+#' @details Procedure 1, step 3 of GTW (2026) for several coefficients (d >
+#'   1), on a grid.
 #' @param prep_list list of per-rep prep objects (with `has_perm_D = TRUE`).
 #' @param centre,scale length-d OLS estimate / naive SE, used to place a
 #'   default grid around the estimate.
@@ -1072,6 +1153,7 @@
 
 #' Validate and coerce a cluster id vector to dense 1-based integers.
 #'
+#' @details Input validation; not a paper step.
 #' @param x the cluster id vector (any type coercible by `factor`).
 #' @param what the user-facing argument name, used in the error message.
 #' @keywords internal
@@ -1091,6 +1173,7 @@
 #' corruption for an outcome. `d`/`x` are protected by matrix coercion (their
 #' mode stays character and `.check_finite` rejects it); `y` needs this
 #' explicit guard because factors are numeric-coercible.
+#' @details Input validation; not a paper step.
 #' @keywords internal
 #' @noRd
 .check_y <- function(y) {
@@ -1105,6 +1188,7 @@
 #' Error unless every supplied vector/matrix is numeric (or logical) with all
 #' entries finite. NULLs are skipped; names label the user-facing arguments in
 #' the error messages.
+#' @details Input validation; not a paper step.
 #' @keywords internal
 #' @noRd
 .check_finite <- function(vars) {
@@ -1126,6 +1210,7 @@
 
 #' Error if any supplied vector does not have length N.
 #'
+#' @details Input validation; not a paper step.
 #' @param N expected length (the number of observations).
 #' @param vars a named list of vectors to check; names appear in the message.
 #' @keywords internal
@@ -1139,6 +1224,7 @@
 }
 
 #' Assemble the nuisance design X (with intercept) from a covariate spec.
+#' @details The nuisance design X of Eq. (7) of GTW (2026), intercept first.
 #' @keywords internal
 #' @noRd
 .make_X <- function(x, N, intercept = TRUE) {
@@ -1154,8 +1240,9 @@
 }
 
 ## ---- shared front-end helpers --------------------------------------------
-## Used by every mwperm_* front end (dyadic, panel, threeway, layout, missing)
-## to pick the permutation-group order, derive coefficient labels, derive
+## Used by every mwperm_* front end (dyadic, panel, threeway, layout, missing,
+## panel_missing, irregular, dyadic_het) to pick the permutation-group order,
+## derive coefficient labels, derive
 ## per-rep seeds, and validate complete-array designs.
 
 #' Default / validate the permutation-group order K.
@@ -1165,12 +1252,17 @@
 #' dimension. When `K` is `NULL` the largest group the design supports is
 #' used, capped at `cap`.
 #'
+#' @details Algorithm 1 of GTW (2026) needs K + 1 <= n in every permuted
+#'   dimension (Section 3.2); Eq. (10) then gives the resolution 1/(K + 1).
 #' @param K user-supplied `K` or `NULL`.
 #' @param dim_sizes the sizes of the permuted dimensions (scalar or vector);
 #'   the smallest one bounds the group order.
 #' @keywords internal
 #' @noRd
 .default_K <- function(K, dim_sizes, cap = 199L) {
+  ## Algorithm 1 builds blocks of K + 1 indices, so K + 1 <= n in every
+  ## permuted dimension; the largest such group gives the finest resolution
+  ## 1/(K + 1) of Eq. (10).
   smallest <- min(dim_sizes)
   gmax <- smallest - 1L
   if (is.null(K)) {
@@ -1201,24 +1293,45 @@
 #' sign-flip group has order `2^(n_flip - 1)` (not `n_flip + 1`), so the
 #' smallest attainable p-value is `1 / 2^(n_flip - 1)` and the cost -- one
 #' residual projection per non-identity element -- is EXPONENTIAL in
-#' `n_flip`, where the permutation designs' cost is linear in `K`. Hence a
-#' fixed default rather than "as large as the design allows": `n_flip = 8`
-#' gives order 128 and a floor of 0.0078, resolution enough for a 95% set
-#' (which needs `2^(n_flip - 1) >= 20`, i.e. `n_flip >= 6`) at 127
-#' projections per repetition. The default is capped at `min(n_row, n_col)`
-#' so every flip group can be reached by the row assignment alone, and a
-#' request above `max_flip` is refused with the projection count it implies.
+#' `n_flip`, where the permutation designs' cost is linear in `K`. Hence the
+#' default is not "as large as the design allows" but the package's
+#' resolution rule applied to this group (0.4.2, on the advisors' "n_flip
+#' 5/6/7/8; K should be greater than 20"): the smallest `n_flip >= 2` whose
+#' REPORTED p-value floor is at most `alpha`, i.e. `2^(n_flip - 1) >=
+#' m / alpha` with `m = 1` under `aggregate = "median"` and `m = 2` under
+#' `"median2"` (whose reported value is `min(1, 2 * median)`, so its floor
+#' is doubled -- see `p_floor` in `.ipt_engine()`). At `alpha = 0.05` that
+#' is 6 (order 32, floor 1/32, 31 projections per repetition) under
+#' `"median"` and 7 (order 64) under `"median2"`; at `alpha = 0.01`, 8 and 9.
+#' The default is then capped at `min(n_row, n_col)` so every flip group can
+#' be reached by the row assignment alone, and a request above `max_flip` is
+#' refused with the projection count it implies. An explicit `n_flip` is
+#' honoured as given (`alpha` is then not consulted here; the engine
+#' validates it).
 #'
+#' @details The order 2^(n_flip - 1) of the sign-flip group (revised
+#'   Assumption 2 of GTW), chosen by the resolution rule that Eq. (10)
+#'   implies.
 #' @param n_flip user-supplied `n_flip` or `NULL`.
 #' @param n_row,n_col the two cluster counts.
-#' @param default the value used when `n_flip` is `NULL` (before the cap).
+#' @param alpha,aggregate the fit's test level and cross-repetition rule,
+#'   which together set the floor the default must clear.
 #' @param max_flip the largest `n_flip` accepted.
 #' @keywords internal
 #' @noRd
-.default_n_flip <- function(n_flip, n_row, n_col, default = 8L,
+.default_n_flip <- function(n_flip, n_row, n_col, alpha = 0.05,
+                            aggregate = c("median", "median2"),
                             max_flip = 20L) {
   smallest <- min(n_row, n_col)
   if (is.null(n_flip)) {
+    aggregate <- match.arg(aggregate)
+    if (!(is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha) &&
+          alpha > 0 && alpha < 1))
+      stop("`alpha` must be a single number strictly between 0 and 1.",
+           call. = FALSE)
+    ## 2^(n_flip - 1) >= m / alpha  <=>  n_flip >= 1 + log2(m / alpha)
+    agg_mult <- if (identical(aggregate, "median2")) 2L else 1L
+    default <- max(2L, 1L + as.integer(ceiling(log2(agg_mult / alpha))))
     n_flip <- min(default, smallest)
   } else {
     if (!(is.numeric(n_flip) && length(n_flip) == 1L && is.finite(n_flip) &&
@@ -1231,8 +1344,11 @@
                           "has 2^(n_flip - 1) elements, so the fit would ",
                           "need %s residual projections (one factorization ",
                           "of the stacked design [X | S_k X] each) per ",
-                          "repetition. Use n_flip <= %d; n_flip = 8 (127 ",
-                          "projections, p-value floor 1/128) is the default."),
+                          "repetition. Use n_flip <= %d; the default is the ",
+                          "smallest n_flip whose p-value floor ",
+                          "1/2^(n_flip - 1) is at most alpha (6 at alpha = ",
+                          "0.05: 31 projections, floor 1/32), and each ",
+                          "extra flip group doubles the cost."),
                    n_flip, format(2^(n_flip - 1) - 1, big.mark = ",",
                                   scientific = FALSE),
                    max_flip), call. = FALSE)
@@ -1260,6 +1376,7 @@
 #' The `"perm"` strings are byte-identical to the historical wording, so no
 #' existing note changes.
 #'
+#' @details Wording of the resolution notes; not a paper step.
 #' @param group `"perm"` or `"flip"`.
 #' @param agg_mult 1, or 2 under `aggregate = "median2"`.
 #' @param need_lvl the group order a `(1 - alpha)` set needs,
@@ -1306,6 +1423,8 @@
 #' change that design's seeded output; that is the point, and it is recorded
 #' in NEWS.
 #'
+#' @details The per-repetition seed stream for the random relabelling pi of
+#'   Algorithm 1 (GTW 2026) and its analogues (JSS draft, Section 3.8).
 #' @param rep_seed the rep-level seed, or `NULL` for the ambient RNG.
 #' @param j the within-rep offset (dimension, cell, or block slot).
 #' @param stride the multiplier separating consecutive rep seeds. Must exceed
@@ -1321,6 +1440,9 @@
                         "stride %d, which would make two repetitions share a ",
                         "permutation relabelling. Please report this."),
                  max(j), stride), call. = FALSE)   # nocov
+  ## repetition r's seed is seed + r - 1 (set in .ipt_engine); dimension,
+  ## cell or block j of that repetition draws its Algorithm 1 relabelling
+  ## from rep_seed * stride + j (JSS draft, Section 3.8)
   s <- rep_seed * stride + j
   if (abs(s) > .Machine$integer.max)
     stop(sprintf(paste0("`seed` is too large for this design's rep/sub-seed ",
@@ -1346,6 +1468,7 @@
 #' the vector [1]`. Fall back to a generic `"d"` in that case. Single-line
 #' deparses (every call that worked before) are untouched, so no existing
 #' label or seeded result changes.
+#' @details Coefficient labels; not a paper step.
 #' @keywords internal
 #' @noRd
 .coef_names <- function(D, fallback) {
@@ -1361,6 +1484,8 @@
 #' Consolidates the identical check used by [mwperm_panel()] and
 #' [mwperm_threeway()].
 #'
+#' @details Procedure 1 of GTW (2026) needs a complete array; an incomplete
+#'   one is the setting of Procedure 2 (Section 5).
 #' @param coords integer matrix of cluster coordinates, one row per
 #'   observation.
 #' @param sizes named integer vector of per-dimension sizes; the names label

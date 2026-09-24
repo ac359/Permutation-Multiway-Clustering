@@ -179,6 +179,12 @@ rows, few columns, or vice versa) can reach resolutions the two-sided test
 cannot. The price is power: a smaller group ignores invariance information
 in the unpermuted dimension, so when both sides are large enough for
 \code{permute = "both"}, the default is the better choice.
+
+Implements Procedure 2 of Guo, Toulis and Wang (2026): fully
+observed, disjoint blocks (Definition 1; Algorithm 2, via
+find_bicliques()), Algorithm 1 on each block's rows and columns with a
+common K, and Procedure 1 on the stacked retained data with the
+concatenated group. Validity is their Theorem 4 under Assumption 4.
 }
 \examples{
 data(trade_dyadic)

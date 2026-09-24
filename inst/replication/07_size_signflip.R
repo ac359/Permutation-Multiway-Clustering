@@ -18,8 +18,11 @@
 ##
 ## Both tests run at n_reps = 1 (Theorem 1's configuration): the permutation
 ## test at its default K = 24, the sign-flip test at n_flip = 6 (group order
-## 32, so rejection at 0.05 is attainable; the default 8 costs four times as
-## much and, at this n, changes little).
+## 32, so rejection at 0.05 is attainable; since 0.4.2 this is also the
+## front end's default at alpha = 0.05 -- it was a fixed 8 in 0.4.0-0.4.1,
+## which costs four times as much and, at this n, changes little). n_flip is
+## passed explicitly so the expected output is pinned to the value, not to
+## the default.
 ##
 ## Usage:  Rscript 07_size_signflip.R          # 500 sims/cell (default)
 ## Output: out/07_size_signflip.txt (+ _summary.rds); cache under ./cache.

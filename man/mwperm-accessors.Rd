@@ -26,6 +26,13 @@ the inferential quantity is the IPT confidence set, see
 observations the fit used (for \code{\link{mwperm_missing}}, the cells
 inside the selected blocks).
 }
+\details{
+coef() reports the OLS estimate, which is not a quantity of the
+permutation test.
+
+nobs() reports the observations Procedure 1 (or, for the biclique
+designs, Procedure 2) actually used.
+}
 \examples{
 data(trade_dyadic)
 fit <- mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,

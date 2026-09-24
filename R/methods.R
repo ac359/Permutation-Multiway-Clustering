@@ -1,5 +1,18 @@
-## S3 methods for objects of class "mwperm".
+## ============================================================================
+## R/methods.R -- print(), summary() and confint() for "mwperm" objects
+##
+## Purpose. Report what the engine stored: the aggregated p-value of Eq. (10)
+##   with its resolution 1/(K + 1), the OLS estimate, and the confidence set
+##   of Procedure 1, step 3. Nothing is recomputed here.
+## Paper. Guo, Toulis & Wang (2026): Eq. (10) (the p-value and its grid),
+##   Remark 1 (median of repetitions), Procedure 1 step 3 (the set).
+## Pipeline. mwperm() -> dispatch -> design worker -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> [S3 methods]. plot() lives in plot.R.
+## ============================================================================
 
+#' Format a p-value for printing (three decimals, or "< 0.001").
+#' @details Printing only; not a paper step.
 #' @keywords internal
 #' @noRd
 .fmt_p <- function(p) {
@@ -35,6 +48,9 @@
 #' over all of them, and the printed brackets are the marginal extent of one
 #' joint confidence region -- not separate per-coefficient intervals.
 #'
+#' @details Reports the p-value of Procedure 1 (Eq. 10 of Guo, Toulis and Wang
+#'   2026, aggregated by the median of their Remark 1), the set of step 3 when
+#'   it was computed, and the resolution 1/(K + 1) that Eq. (10) implies.
 #' @param x An object of class `"mwperm"`.
 #' @param digits Number of significant digits for the estimate and interval.
 #' @param ... Ignored.
@@ -60,7 +76,9 @@ print.mwperm <- function(x, digits = 4L, ...) {
     cat(strwrap(txt, initial = initial, prefix = prefix,
                 width = 0.9 * getOption("width", 80)), sep = "\n")
 
-  cat("\nInvariant permutation test (mwperm)\n")
+  ## A sign-flip fit relabels nothing, so its header names its own group.
+  cat(if (is.null(x$n_flip)) "\nInvariant permutation test (mwperm)\n"
+      else "\nInvariant sign-flip test (mwperm)\n")
   cat(strrep("-", 36), "\n", sep = "")
   cat("Design       : ", x$type, "\n", sep = "")
   if (!is.null(x$auto))                 # dispatched via mwperm(): say why
@@ -187,6 +205,7 @@ print.mwperm <- function(x, digits = 4L, ...) {
 #' limits, and the permutation p-value for H0:beta = b; see *Value* for the
 #' exact meaning of each column.
 #'
+#' @details The quantities print() reports, as a data frame.
 #' @param object An object of class `"mwperm"`.
 #' @param ... Ignored.
 #' @return A data frame, invisibly, with one row per coefficient and columns
@@ -250,6 +269,8 @@ summary.mwperm <- function(object, ...) {
 #' time (`1 - alpha`); a different level requires refitting with the
 #' corresponding `alpha`.
 #'
+#' @details Returns the set of Procedure 1, step 3 of Guo, Toulis and Wang
+#'   (2026), `{b : pval(b) > alpha}`, as it was computed at fit time.
 #' @section How the set is defined: Procedure 1, step 3 of Guo, Toulis and
 #'   Wang (2026) defines the confidence region as the set of null values the
 #'   test does not reject, that is `{b : pval(b) > alpha}`. With `n_reps >

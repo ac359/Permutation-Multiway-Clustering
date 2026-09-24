@@ -1,3 +1,13 @@
+## ============================================================================
+## R/plot.R -- plot() and mwperm_save() for "mwperm" objects
+##
+## Purpose. Draw the stored result: the OLS estimate with the inverted set
+##   (Procedure 1, step 3), a joint region, or the per-repetition p-values
+##   whose median (Remark 1) is reported. Figures only; no test is re-run.
+## Paper. Guo, Toulis & Wang (2026): Procedure 1 step 3, Eq. (10), Remark 1.
+## Pipeline. ... -> test inversion -> [S3 methods: plot(), mwperm_save()].
+## ============================================================================
+##
 ## Plotting for "mwperm" objects. One shared style layer (.mwperm_style) feeds
 ## small drawing primitives (one per figure type: .mwperm_plot_coef /
 ## .mwperm_plot_region / .mwperm_plot_stability); plot.mwperm() dispatches on
@@ -16,6 +26,7 @@
 #' error (they are almost certainly typos). Grayscale/colour-vision safety:
 #' the data marks (estimate, interval, region) and the reference lines (null,
 #' alpha) differ in pch/lty as well as colour.
+#' @details Plotting only; not a paper step.
 #' @keywords internal
 #' @noRd
 .mwperm_style <- function(...) {
@@ -73,6 +84,7 @@
 
 #' Standard subtitle: design, per-dimension cluster counts, N, resolution
 #' (plus the biclique-block summary for the missing design).
+#' @details Plotting only; not a paper step.
 #' @keywords internal
 #' @noRd
 .mwperm_subtitle <- function(x) {
@@ -91,6 +103,7 @@
 }
 
 #' One-line statistical annotation: the null, the p-value, the decision.
+#' @details Plotting only: the decision pval <= alpha of Eq. (10).
 #' @keywords internal
 #' @noRd
 .mwperm_decision <- function(x) {
@@ -104,6 +117,7 @@
 
 #' Shrink a cex until the text fits the panel width (never below min_cex).
 #' Must be called after plot.new() (strwidth needs an open plot).
+#' @details Plotting only; not a paper step.
 #' @keywords internal
 #' @noRd
 .shrink_cex <- function(txt, cex, min_cex = 0.55) {
@@ -115,6 +129,7 @@
 #' Shared plot skeleton: open panel, bottom/left axes only (no top/right
 #' spines, outward ticks), and the three-line title block -- main, the
 #' standard subtitle, and the H0 / p-value / decision annotation.
+#' @details Plotting only; not a paper step.
 #' @keywords internal
 #' @noRd
 .mwperm_frame <- function(fit, style, xlim, ylim, main, sub, xlab, ylab,
@@ -152,6 +167,7 @@
 }
 
 #' Pad a range for plotting limits, ignoring non-finite values.
+#' @details Plotting only; not a paper step.
 #' @keywords internal
 #' @noRd
 .pad_range <- function(v, f = 0.15) {
@@ -168,6 +184,7 @@
 #' drawn as an outward arrow) against a dashed null reference. d > 1: a forest
 #' of the joint region's marginal extents (conf_box), rows ordered by
 #' estimate. Availability is checked by the dispatcher.
+#' @details Plotting only: draws the stored set of Procedure 1, step 3.
 #' @keywords internal
 #' @noRd
 .mwperm_plot_coef <- function(x, style, main = NULL, sub = NULL,
@@ -287,6 +304,8 @@
 #' with a convex-hull outline (the points stay visible, so a non-convex region
 #' is not overstated by the hull), the marginal conf_box, the OLS estimate and
 #' the null.
+#' @details Plotting only: draws the stored joint region of Procedure 1, step
+#'   3 (d > 1).
 #' @keywords internal
 #' @noRd
 .mwperm_plot_region <- function(x, style, main = NULL, sub = NULL,
@@ -342,6 +361,8 @@
 #' With >= 5 reps, a histogram of the per-rep p-values with the reported
 #' (median) p-value and alpha marked; with fewer, a one-row dot strip of the
 #' per-rep p-values against alpha (degrades gracefully to a single point).
+#' @details Plotting only: the per-repetition p-values whose median (Remark 1)
+#'   is reported.
 #' @keywords internal
 #' @noRd
 .mwperm_plot_stability <- function(x, style, main = NULL, sub = NULL,
@@ -425,6 +446,9 @@
 #' `1/(K+1)`, the null value, the p-value, and the reject/do-not-reject
 #' decision at `alpha`.
 #'
+#' @details Draws only stored fields: the Procedure 1 result, the set of step
+#'   3, and the per-repetition p-values of Remark 1 (Guo, Toulis and Wang
+#'   2026). The test is never re-run.
 #' @param x An object of class `"mwperm"`.
 #' @param type Which figure to draw:
 #' - ``"auto"` (default)`: the flagship `"coef"` figure whenever a confidence
@@ -564,6 +588,7 @@ plot.mwperm <- function(x, type = c("auto", "coef", "region", "null",
 #' base `grDevices` devices. The device is always closed on exit, even if
 #' drawing fails.
 #'
+#' @details Figure export only; not a paper step.
 #' @param x An object of class `"mwperm"`.
 #' @param file Output path; the extension selects the graphics device: `.pdf`
 #'   (vector), `.png`, `.tiff`/`.tif`, or `.jpeg`/`.jpg`.

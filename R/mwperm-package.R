@@ -1,3 +1,15 @@
+## ============================================================================
+## R/mwperm-package.R -- package-level documentation and NAMESPACE imports
+##
+## Purpose. The ?mwperm-package page (the two group constructions and their
+##   assumptions) and the @importFrom directives that generate NAMESPACE.
+## Paper. Guo, Toulis & Wang (2026) as a whole; the revised paper's
+##   Assumption 2 for the sign-flip group.
+## Pipeline. mwperm() -> dispatch -> design worker -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods; see ARCHITECTURE.md at the repository root.
+## ============================================================================
+
 #' mwperm: Invariant Permutation Tests for Multi-Way Clustered and Panel
 #' Regression
 #'
@@ -15,7 +27,7 @@
 #' clustering), [mwperm_threeway()] (three-way clustering), [mwperm_panel()]
 #' (panels with an arbitrary time effect), [mwperm_layout()] (replicated
 #' two-way layouts), [mwperm_irregular()] (irregular layouts, Section 6.4:
-#' repeats that are time periods, or a covariate constant within cells),
+#' exchangeable replicates with a covariate constant within cells),
 #' [mwperm_missing()] (incomplete arrays, via fully observed bicliques) and
 #' [mwperm_dyadic_het()] (dyadic clustering under heteroskedasticity). All
 #' return an object of class `"mwperm"` with [print.mwperm()],

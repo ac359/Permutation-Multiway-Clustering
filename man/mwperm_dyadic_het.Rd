@@ -38,10 +38,15 @@ each observation (any type coercible by \code{\link{factor}}).}
 \item{n_flip}{Number of flip groups. The group has order
 \code{2^(n_flip - 1)}, so the smallest attainable p-value is
 \code{1 / 2^(n_flip - 1)} and a 95\% confidence set needs
-\code{n_flip >= 6}. Defaults to 8, capped at \code{min(n_row, n_col)}
-(every group must be reachable by the row assignment alone); values above
-20 are refused, with the number of projections they would imply. Must
-satisfy \code{2 <= n_flip <= min(n_row, n_col)}.}
+\code{n_flip >= 6}. The default is the smallest number of flip groups
+whose p-value floor \code{1 / 2^(n_flip - 1)} (doubled under
+\code{aggregate = "median2"}) is at most \code{alpha} -- 6 at
+\code{alpha = 0.05}, 7 under \code{"median2"}, 8 at \code{alpha = 0.01}
+-- capped at \code{min(n_row, n_col)} (every group must be reachable by
+the row assignment alone); 6-8 are the useful range, and the cost doubles
+with each extra group. Values above 20 are refused, with the number of
+projections they would imply. Must satisfy
+\code{2 <= n_flip <= min(n_row, n_col)}.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -82,8 +87,9 @@ into the reported p-value, and into the confidence set that inverts it.
 Guo, Toulis and Wang (2026); \code{"median2"} is \code{min(1, 2 * median)},
 a valid p-value at level \code{alpha} under arbitrary dependence across
 repetitions, at the cost of resolution: its floor is
-\code{2 / 2^(n_flip - 1)}, so a 95\% set then needs \code{n_flip >= 7}.
-See \code{\link{mwperm_dyadic}} for the full account.}
+\code{2 / 2^(n_flip - 1)}, so a 95\% set then needs \code{n_flip >= 7},
+which is what the default \code{n_flip} becomes under it. See
+\code{\link{mwperm_dyadic}} for the full account.}
 
 \item{n_cores}{Number of CPU cores (default 1 = serial). Parallelism is over
 the \code{n_reps} repetitions when several are run with a \code{seed},
@@ -115,11 +121,13 @@ but \strong{not additive cluster effects}: the error array must be
 \preformatted{  (eps_ij) =d (s_i t_j eps_ij) | X, D   for all row signs s and column signs t.}
 
 This is the invariant test of Guo, Toulis and Wang (2026) run with a
-\emph{sign-flip} group in place of the permutation group -- Section 2 of
-the paper notes that the partialling-out and minorization argument holds
-for any invariance group -- and is the test the authors call IPT-Het. Same
-model, same null, same statistic, same confidence set by test inversion;
-only the group changes, and with it the assumption.
+\emph{sign-flip} group in place of the permutation group: the \emph{double
+sign symmetry} assumption (Assumption 2 of the revised paper), under which
+Procedure 1 is unchanged except that Step 1 applies random sign flips. It
+is the test the authors call IPT-Het. Same model, same null, same
+statistic, same confidence set by test inversion; only the group changes,
+and with it the assumption. (The revised paper is not public yet; in
+arXiv:2601.08610v1, "Assumption 2" is the Section 4 random-effects model.)
 }
 \details{
 \strong{What the assumption does and does not allow.} A sign flip moves no
@@ -157,22 +165,24 @@ assumptions are complementary and neither contains the other:
   (or sign-symmetrically dependent) symmetric errors, \strong{no additive
   cluster effects}.
 }
-The authors' own design for this test (\code{simulate_gravity_model()} in
-their revision material) draws errors that are independent across cells
-with a variance increasing in the gravity mean and in distance; that is the
-setting it is meant for.
+The paper's own parameterisation of the assumption is
+\code{eps_ij = h(X_ij) u_i v_j} with \code{u_i, v_j} i.i.d. from a
+symmetric distribution and \code{h} an unknown function of the covariates
+-- dependence only through symmetric multiplicative factors -- and the
+authors' own simulation design for this test draws errors that are
+independent across cells with a variance increasing in the gravity mean and
+in distance; that is the setting it is meant for.
 
 Under covariate-dependent heteroskedasticity (25 clusters per side, a
 gravity design with the residual variance increasing in the mean and in the
 distance covariate) the permutation test's rejection rate under a true null
 rose with the strength of the heteroskedasticity -- to about 0.06-0.09 at
-a nominal 0.05 in this package's own 300-replication check, and to about
-0.13 in the authors' -- while this test stayed at or below nominal (0.02
-and 0.05 respectively). That gap is the reason the function exists. It is
-\strong{not a strict upgrade}: under homoskedastic, exchangeable errors the
-sign-flip test is less powerful (about 0.86 against 0.96 at beta = 0.15 in
-the same design here; 0.90 against 0.98 in the authors' run), because its
-group is smaller and coarser than a full relabelling group. Use it when the
+a nominal 0.05 in this package's own 300-replication check -- while this
+test stayed at 0.02 or below. That gap is the reason the function exists.
+It is \strong{not a strict upgrade}: under homoskedastic, exchangeable
+errors the sign-flip test is less powerful (about 0.86 against 0.96 at
+beta = 0.15 in the same design), because its group is smaller and coarser
+than a full relabelling group. Use it when the
 errors are plausibly independent across cells with a variance that depends
 on the covariates; use \code{\link{mwperm_dyadic}} when additive cluster
 effects are the concern. Heteroskedasticity leaves no trace in the
@@ -181,8 +191,13 @@ automatically: request it with \code{design = "dyadic_het"}.
 
 \strong{Incomplete arrays.} No fully observed block is needed: every
 observed cell is used and nothing is discarded (the fit says so in a note).
-The only thing an incomplete array changes is the guard on the flip-group
-assignment, which must keep the group's kernel at \code{{s, -s}} on the
+What is needed is the analogue of Assumption 4: which cells are observed
+must be independent of the errors given X and D. Dropping zero trade flows
+because log(0) is undefined violates it, since whether a flow is zero
+depends on its error. Running on an incomplete array is this package's
+extension; the paper states Assumption 2 for a complete array. The only
+thing an incomplete array changes in the computation is the guard on the
+flip-group assignment, which must keep the group's kernel at \code{{s, -s}} on the
 observed cells -- see the \code{cells} argument of
 \code{\link{build_flip_set}}.
 
@@ -200,20 +215,35 @@ Per repetition the p-value therefore lives on the grid
 \code{n_flip >= 6} (order 32). Below that the p-value is still exact but no
 set is attainable, and the fit says so in a note. The cost is one residual
 projection per non-identity element -- \code{2^(n_flip - 1) - 1} per
-repetition, exponential in \code{n_flip} -- which is why the default is a
-fixed \code{n_flip = 8} (order 128, floor 0.0078, 127 projections) rather
-than the largest value the design allows, as \code{K} is for the
-permutation tests. At that default with \code{n_reps = 10} the exact
-confidence set exceeds the engine's candidate budget and the interval is
-found by bracketing and bisection instead (the fit says so in a note; the
-end points agree to the bisection tolerance); \code{n_reps <= 6}, or
-\code{n_flip <= 7}, keeps it exact.
+repetition, exponential in \code{n_flip} -- which is why the default is
+not the largest value the design allows, as \code{K} is for the
+permutation tests, but the smallest number of flip groups whose p-value
+floor \code{1 / 2^(n_flip - 1)} (doubled under
+\code{aggregate = "median2"}) is at most \code{alpha}: 6 at
+\code{alpha = 0.05} (order 32, floor 0.031, 31 projections), 7 under
+\code{"median2"}, 8 at \code{alpha = 0.01}. 6-8 are the useful range, and
+the cost doubles with each extra group. At the default with
+\code{n_reps = 10} the confidence set is the exact one
+(\code{2 * 31^2 * 10} candidates, under the engine's budget); at
+\code{n_flip = 8} with \code{n_reps = 10} it exceeds the budget and the
+interval is found by bracketing and bisection instead (the fit says so in a
+note; the end points agree to the bisection tolerance). The default buys
+resolution, not power: at 25 x 25 with independent heteroskedastic
+symmetric errors and \code{n_reps = 10}, power at beta = 0.10 was 0.27,
+0.34 and 0.37 for \code{n_flip} = 6, 7 and 8 (300 simulations each), at 1,
+2 and 4 times the projections. Under the paper's own model
+\code{eps_ij = h(X_ij) u_i v_j} the size was 0.014 at \code{n_reps = 1}
+and 0.002 at the default -- conservative, not over-rejecting.
 
 The aggregation over \code{n_reps} repetitions, the exact confidence set
 and its closure convention, the \code{aggregate = "median2"} guarantee and
 the numerical notes on the projection are all exactly as documented in
 \code{\link{mwperm_dyadic}}; the sign-flip element \code{S_k} simply takes
 the place of the permuted copy in the stacked design \code{[X | S_k X]}.
+
+Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
+sign flips in Step 1 in place of the permutation group, under the revised
+paper's Assumption 2 (double sign symmetry).
 }
 \examples{
 data(trade_dyadic)

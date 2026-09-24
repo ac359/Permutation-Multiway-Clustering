@@ -37,7 +37,11 @@ constant within every cell), never for fitting.}
 column of \code{data} (or of one of the \code{index} columns). Forces
 the panel interpretation of that dimension: a complete
 \code{(row, col, time)} array runs \code{\link{mwperm_panel}}, an
-incomplete one \code{\link{mwperm_panel_missing}}.}
+incomplete one \code{\link{mwperm_panel_missing}} (to which
+\code{\link{mwperm}} also forwards \code{L0 =}, the number of periods to
+keep when some pairs miss periods). With \code{design = "irregular"} it runs
+\code{\link{mwperm_panel_missing}} too: periods are never given the random
+per-cell trim, which is exact only for exchangeable replicates.}
 
 \item{rep}{Optional explicit replication identifier (vector or column
 name): declares within-cell replication and forces the layout design.}
@@ -46,8 +50,9 @@ name): declares within-cell replication and forces the layout design.}
 still validated against it). \code{"dyadic_het"} -- the sign-flip test of
 \code{\link{mwperm_dyadic_het}} -- is \emph{opt-in only}: it is never
 detected, because heteroskedasticity leaves no trace in the clustering
-structure, and it is validated exactly as \code{"dyadic"} (two indices,
-one observation per cell, complete array).}
+structure. It is validated as \code{"dyadic"} is (two indices, one
+observation per cell) except that the array need not be complete: a sign
+flip moves no observation, so every observed cell is used.}
 
 \item{alpha, aggregate}{The test level and cross-repetition rule the fit
 will use (the defaults of every front end). They decide the resolution
@@ -77,10 +82,12 @@ An object of class \code{"mwperm_design"}: a list with fields
   for you -- on a complete dyadic array, \code{design = "dyadic_het"}).
   For \code{design = "dyadic_het"} the group order is \code{2^(n_flip -
   1)}, so \code{K_default} is \code{NA}, the extra field
-  \code{n_flip_default} carries the fit's default \code{n_flip}, and
-  \code{levels_needed} is the \code{n_flip} a \code{(1 - alpha)} set
-  requires. Its \code{print} method lays this out as a short human
-  diagnosis.
+  \code{n_flip_default} carries the fit's default \code{n_flip} (the
+  smallest whose p-value floor is at most \code{alpha} under the given
+  \code{aggregate}, capped by the smaller dimension: 6 at
+  \code{alpha = 0.05}), and \code{levels_needed} is the \code{n_flip} a
+  \code{(1 - alpha)} set requires. Its \code{print} method lays this out
+  as a short human diagnosis.
 }
 \description{
 Inspects the clustering structure of a dataset -- number of index
@@ -130,6 +137,15 @@ under arbitrary heteroskedasticity for errors that are independent across
 cells and symmetric, but not under additive cluster effects); on a dyadic
 array, complete or not, it prints one line offering \code{design =
 "dyadic_het"}, and the choice is yours.
+
+Maps each data signature to the procedure of Guo, Toulis and
+Wang (2026) it supports: Procedure 1 (dyadic), Sections 6.1-6.4
+(three-way, panel, layout, irregular), Procedure 2 (missing cells,
+incomplete panels) or the sign-flip variant. It runs no permutation and
+fits nothing.
+
+The print method lays the diagnosis out for a reader; it computes
+nothing.
 }
 \examples{
 data(trade_dyadic)

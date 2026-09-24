@@ -7,15 +7,17 @@
 ## exceeds alpha CANNOT reject and its measured size is a vacuous zero. Each
 ## cell asserts K + 1 >= 1/alpha before its size is quoted.
 ##
-## The irregular design is run twice. The first arm is Section 6.4 as printed
-## (the 0.4.1 default, trim = "random"): exchangeable replicates inside each
-## cell, a covariate CONSTANT within each cell, a random per-cell trim to L0
-## redrawn per repetition. The second arm has a covariate that VARIES within a
-## cell (staggered adoption) and a common period effect in the errors: there
-## the test is valid only if the permutation holds the `rep` LEVEL fixed in
-## every cell, trim = "levels" -- under the random trim this arm rejects a true
-## null essentially always (1.000 in 1000 simulations), which is the reason
-## the argument exists.
+## The irregular design (Section 6.4 as printed: exchangeable replicates
+## inside each cell, a covariate CONSTANT within each cell, a random per-cell
+## trim to L0 redrawn per repetition) is followed by the case it does NOT
+## cover: a covariate that VARIES within a cell (staggered adoption) and a
+## common period effect in the errors. Under the random trim that arm rejects
+## a true null essentially always (1.000 in 1000 simulations); the valid test
+## holds the PERIOD fixed and keeps the same L0 periods in every cell, which
+## since 0.4.2 is mwperm_panel_missing(L0 = ) (until 0.4.1 it was
+## mwperm_irregular(trim = "levels"), and mwperm_panel_missing(L0 = ,
+## time_fe = FALSE) reproduces that exactly; this arm runs with the default
+## time_fe = TRUE).
 ##
 ## Usage:  Rscript 06_size_by_design.R          # 1000 sims/cell (default)
 ## Output: out/06_size_by_design.txt (+ _summary.rds); cache under ./cache.
@@ -104,27 +106,30 @@ report("irregular 30x30, cell-constant d",
        mc_cell("size06_irregular_const_v2", N, sim_irr_c,
                params = list(design = "irregular", L0 = 4L), batch = BATCH))
 
-## ---- irregular (Section 6.4), covariate VARYING within cells ---------------
+## ---- incomplete panel with L0: covariate VARYING within cells -------------
 ## 22 x 22 cells each observed in periods 1..4, L0 = 2 (so two periods are cut
 ## from every cell), d_ijt = 1{t >= start_ij} (staggered adoption), and a
 ## common period effect zeta = (0, 0, 0, 20) in the errors. Valid only when
-## the retained periods are the SAME two in every cell: trim = "levels".
-cat("\n---- irregular layout, mwperm_irregular(L0 = 2), d varies in cells\n")
-sim_irr_w <- function(s, dgp_seed, fit_seed) {
+## the retained periods are the SAME two in every cell and the period is held
+## fixed: mwperm_panel_missing(time = t, L0 = 2).
+cat("\n---- incomplete panel, mwperm_panel_missing(L0 = 2), d varies in ",
+    "cells\n", sep = "")
+sim_pm_L0 <- function(s, dgp_seed, fit_seed) {
   set.seed(dgp_seed)
   m <- 22L; TT <- 4L
   g <- expand.grid(t = seq_len(TT), j = seq_len(m), i = seq_len(m))
   start <- matrix(sample(seq_len(TT + 1L), m * m, TRUE), m, m)
   d <- as.numeric(g$t >= start[cbind(g$i, g$j)])
   y <- rnorm(m)[g$i] + rnorm(m)[g$j] + c(0, 0, 0, 20)[g$t] + rnorm(nrow(g))
-  fit <- mwperm_irregular(y, d, row = g$i, col = g$j, rep = g$t, L0 = 2L,
-                          trim = "levels", min_block = 20L, n_reps = 1,
-                          seed = fit_seed, conf_int = FALSE)
+  fit <- mwperm_panel_missing(y, d, row = g$i, col = g$j, time = g$t,
+                              L0 = 2L, min_block = 20L, n_reps = 1,
+                              seed = fit_seed, conf_int = FALSE)
   c(p = fit$pvalue, K = fit$K)
 }
-report("irregular 22x22x4, within-cell d, L0 = 2",
-       mc_cell("size06_irregular_within_v2", N, sim_irr_w,
-               params = list(design = "irregular", L0 = 2L), batch = BATCH))
+report("panel_missing 22x22x4, within-cell d, L0 = 2",
+       mc_cell("size06_panel_missing_L0_v1", N, sim_pm_L0,
+               params = list(design = "panel_missing", L0 = 2L),
+               batch = BATCH))
 
 ## ---- missing (Procedure 2): 40 x 40 array with the diagonal deleted --------
 ## The no-self-trade mask of a gravity dataset (the software paper's Section

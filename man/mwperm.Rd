@@ -18,13 +18,13 @@ mwperm(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+  n_reps = NULL,
   seed = NULL,
   grid = NULL,
   n_cores = 1L,
   time_fe = TRUE,
   L0 = NULL,
-  trim = c("random", "levels"),
+  trim = NULL,
   min_block = 3L,
   block_method = c("greedy", "exact"),
   permute = c("both", "rows", "cols"),
@@ -71,13 +71,11 @@ has several columns).}
 inversion: an interval for a single covariate, or a joint (grid-based)
 confidence region for several.}
 
-\item{n_reps}{Number of independent runs whose p-values (and CI end points)
-are aggregated by the median, as recommended for randomised tests.
-Defaults to 10: a single run's p-value depends on the random relabelling
-(a seed lottery), and the median of 10 runs stabilises it at roughly ten
-times the cost -- fractions of a second on typical designs. Set
-\code{n_reps = 1} to reproduce the single-run behaviour of versions
-before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
+\item{n_reps}{Number of repetitions whose p-values are aggregated (see
+\code{aggregate}). \code{NULL} (the default) means the dispatched
+function's own default: 500 for \code{\link{mwperm_irregular}}, whose
+random per-cell trim is redrawn in every repetition, and 10 for every other
+design. A value given here is forwarded as it is.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -104,19 +102,25 @@ with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 \code{\link{mwperm_panel_missing}} (panel designs only; supplying it for
 another design warns and ignores it).}
 
-\item{L0}{Passed to \code{\link{mwperm_layout}} or
-\code{\link{mwperm_irregular}} (layout and irregular only; required for
-\code{design = "irregular"}).}
+\item{L0}{Passed to \code{\link{mwperm_layout}},
+\code{\link{mwperm_irregular}} or \code{\link{mwperm_panel_missing}}
+(layout, irregular and incomplete-panel designs only; required for
+\code{design = "irregular"}, optional for the other two: for an incomplete
+panel it keeps the L0 periods jointly observed by the most pairs, the same
+ones in every cell).}
 
-\item{trim}{Passed to \code{\link{mwperm_irregular}} (irregular only):
-\code{"random"}, the paper's random per-cell trim, or \code{"levels"}, the
-same \code{rep} levels in every cell. Supplying it for another design warns
-and ignores it.}
+\item{trim}{Removed in 0.4.2 and refused when supplied: the level-aligned
+cut that was \code{mwperm_irregular(trim = "levels")} is now
+\code{mwperm_panel_missing(time = <rep>, L0 = <L0>)} (reached here with
+\code{time =} and \code{L0 =}), and \code{\link{mwperm_irregular}}
+implements only the paper's random per-cell trim.}
 
 \item{n_flip}{Passed to \code{\link{mwperm_dyadic_het}} (\code{design =
 "dyadic_het"} only: the number of flip groups, group order
-\code{2^(n_flip - 1)}; supplying it for another design warns and ignores
-it).}
+\code{2^(n_flip - 1)}; by default the smallest number whose p-value floor
+\code{1 / 2^(n_flip - 1)} (doubled under \code{aggregate = "median2"}) is
+at most \code{alpha}, i.e. 6 at \code{alpha = 0.05}. Supplying it for
+another design warns and ignores it).}
 
 \item{min_block, block_method, permute}{\code{min_block} and
 \code{block_method} are passed to \code{\link{mwperm_missing}},
@@ -172,8 +176,9 @@ and dispatches to the matching test -- \code{\link{mwperm_dyadic}},
 \code{\link{mwperm_panel}}, \code{\link{mwperm_panel_missing}},
 \code{\link{mwperm_threeway}}, \code{\link{mwperm_layout}} or
 \code{\link{mwperm_missing}}; \code{\link{mwperm_irregular}} is never
-chosen automatically and needs \code{design = "irregular"} with \code{L0},
-and \code{\link{mwperm_dyadic_het}} is never chosen automatically and
+chosen automatically and needs \code{design = "irregular"} with \code{L0}
+(with a \code{time =} index that runs \code{\link{mwperm_panel_missing}}
+instead), and \code{\link{mwperm_dyadic_het}} is never chosen automatically and
 needs \code{design = "dyadic_het"} -- forwarding all arguments unchanged. A thin convenience layer: the returned object is
 exactly what the underlying function returns (plus a record of what was
 detected), and calling the specific function directly with the same seed
@@ -185,6 +190,9 @@ two assumption-dependent forks (panel-vs-threeway and
 layout-vs-suppressed-panel) that are announced rather than silently
 resolved. Structural forks (complete vs incomplete arrays, replicated
 cells) are resolved silently.
+
+Dispatches by the rule of mwperm_check(); the numbers returned are
+those of the design-specific function it calls, bit for bit.
 }
 \examples{
 data(trade_dyadic)

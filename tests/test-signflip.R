@@ -4,11 +4,13 @@
 ## The permutation designs need the error array to be exchangeable under
 ## relabelling of the clusters; that fails under heteroskedasticity. The
 ## sign-flip design replaces the permutation group by the group of joint
-## row-and-column sign changes, valid under symmetry of the errors about zero
-## and indifferent to their variances (Guo, Toulis & Wang 2026, Section 2:
-## the argument holds for any invariance group). Every group element is a
-## signed gather `list(g = NULL, s = +/-1)` applied through `.apply_op()`,
-## which is the one generalisation the engine needed.
+## row-and-column sign changes. It is valid under the revised paper's
+## Assumption 2, "double sign symmetry" (Guo, Toulis & Wang):
+## (eps_ij) =d (s_i t_j eps_ij) given X and D. That covers errors that are
+## independent across cells and symmetric, whatever their variances, but NOT
+## additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het). Every
+## group element is a signed gather `list(g = NULL, s = +/-1)` applied
+## through `.apply_op()`, which is the one generalisation the engine needed.
 ##
 ## Section 1 is the test that matters most: agreement with a corrected port of
 ## the author's research implementation (tests/helpers/signflip-reference.R).
@@ -188,14 +190,52 @@ stopifnot(length(f6$conf_int) == 2L, all(is.finite(f6$conf_int)),
           identical(f6$ci_method, "exact"), identical(f6$n_perm, 32L),
           f6$conf_int[1] <= -1, f6$conf_int[2] >= -1,   # covers the truth
           identical(f6$type, "dyadic (sign-flip / heteroskedasticity-robust)"))
-## the default n_flip = 8: group order 128
+## The default n_flip follows the resolution rule (0.4.2): the smallest
+## n_flip >= 2 whose REPORTED p-value floor -- 1/2^(n_flip - 1), doubled under
+## aggregate = "median2" -- is at most alpha, i.e. 2^(n_flip - 1) >= m/alpha.
+## At alpha = 0.05 that is 6 (order 32, floor 1/32) under "median" and 7
+## (order 64) under "median2"; at alpha = 0.01, 8 and 9. Then capped at
+## min(n_row, n_col) exactly as before.
+dnf <- internal(".default_n_flip")
+stopifnot(identical(dnf(NULL, 40L, 40L, alpha = 0.05, aggregate = "median"), 6L),
+          identical(dnf(NULL, 40L, 40L, alpha = 0.05, aggregate = "median2"), 7L),
+          identical(dnf(NULL, 40L, 40L, alpha = 0.01, aggregate = "median"), 8L),
+          identical(dnf(NULL, 40L, 40L, alpha = 0.01, aggregate = "median2"), 9L),
+          identical(dnf(NULL, 40L, 40L, alpha = 0.5, aggregate = "median"), 2L),
+          identical(dnf(NULL, 40L, 40L, alpha = 0.2, aggregate = "median"), 4L),
+          identical(dnf(NULL, 5L, 9L, alpha = 0.05, aggregate = "median"), 5L),
+          ## an explicit value is honoured whatever alpha says
+          identical(dnf(4L, 40L, 40L, alpha = 0.05, aggregate = "median"), 4L))
+expect_err(dnf(NULL, 40L, 40L, alpha = 1, aggregate = "median"), "`alpha`")
 f8 <- with(trade_dyadic,
            mwperm_dyadic_het(y = log_trade, d = log_dist,
                              x = cbind(log_gdp_i, log_gdp_j),
                              row = importer, col = exporter,
                              n_reps = 1, seed = 1, conf_int = FALSE))
-stopifnot(identical(f8$n_flip, 8L), identical(f8$n_perm, 128L),
-          identical(f8$K, 127L), f8$pvalue >= 1 / 128)
+stopifnot(identical(f8$n_flip, 6L), identical(f8$n_perm, 32L),
+          identical(f8$K, 31L), f8$pvalue >= 1 / 32)
+fm2 <- with(trade_dyadic,
+            mwperm_dyadic_het(y = log_trade, d = log_dist,
+                              x = cbind(log_gdp_i, log_gdp_j),
+                              row = importer, col = exporter,
+                              aggregate = "median2", n_reps = 1, seed = 1,
+                              conf_int = FALSE))
+f01 <- with(trade_dyadic,
+            mwperm_dyadic_het(y = log_trade, d = log_dist,
+                              x = cbind(log_gdp_i, log_gdp_j),
+                              row = importer, col = exporter,
+                              alpha = 0.01, n_reps = 1, seed = 1,
+                              conf_int = FALSE))
+stopifnot(identical(fm2$n_flip, 7L), identical(fm2$n_perm, 64L),
+          identical(f01$n_flip, 8L), identical(f01$n_perm, 128L))
+## at the default (n_flip = 6, n_reps = 10) the confidence set takes the
+## exact path: 2 x 31^2 x 10 = 19,220 candidates, under the 2e5 budget
+fdef <- with(trade_dyadic,
+             mwperm_dyadic_het(y = log_trade, d = log_dist,
+                               x = cbind(log_gdp_i, log_gdp_j),
+                               row = importer, col = exporter, seed = 1))
+stopifnot(identical(fdef$n_flip, 6L), identical(fdef$n_reps, 10L),
+          identical(fdef$ci_method, "exact"), length(fdef$conf_int) == 2L)
 ## the default is capped by the smaller dimension, and the cap is enforced
 g5 <- expand.grid(i = 1:5, j = 1:9)
 set.seed(4)
@@ -283,14 +323,24 @@ stopifnot(any(grepl("design = \"dyadic_het\"", out_chk, fixed = TRUE)))
 chk_h <- mwperm_check(index = c("importer", "exporter"), data = trade_dyadic,
                       design = "dyadic_het")
 stopifnot(identical(chk_h$design, "dyadic_het"),
-          identical(chk_h$n_flip_default, 8L),
+          identical(chk_h$n_flip_default, 6L),
           is.na(chk_h$K_default),
-          identical(chk_h$p_floor, 1 / 128), isTRUE(chk_h$resolution_ok),
+          identical(chk_h$p_floor, 1 / 32), isTRUE(chk_h$resolution_ok),
           identical(chk_h$levels_needed, 6L),
           grepl("mwperm_dyadic_het(", chk_h$call_str, fixed = TRUE))
 out_h <- capture.output(print(chk_h))
-stopifnot(any(grepl("default n_flip = 8", out_h, fixed = TRUE)),
-          any(grepl("1/2^7 = 1/128", out_h, fixed = TRUE)))
+stopifnot(any(grepl("default n_flip = 6", out_h, fixed = TRUE)),
+          any(grepl("1/2^5 = 1/32", out_h, fixed = TRUE)))
+## the diagnosis follows the same rule as the fit: alpha and aggregate move
+## the default n_flip it reports, and the verdict stays attainable
+chk_h2 <- mwperm_check(index = c("importer", "exporter"), data = trade_dyadic,
+                       design = "dyadic_het", aggregate = "median2")
+chk_h3 <- mwperm_check(index = c("importer", "exporter"), data = trade_dyadic,
+                       design = "dyadic_het", alpha = 0.01)
+stopifnot(identical(chk_h2$n_flip_default, 7L), isTRUE(chk_h2$resolution_ok),
+          identical(chk_h2$p_floor, 2 / 64),
+          identical(chk_h3$n_flip_default, 8L), isTRUE(chk_h3$resolution_ok),
+          identical(chk_h3$p_floor, 1 / 128))
 ## a small design: the verdict names n_flip, not a cluster count
 chk_s <- mwperm_check(index = list(i = g5$i, j = g5$j), design = "dyadic_het")
 stopifnot(identical(chk_s$n_flip_default, 5L), isFALSE(chk_s$resolution_ok))
@@ -400,7 +450,9 @@ f_inc <- with(inc2, mwperm_dyadic_het(y = log_trade, d = log_dist,
                                       conf_int = FALSE))
 stopifnot(f_inc$n_obs == nrow(inc2), f_inc$K == 15L,
           any(grepl("incomplete", f_inc$note, fixed = TRUE)),
-          any(grepl("no cell is discarded", f_inc$note, fixed = TRUE)))
+          any(grepl("no cell is discarded", f_inc$note, fixed = TRUE)),
+          any(grepl("independent of the errors given the covariates",
+                    f_inc$note, fixed = TRUE)))
 ri2 <- as.integer(factor(inc2$importer)); ci2 <- as.integer(factor(inc2$exporter))
 F2 <- build_flip_set(max(ri2), max(ci2), 5L, seed = sub_seed(3L, 1L),
                      cells = cbind(ri2, ci2))

@@ -160,6 +160,10 @@ projection retains \emph{more} dimensions than \code{N - 2p}. That is the
 correct reading -- \code{N - 2p} is not well defined when the stack is rank
 deficient -- and it is why \code{time_fe = TRUE} costs far less than its
 column count suggests.
+
+Implements Section 6.2 of Guo, Toulis and Wang (2026): Algorithm 1
+on the row and the column dimension only, the same element applied in
+every period (condition InvB), then Procedure 1.
 }
 \examples{
 data(trade_panel)

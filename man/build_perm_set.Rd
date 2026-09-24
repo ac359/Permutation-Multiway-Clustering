@@ -57,6 +57,13 @@ observation level for every design). Monte-Carlo size simulations cannot
 detect closure defects, because a broken set whose elements are still
 per-dimension permutations continues to control size element-wise;
 simulation evidence therefore never certifies the group structure.
+
+Implements Algorithm 1 of Guo, Toulis and Wang (2026). The residue
+in its display is read as 1-based, ((i - 1) mod (K + 1)) + 1, the reading
+under which psi~_k is a permutation; element k + 1 of the list is
+\verb{psi_k = pi^\{-1\} o psi~_k o pi}, so the list is closed under composition
+(their Proposition 2). The paper's worked example lists the same set in
+the opposite order: its element k is element K + 1 - k here.
 }
 \examples{
 G <- build_perm_set(n = 8, K = 3, seed = 1)

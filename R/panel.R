@@ -1,3 +1,19 @@
+## ============================================================================
+## R/panel.R -- the panel design: Section 6.2, condition InvB
+##
+## Purpose. mwperm_panel() validates a complete (row, col, time) array, adds
+##   period dummies when time_fe = TRUE, and hands the engine a builder of
+##   the row/column group that is applied identically in every period.
+## Paper. Guo, Toulis & Wang (2026), Section 6.2: condition InvB (errors
+##   exchangeable over (i, j) within each period, with an arbitrary common
+##   trend zeta_t); step (i) Algorithm 1 on the two cross-sectional index sets,
+##   step (ii) Procedure 1. The period dummies are a package addition that
+##   InvB permits: they are invariant under the within-period permutation.
+## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods.
+## ============================================================================
+
 #' Invariant permutation test for panel (longitudinal) dyadic regression
 #'
 #' Finite-sample valid test of H0: beta = b in the panel model
@@ -35,6 +51,9 @@
 #' not well defined when the stack is rank deficient -- and it is why `time_fe
 #' = TRUE` costs far less than its column count suggests.
 #'
+#' @details Implements Section 6.2 of Guo, Toulis and Wang (2026): Algorithm 1
+#'   on the row and the column dimension only, the same element applied in
+#'   every period (condition InvB), then Procedure 1.
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest d_ijt
 #'   (may be time-varying). With a single covariate a confidence interval is
@@ -141,9 +160,10 @@ mwperm_panel <- function(y, d, x = NULL, row, col, time, K = NULL,
   ## The SAME row/column permutation is applied in every period (time passed as
   ## NULL = held fixed), so any unknown time effect is preserved and partialled
   ## out.
+  ## Section 6.2, step (i): Algorithm 1 on [m] and on [n] only.
   perm_builder <- function(rep_seed) {
-    Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))
-    Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))
+    Grow <- build_perm_set(n_row, K, seed = .sub_seed(rep_seed, 1L))  # pi_k
+    Gcol <- build_perm_set(n_col, K, seed = .sub_seed(rep_seed, 2L))  # sigma_k
     ## time held fixed (the NULL group) -- this is condition InvB
     .build_obs_perms(coords, list(Grow, Gcol, NULL), design = "panel",
                      front_end = "mwperm_layout() (within-cell replication)")
