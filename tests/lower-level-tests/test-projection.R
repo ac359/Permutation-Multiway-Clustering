@@ -1,6 +1,5 @@
-## The FWL / partialling-out step (GTW 2026 Eq. 3, Procedure 1
-## step 1)
-## and the affine-in-beta caching that licenses the CI search. Every check
+## The FWL / partialling-out step (GTW 2026 Eq. 3, Procedure 1 step 1) and
+## the affine-in-beta caching that licenses the CI search. Every check
 ## compares package internals against an INDEPENDENT from-scratch implementation
 ## (explicit null-space V_k via qr.Q(complete) + explicit projector) that shares
 ## no statistic/p-value code with R/. Not asserted here: behaviour when `d` is

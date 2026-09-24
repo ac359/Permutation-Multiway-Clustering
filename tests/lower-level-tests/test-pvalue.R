@@ -1,9 +1,8 @@
 ## The minorized randomization p-value (GTW 2026 Eq. 10):
 ##   p(b) = (1 + #{k : min_j a_j(b) <= b_k(b)}) / (K + 1).
 ## It must live on the grid {1,...,K+1}/(K+1), be conservative on ties, and
-## equal
-## 1 at each per-permutation FWL estimate u_j/M_j (the fact the island guard
-## uses).
+## equal 1 at each per-permutation FWL estimate u_j/M_j (the fact the island
+## guard uses).
 ##
 ## Lower-level test (tests/lower-level-tests/): it exercises the machinery
 ## beneath the front ends, mostly through package internals, so it must run
