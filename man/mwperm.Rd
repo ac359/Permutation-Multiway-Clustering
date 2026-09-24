@@ -190,6 +190,9 @@ two assumption-dependent forks (panel-vs-threeway and
 layout-vs-suppressed-panel) that are announced rather than silently
 resolved. Structural forks (complete vs incomplete arrays, replicated
 cells) are resolved silently.
+
+Dispatches by the rule of mwperm_check(); the numbers returned are
+those of the design-specific function it calls, bit for bit.
 }
 \examples{
 data(trade_dyadic)

@@ -40,6 +40,10 @@ interval around the OLS estimate. Note that \code{level} is fixed at fitting
 time (\code{1 - alpha}); a different level requires refitting with the
 corresponding \code{alpha}.
 }
+\details{
+Returns the set of Procedure 1, step 3 of Guo, Toulis and Wang
+(2026), \code{{b : pval(b) > alpha}}, as it was computed at fit time.
+}
 \section{How the set is defined}{
 
 Procedure 1, step 3 of Guo, Toulis and Wang (2026) defines the confidence

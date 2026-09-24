@@ -50,8 +50,9 @@ name): declares within-cell replication and forces the layout design.}
 still validated against it). \code{"dyadic_het"} -- the sign-flip test of
 \code{\link{mwperm_dyadic_het}} -- is \emph{opt-in only}: it is never
 detected, because heteroskedasticity leaves no trace in the clustering
-structure, and it is validated exactly as \code{"dyadic"} (two indices,
-one observation per cell, complete array).}
+structure. It is validated as \code{"dyadic"} is (two indices, one
+observation per cell) except that the array need not be complete: a sign
+flip moves no observation, so every observed cell is used.}
 
 \item{alpha, aggregate}{The test level and cross-repetition rule the fit
 will use (the defaults of every front end). They decide the resolution
@@ -136,6 +137,15 @@ under arbitrary heteroskedasticity for errors that are independent across
 cells and symmetric, but not under additive cluster effects); on a dyadic
 array, complete or not, it prints one line offering \code{design =
 "dyadic_het"}, and the choice is yours.
+
+Maps each data signature to the procedure of Guo, Toulis and
+Wang (2026) it supports: Procedure 1 (dyadic), Sections 6.1-6.4
+(three-way, panel, layout, irregular), Procedure 2 (missing cells,
+incomplete panels) or the sign-flip variant. It runs no permutation and
+fits nothing.
+
+The print method lays the diagnosis out for a reader; it computes
+nothing.
 }
 \examples{
 data(trade_dyadic)

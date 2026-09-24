@@ -1,3 +1,14 @@
+## ============================================================================
+## R/formula.R -- the formula interface and the coef()/nobs() accessors
+##
+## Purpose. mwperm_formula() turns `y ~ d | x` into the arguments of
+##   mwperm(); coef() and nobs() read the fitted object.
+## Paper. None of the method lives here: the formula only assembles y, D and
+##   X of model (7) of Guo, Toulis & Wang (2026).
+## Pipeline. [formula front door] -> mwperm() -> dispatch -> design worker
+##   -> ... -> [S3 methods: coef(), nobs()].
+## ============================================================================
+##
 ## Formula interface: a thin assembly layer over mwperm(). The statistical
 ## core is untouched -- the wrapper only builds y/d/x from formula algebra
 ## and forwards; identity with the data interface is pinned by
@@ -19,6 +30,8 @@
 #' dropping a row would turn a complete array into an incomplete one without
 #' notice. Subset `data` to complete cases first.
 #'
+#' @details Argument assembly only: the test is the one mwperm() selects for
+#'   the data.
 #' @param formula A two-sided formula, `y ~ d` or `y ~ d | x`.
 #' @param data A data frame in which the formula (and character
 #'   `index`/`time`/`rep`) are evaluated.
@@ -122,11 +135,15 @@ mwperm_formula <- function(formula, data, index, time = NULL, rep = NULL, ...) {
 #' @name mwperm-accessors
 NULL
 
+#' @details coef() reports the OLS estimate, which is not a quantity of the
+#'   permutation test.
 #' @rdname mwperm-accessors
 #' @export
 coef.mwperm <- function(object, ...)
   stats::setNames(as.numeric(object$estimate), object$d_names)
 
+#' @details nobs() reports the observations Procedure 1 (or, for the biclique
+#'   designs, Procedure 2) actually used.
 #' @rdname mwperm-accessors
 #' @export
 nobs.mwperm <- function(object, ...) object$n_obs

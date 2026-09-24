@@ -45,6 +45,10 @@ With several coefficients the \code{H0} line marks the null as a
 \emph{joint} test over all of them, and the printed brackets are the
 marginal extent of one joint confidence region -- not separate
 per-coefficient intervals.
+
+Reports the p-value of Procedure 1 (Eq. 10 of Guo, Toulis and Wang
+2026, aggregated by the median of their Remark 1), the set of step 3 when
+it was computed, and the resolution 1/(K + 1) that Eq. (10) implies.
 }
 \examples{
 data(trade_dyadic)

@@ -1,3 +1,19 @@
+## ============================================================================
+## R/unified.R -- the single entry point and the design diagnostic
+##
+## Purpose. mwperm_check() reads the index structure (number of indices,
+##   repeated cells, completeness, which index is time) and names the design
+##   and the worker to run; mwperm() calls it and dispatches, returning
+##   exactly what the worker returns for the same seed.
+## Paper. The dispatch rule is Table 1 of the JSS draft (Section 3.2); each
+##   row maps to one procedure of Guo, Toulis & Wang (2026): Procedure 1
+##   (dyadic), Sections 6.1-6.4 (three-way, panel, layout, irregular),
+##   Procedure 2 (missing, incomplete panel) and the sign-flip variant.
+## Pipeline. [mwperm() -> dispatch] -> design worker -> permutation
+##   construction -> projection engine -> median aggregation -> test
+##   inversion -> S3 methods.
+## ============================================================================
+##
 ## Unified entry point: automatic design detection (mwperm_check) and
 ## dispatch (mwperm). A thin, additive layer over the eight mwperm_* front
 ## ends -- it changes nothing about how any test is computed.
@@ -29,6 +45,7 @@
 ## ---- small helpers ----------------------------------------------------------
 
 #' Resolve the `index` argument to a named list of equal-length vectors.
+#' @details Design detection (JSS draft, Section 3.2); not a paper step.
 #' @keywords internal
 #' @noRd
 .resolve_index <- function(index, data) {
@@ -58,9 +75,15 @@
        "character vector of column names in `data`.", call. = FALSE)
 }
 
+#' Null-coalescing operator: `a` unless it is NULL, else `b`.
+#' @details Utility; not a paper step.
+#' @keywords internal
+#' @noRd
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 #' Is a dimension name time-like? (case-insensitive vocabulary)
+#' @details Design detection (JSS draft, Section 3.2): the panel versus
+#'   three-way fork; not a paper step.
 #' @keywords internal
 #' @noRd
 .timelike_name <- function(nm) {
@@ -72,6 +95,8 @@
 
 #' Are a dimension's values time-like? (temporal class, or regularly spaced
 #' numeric with no more levels than the cross-sectional dimensions)
+#' @details Design detection (JSS draft, Section 3.2): the panel versus
+#'   three-way fork; not a paper step.
 #' @keywords internal
 #' @noRd
 .timelike_values <- function(v, n_levels, max_levels) {
@@ -89,6 +114,8 @@
 #' so this stricter form is what decides whether a NAME-based time assignment
 #' is corroborated by the values. Used only to gate warnings -- never to
 #' assign the time role itself (assignment behaviour is frozen).
+#' @details Design detection (JSS draft, Section 3.2): the panel versus
+#'   three-way fork; not a paper step.
 #' @keywords internal
 #' @noRd
 .timelike_strong <- function(v, n_levels, min_other) {
@@ -145,6 +172,11 @@
 #' complete or not, it prints one line offering `design = "dyadic_het"`, and
 #' the choice is yours.
 #'
+#' @details Maps each data signature to the procedure of Guo, Toulis and
+#'   Wang (2026) it supports: Procedure 1 (dyadic), Sections 6.1-6.4
+#'   (three-way, panel, layout, irregular), Procedure 2 (missing cells,
+#'   incomplete panels) or the sign-flip variant. It runs no permutation and
+#'   fits nothing.
 #' @param index The clustering dimensions (2 or 3): a data frame, a named list
 #'   of vectors, or a character vector of column names resolved against
 #'   `data`.
@@ -166,9 +198,10 @@
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it). `"dyadic_het"` -- the sign-flip test of
 #'   [mwperm_dyadic_het()] -- is *opt-in only*: it is never detected, because
-#'   heteroskedasticity leaves no trace in the clustering structure, and it
-#'   is validated exactly as `"dyadic"` (two indices, one observation per
-#'   cell, complete array).
+#'   heteroskedasticity leaves no trace in the clustering structure. It is
+#'   validated as `"dyadic"` is (two indices, one observation per cell)
+#'   except that the array need not be complete: a sign flip moves no
+#'   observation, so every observed cell is used.
 #' @param alpha,aggregate The test level and cross-repetition rule the fit
 #'   will use (the defaults of every front end). They decide the resolution
 #'   verdict: the smallest reportable p-value is `1/(K+1)` under `"median"`
@@ -804,6 +837,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   ), class = "mwperm_design")
 }
 
+#' @details The print method lays the diagnosis out for a reader; it computes
+#'   nothing.
 #' @rdname mwperm_check
 #' @param x An object of class `"mwperm_design"` (print method).
 #' @param ... Ignored.
@@ -907,6 +942,8 @@ print.mwperm_design <- function(x, ...) {
 #' resolved. Structural forks (complete vs incomplete arrays, replicated
 #' cells) are resolved silently.
 #'
+#' @details Dispatches by the rule of mwperm_check(); the numbers returned are
+#'   those of the design-specific function it calls, bit for bit.
 #' @param y,d,x Outcome, covariate(s) of interest, and optional nuisance
 #'   covariates, as in [mwperm_dyadic()]. With `data` given, each may also be
 #'   a character (vector of) column name(s) resolved against it.
