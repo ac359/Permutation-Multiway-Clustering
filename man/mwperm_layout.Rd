@@ -65,9 +65,10 @@ That combination is valid (a uniform random subset of
   \code{K} and so the p-value resolution -- but it is a different procedure
   from Section 6.4, and it does not cover what Section 6.4 exists for: a
   covariate constant within cells still gives a powerless test (see the
-  warning in Details), and replicates that are really time periods are still
-  not exchangeable within a cell. For those cases use
-  \code{\link{mwperm_irregular}}, which is the Section 6.4 procedure.}
+  warning in Details) -- use \code{\link{mwperm_irregular}}, the Section 6.4
+  procedure, there -- and replicates that are really time periods are not
+  exchangeable within a cell -- pass them as \code{time} to
+  \code{\link{mwperm_panel}} or \code{\link{mwperm_panel_missing}}.}
 
 \item{K}{Number of non-identity permutations; defaults to
 \code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).

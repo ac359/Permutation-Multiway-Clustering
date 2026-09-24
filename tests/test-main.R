@@ -305,6 +305,38 @@ stopifnot(isTRUE(same_fit(pm_dir, pm_tag, skip = c("call", "auto", "note"))),
           any(grepl("observed in EVERY period", pm_tag$note, fixed = TRUE)),
           all(pm_dir$note %in% pm_tag$note))
 
+## `L0` travels with `time =` to the incomplete-panel design (0.4.2): the
+## dispatched fit is the direct mwperm_panel_missing(L0 = ) call, it is NOT
+## the L0 = NULL fit (a different period set is retained), and no
+## "`L0` applies to ... only" warning fires for this design.
+gpl <- gp[!(gp$i <= 3L & gp$t == 4L), ]            # rows 1-3 miss period 4
+set.seed(7)
+dpl <- rnorm(nrow(gpl))
+ypl <- rnorm(6)[gpl$i] + rnorm(6)[gpl$j] + c(0, 2, 4, 6)[gpl$t] + 0.3 * dpl +
+  rnorm(nrow(gpl))
+pl_dir <- mwperm_panel_missing(ypl, dpl, row = gpl$i, col = gpl$j,
+                               time = gpl$t, L0 = 3L, min_block = 3,
+                               conf_int = FALSE, n_reps = 2L, seed = 8)
+wl <- warns_of(pl_dis <- mwperm(y = ypl, d = dpl,
+                                index = list(row = gpl$i, col = gpl$j),
+                                time = gpl$t, L0 = 3L, min_block = 3,
+                                conf_int = FALSE, n_reps = 2L, seed = 8,
+                                verbose = FALSE))
+pl_null <- mwperm_panel_missing(ypl, dpl, row = gpl$i, col = gpl$j,
+                                time = gpl$t, min_block = 3,
+                                conf_int = FALSE, n_reps = 2L, seed = 8)
+stopifnot(isTRUE(same_fit(pl_dir, pl_dis, skip = c("call", "auto", "note"))),
+          identical(pl_dis$auto$design, "panel_missing"),
+          identical(pl_dis$periods_used, c("1", "2", "3")),
+          pl_dis$cells_used == 36L,                  # every pair has 1-3
+          pl_null$cells_used == 18L,                 # only rows 4-6 have 1-4
+          !isTRUE(same_fit(pl_dir, pl_null, skip = c("call", "note"))),
+          !any(grepl("`L0`", wl, fixed = TRUE)),
+          any(grepl("`L0 =`", pl_dis$note, fixed = TRUE)))   # the routing note
+chk_l <- mwperm_check(index = list(row = gpl$i, col = gpl$j), time = gpl$t)
+stopifnot(grepl("L0 = NULL", chk_l$call_str, fixed = TRUE),
+          any(grepl("`L0 =`", chk_l$notes, fixed = TRUE)))
+
 ## ---- 5. data = : columns are resolved by name -----------------------------
 f_nm <- mwperm(y = "yy", d = c("dd", "xx"), index = c("i", "j"), data = df2,
                seed = 2, n_reps = 1, conf_int = FALSE, verbose = FALSE)
@@ -332,5 +364,78 @@ expect_warn(mwperm(y = y2, d = d2, index = list(i = g2$i, j = g2$j),
 expect_warn(mwperm(y = y2, d = d2, index = list(i = g2$i, j = g2$j),
                    min_block = 3, seed = 1, conf_int = FALSE, verbose = FALSE),
             "applies to the missing, irregular and panel_missing designs only")
+
+## ---- 7. n_reps: the dispatched front end's own default ---------------------
+## Since 0.4.2 mwperm_irregular() defaults to 500 repetitions (the paper's
+## random per-cell trim is redrawn in every repetition, so the median needs
+## many of them) while every other front end keeps 10. mwperm()'s own default
+## is therefore NULL, "whatever the front end says", and it forwards n_reps
+## only when given: the dispatch identity must hold WITHOUT passing it.
+stopifnot(is.null(formals(mwperm)$n_reps),
+          identical(formals(mwperm_irregular)$n_reps, 500L),
+          identical(formals(mwperm_dyadic)$n_reps, 10L))
+set.seed(11)
+dat_irr <- do.call(rbind, lapply(1:8, function(i)
+  do.call(rbind, lapply(1:8, function(j) {
+    L <- sample(c(0L, 2L, 4L, 6L, 9L), 1L)
+    if (L == 0L) return(NULL)
+    data.frame(i = i, j = j, l = seq_len(L), d = rnorm(1), eta = rnorm(1))
+  }))))
+dat_irr$y <- 0.5 * dat_irr$d + dat_irr$eta + rnorm(nrow(dat_irr))
+ir_dir <- with(dat_irr, mwperm_irregular(y = y, d = d, row = i, col = j,
+                                         rep = l, L0 = 4L, min_block = 2L,
+                                         conf_int = FALSE, seed = 5))
+ir_dis <- mwperm(y = "y", d = "d", index = c("i", "j"), rep = "l",
+                 data = dat_irr, design = "irregular", L0 = 4L,
+                 min_block = 2L, conf_int = FALSE, seed = 5, verbose = FALSE)
+## (the detector prepends its L0 routing note, hence `note` is skipped and
+## checked by inclusion, as for the incomplete-panel routes above)
+stopifnot(identical(ir_dir$n_reps, 500L), length(ir_dir$pvalues_rep) == 500L,
+          identical(ir_dis$n_reps, 500L),
+          isTRUE(same_fit(ir_dir, ir_dis, skip = c("call", "auto", "note"))),
+          all(ir_dir$note %in% ir_dis$note))
+## every other design still runs 10 repetitions through mwperm()
+dy10 <- mwperm(y = "yy", d = "dd", index = c("i", "j"), data = df2, seed = 2,
+               conf_int = FALSE, verbose = FALSE)
+stopifnot(identical(dy10$n_reps, 10L), length(dy10$pvalues_rep) == 10L)
+## and an explicit n_reps is forwarded as given, to either
+ir3 <- mwperm(y = "y", d = "d", index = c("i", "j"), rep = "l", data = dat_irr,
+              design = "irregular", L0 = 4L, min_block = 2L, conf_int = FALSE,
+              n_reps = 3L, seed = 5, verbose = FALSE)
+stopifnot(identical(ir3$n_reps, 3L))
+
+## ---- 8. design = "irregular" with a `time =` index -> the incomplete panel --
+## Section 6.4 with PERIODS as the within-cell index is the incomplete panel
+## with one observation per cell and period, and the random trim is exact
+## only for exchangeable replicates. A tagged `time =` therefore runs
+## mwperm_panel_missing() -- identical to the direct call -- instead of being
+## dropped while the trim ran on the order of appearance (the pre-fix
+## behaviour). Rows 1-5 observe periods 1-3, rows 6-10 periods 2-4, so no pair
+## clears the every-period mask and L0 = 2 keeps periods 2-3 in every cell.
+set.seed(12)
+st <- do.call(rbind, lapply(1:10, function(i)
+  data.frame(i = i, j = rep(1:10, each = 3L),
+             t = rep(if (i <= 5L) 1:3 else 2:4, times = 10L))))
+st$d <- rnorm(100)[(st$i - 1L) * 10L + st$j]
+st$y <- rnorm(10)[st$i] + rnorm(10)[st$j] + 0.5 * st$t + rnorm(nrow(st))
+pm_dir <- with(st, mwperm_panel_missing(y = y, d = d, row = i, col = j,
+                                        time = t, L0 = 2L, n_reps = 3L,
+                                        conf_int = FALSE, seed = 5))
+pm_dis <- mwperm(y = "y", d = "d", index = c("i", "j"), time = "t", data = st,
+                 design = "irregular", L0 = 2L, n_reps = 3L, conf_int = FALSE,
+                 seed = 5, verbose = FALSE)
+stopifnot(identical(pm_dis$auto$design, "panel_missing"),
+          identical(pm_dis$periods_used, c("2", "3")),
+          isTRUE(same_fit(pm_dir, pm_dis, skip = c("call", "auto", "note"))),
+          all(pm_dir$note %in% pm_dis$note),
+          any(grepl("was given a `time =` index", pm_dis$note, fixed = TRUE)))
+## the diagnosis says so too, and one within-cell index is required, not two
+chk_st <- mwperm_check(index = c("i", "j"), time = "t", data = st,
+                       design = "irregular")
+stopifnot(identical(chk_st$design, "panel_missing"),
+          identical(chk_st$roles$time, "t"))
+expect_err(mwperm_check(index = c("i", "j"), time = "t", rep = "t",
+                        data = st, design = "irregular"),
+           "not both")
 
 passed("test-main.R")

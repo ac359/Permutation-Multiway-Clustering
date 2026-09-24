@@ -62,9 +62,10 @@
 #' lever -- dropping thin cells raises the attainable `K` and so the p-value
 #' resolution -- but it is a different procedure from Section 6.4, and it does
 #' not cover what Section 6.4 exists for: a covariate constant within cells
-#' still gives a powerless test (see the warning in Details), and replicates
-#' that are really time periods are still not exchangeable within a cell. For
-#' those cases use [mwperm_irregular()], which is the Section 6.4 procedure.
+#' still gives a powerless test (see the warning in Details) -- use
+#' [mwperm_irregular()], the Section 6.4 procedure, there -- and replicates
+#' that are really time periods are not exchangeable within a cell -- pass
+#' them as `time` to [mwperm_panel()] or [mwperm_panel_missing()].
 #' @param K Number of non-identity permutations; defaults to `min(cell size) -
 #'   1` capped at 199 (with `L0`, to `L0 - 1`). Must satisfy `K + 1 <=
 #'   min(cell size)`.

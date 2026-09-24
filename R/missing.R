@@ -322,16 +322,26 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   ## mwperm_irregular(), which keys on (row, col, slot)), so the invariant is
   ## enforced where it is relied upon.
   key <- if (is.null(slot)) cbind(ri, ci) else cbind(ri, ci, slot)
-  dup <- anyDuplicated(key)
+  ## Global cell code on the retained cells, formed before the check so the
+  ## check can run on it. The mixed-radix code is an exact one-to-one map of
+  ## the key rows (positive integers; .cell_code() guards the 2^53 range), so
+  ## a repeated code is exactly a repeated key and anyDuplicated() returns the
+  ## same position on either. On the code it is one hash over a double vector;
+  ## on the matrix it was anyDuplicated.matrix()'s asplit() into N row
+  ## vectors -- about 40% of every mwperm_irregular() repetition, which runs
+  ## this builder once per repetition (500 by default).
+  code <- .cell_code(key)
+  dup <- anyDuplicated(code)
   if (dup > 0L)
     stop(if (is.null(slot))
       sprintf(paste0("The missing-data design requires exactly one ",
                      "observation per (row, col) cell, but cell (%s, %s) ",
                      "appears more than once (observation %d). For repeated ",
                      "cells use mwperm_layout() (exchangeable within-cell ",
-                     "replication) or mwperm_irregular() (replicates that ",
-                     "are time periods, or a covariate constant within ",
-                     "cells)."),
+                     "replication), mwperm_irregular() (the same, with a ",
+                     "covariate constant within cells) or ",
+                     "mwperm_panel_missing() (replicates that are time ",
+                     "periods)."),
               ri[dup], ci[dup], dup)
     else
       sprintf(paste0("Internal error: (row, col, slot) key (%s, %s, %s) ",
@@ -358,7 +368,6 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                                   seed = .sub_seed(rep_seed, 4L * q,
                                                    seed_stride))
   }
-  code <- .cell_code(key)            # global cell code on retained cells
   Kp1 <- K + 1L
   ## Row positions of each block's cells, once rather than once per element:
   ## `blk` does not depend on k, so the K+1 rounds of `blk == q` below were

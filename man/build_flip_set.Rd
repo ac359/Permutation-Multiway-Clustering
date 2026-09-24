@@ -13,7 +13,11 @@ build_flip_set(n_row, n_col, n_flip, seed = NULL, cells = NULL)
 \code{n_row + n_col} (so that every group can be reached). Group order is
 \code{2^(n_flip - 1)}, and the cost of the test is one residual projection
 per element, so keep it moderate: \code{\link{mwperm_dyadic_het}} defaults
-to 8 and refuses values above 20.}
+to the smallest number of flip groups whose p-value floor
+\code{1 / 2^(n_flip - 1)} (doubled under \code{aggregate = "median2"}) is
+at most \code{alpha} -- 6 at \code{alpha = 0.05} -- and refuses values
+above 20; 6-8 are the useful range, and the cost doubles with each extra
+group.}
 
 \item{seed}{Optional integer seed for the random assignment. If \code{NULL},
 the current RNG state is used. A seeded call leaves the caller's RNG
@@ -95,8 +99,9 @@ outer(F[[3]]$row, F[[3]]$col)
 }
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
-  multi-way clustering and missing data. arXiv:2601.08610. Section 2 (the
-  argument holds for any invariance group) and Procedure 1.
+  multi-way clustering and missing data. arXiv:2601.08610. Procedure 1
+  under the double sign symmetry assumption (Assumption 2 of the revised
+  paper).
 }
 \seealso{
 \code{\link{mwperm_dyadic_het}}, the test built on this group;

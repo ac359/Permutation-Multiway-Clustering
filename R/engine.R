@@ -304,7 +304,7 @@
   one_rep <- function(s) {
     op <- perm_builder(s)               # K+1 gather-vectors for this rep
     ## A builder may confine this repetition to a subset of the rows: the
-    ## Section 6.4 random trim (mwperm_irregular(trim = "random")) redraws
+    ## Section 6.4 random trim (mwperm_irregular()) redraws
     ## the retained observations from the rep seed, so the group elements it
     ## returns index a subsample, named in `attr(op, "rows")`. Every
     ## inversion path consumes only the cached cross products of the prep
@@ -932,13 +932,24 @@
   ## per-permutation estimate outside the bracketed interval certifies a
   ## disconnected set; the interval is then extended to the boundary of the
   ## outlying component (a conservative hull, never narrower) and flagged.
+  ##
+  ## The candidates are screened in ONE .pval_matrix() call rather than one
+  ## pval_at() each: there are up to K * n_reps of them (17,500 for
+  ## mwperm_irregular() at its default 500 reps), and each separate call
+  ## looped over every rep. The values are the same -- .pval_matrix() is
+  ## elementwise in the candidates (per element one multiply and one
+  ## subtract, then a min and an integer count over j and k, with no
+  ## reduction across candidates) and .agg_pvals() is row-independent -- which
+  ## is what the exact path already relies on when it evaluates every
+  ## breakpoint at once.
+  accepted <- function(b)
+    if (!length(b)) b
+    else b[.agg_pvals(.pval_matrix(prep_list, b), agg) > alpha]
   lo_r <- one_side(-1)
   up_r <- one_side(+1)
   disconnected <- FALSE
-  out_lo <- bhat_all[bhat_all < lo_r]
-  out_hi <- bhat_all[bhat_all > up_r]
-  out_lo <- out_lo[vapply(out_lo, function(b) pval_at(b) > alpha, logical(1))]
-  out_hi <- out_hi[vapply(out_hi, function(b) pval_at(b) > alpha, logical(1))]
+  out_lo <- accepted(bhat_all[bhat_all < lo_r])
+  out_hi <- accepted(bhat_all[bhat_all > up_r])
   if (length(out_lo)) {
     disconnected <- TRUE
     lo_r <- one_side(-1, start = min(out_lo))
@@ -1201,24 +1212,42 @@
 #' sign-flip group has order `2^(n_flip - 1)` (not `n_flip + 1`), so the
 #' smallest attainable p-value is `1 / 2^(n_flip - 1)` and the cost -- one
 #' residual projection per non-identity element -- is EXPONENTIAL in
-#' `n_flip`, where the permutation designs' cost is linear in `K`. Hence a
-#' fixed default rather than "as large as the design allows": `n_flip = 8`
-#' gives order 128 and a floor of 0.0078, resolution enough for a 95% set
-#' (which needs `2^(n_flip - 1) >= 20`, i.e. `n_flip >= 6`) at 127
-#' projections per repetition. The default is capped at `min(n_row, n_col)`
-#' so every flip group can be reached by the row assignment alone, and a
-#' request above `max_flip` is refused with the projection count it implies.
+#' `n_flip`, where the permutation designs' cost is linear in `K`. Hence the
+#' default is not "as large as the design allows" but the package's
+#' resolution rule applied to this group (0.4.2, on the advisors' "n_flip
+#' 5/6/7/8; K should be greater than 20"): the smallest `n_flip >= 2` whose
+#' REPORTED p-value floor is at most `alpha`, i.e. `2^(n_flip - 1) >=
+#' m / alpha` with `m = 1` under `aggregate = "median"` and `m = 2` under
+#' `"median2"` (whose reported value is `min(1, 2 * median)`, so its floor
+#' is doubled -- see `p_floor` in `.ipt_engine()`). At `alpha = 0.05` that
+#' is 6 (order 32, floor 1/32, 31 projections per repetition) under
+#' `"median"` and 7 (order 64) under `"median2"`; at `alpha = 0.01`, 8 and 9.
+#' The default is then capped at `min(n_row, n_col)` so every flip group can
+#' be reached by the row assignment alone, and a request above `max_flip` is
+#' refused with the projection count it implies. An explicit `n_flip` is
+#' honoured as given (`alpha` is then not consulted here; the engine
+#' validates it).
 #'
 #' @param n_flip user-supplied `n_flip` or `NULL`.
 #' @param n_row,n_col the two cluster counts.
-#' @param default the value used when `n_flip` is `NULL` (before the cap).
+#' @param alpha,aggregate the fit's test level and cross-repetition rule,
+#'   which together set the floor the default must clear.
 #' @param max_flip the largest `n_flip` accepted.
 #' @keywords internal
 #' @noRd
-.default_n_flip <- function(n_flip, n_row, n_col, default = 8L,
+.default_n_flip <- function(n_flip, n_row, n_col, alpha = 0.05,
+                            aggregate = c("median", "median2"),
                             max_flip = 20L) {
   smallest <- min(n_row, n_col)
   if (is.null(n_flip)) {
+    aggregate <- match.arg(aggregate)
+    if (!(is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha) &&
+          alpha > 0 && alpha < 1))
+      stop("`alpha` must be a single number strictly between 0 and 1.",
+           call. = FALSE)
+    ## 2^(n_flip - 1) >= m / alpha  <=>  n_flip >= 1 + log2(m / alpha)
+    agg_mult <- if (identical(aggregate, "median2")) 2L else 1L
+    default <- max(2L, 1L + as.integer(ceiling(log2(agg_mult / alpha))))
     n_flip <- min(default, smallest)
   } else {
     if (!(is.numeric(n_flip) && length(n_flip) == 1L && is.finite(n_flip) &&
@@ -1231,8 +1260,11 @@
                           "has 2^(n_flip - 1) elements, so the fit would ",
                           "need %s residual projections (one factorization ",
                           "of the stacked design [X | S_k X] each) per ",
-                          "repetition. Use n_flip <= %d; n_flip = 8 (127 ",
-                          "projections, p-value floor 1/128) is the default."),
+                          "repetition. Use n_flip <= %d; the default is the ",
+                          "smallest n_flip whose p-value floor ",
+                          "1/2^(n_flip - 1) is at most alpha (6 at alpha = ",
+                          "0.05: 31 projections, floor 1/32), and each ",
+                          "extra flip group doubles the cost."),
                    n_flip, format(2^(n_flip - 1) - 1, big.mark = ",",
                                   scientific = FALSE),
                    max_flip), call. = FALSE)

@@ -84,6 +84,42 @@ m_par <- mwperm_missing(ym, dm, row = gm$i, col = gm$j, min_block = 3, seed = 7,
                         n_cores = 2L)
 stopifnot(isTRUE(same_fit(m_ser, m_par)))
 
+## The three builders that are not plain gather vectors: the sign-flip group
+## (signed gathers), the irregular design (a fresh subsample per repetition,
+## returned through attr(, "rows")) and the incomplete panel with `L0` (the
+## common period set). Rep axis, so n_reps >= 2 with a seed.
+h_ser <- mwperm_dyadic_het(y, d, x = x, row = g$i, col = g$j, seed = 5,
+                           n_reps = 3L)
+h_par <- mwperm_dyadic_het(y, d, x = x, row = g$i, col = g$j, seed = 5,
+                           n_reps = 3L, n_cores = 2L)
+stopifnot(isTRUE(same_fit(h_ser, h_par)))
+
+set.seed(8)
+gi <- expand.grid(i = 1:8, j = 1:8)
+gi <- gi[rep(seq_len(nrow(gi)), sample(c(0L, 2L, 3L, 4L), nrow(gi), TRUE)), ]
+gi$l <- ave(gi$i, gi$i, gi$j, FUN = seq_along)
+Ni <- nrow(gi)
+di <- rnorm(64L)[(gi$j - 1L) * 8L + gi$i]           # constant within a cell
+yi <- rnorm(8)[gi$i] + rnorm(8)[gi$j] + rnorm(Ni)
+i_ser <- mwperm_irregular(yi, di, row = gi$i, col = gi$j, rep = gi$l,
+                          L0 = 2L, min_block = 2L, n_reps = 3L, seed = 2)
+i_par <- mwperm_irregular(yi, di, row = gi$i, col = gi$j, rep = gi$l,
+                          L0 = 2L, min_block = 2L, n_reps = 3L, seed = 2,
+                          n_cores = 2L)
+stopifnot(isTRUE(same_fit(i_ser, i_par)))
+
+gq <- expand.grid(i = 1:10, j = 1:10, t = 1:3)
+set.seed(9)
+gq <- gq[!(gq$t == 3L & runif(nrow(gq)) < 0.2), ]  # some pairs miss period 3
+Nq <- nrow(gq)
+dq <- rnorm(Nq)
+yq <- rnorm(10)[gq$i] + rnorm(10)[gq$j] + gq$t + rnorm(Nq)
+q_ser <- mwperm_panel_missing(yq, dq, row = gq$i, col = gq$j, time = gq$t,
+                              L0 = 2L, n_reps = 3L, seed = 4)
+q_par <- mwperm_panel_missing(yq, dq, row = gq$i, col = gq$j, time = gq$t,
+                              L0 = 2L, n_reps = 3L, seed = 4, n_cores = 2L)
+stopifnot(isTRUE(same_fit(q_ser, q_par)), !is.null(q_ser$periods_used))
+
 ## The PSOCK branch (what "auto" selects on Windows) equals serial for a pure
 ## task, and a worker error propagates on both branches rather than silently
 ## returning NULL. NOTE: FUN must be an inline anonymous function here --

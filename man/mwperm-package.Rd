@@ -21,8 +21,8 @@ fully supported for direct use -- are \code{\link{mwperm_dyadic}} (two-way
 / dyadic clustering), \code{\link{mwperm_threeway}} (three-way
 clustering), \code{\link{mwperm_panel}} (panels with an arbitrary time
 effect), \code{\link{mwperm_layout}} (replicated two-way layouts),
-\code{\link{mwperm_irregular}} (irregular layouts, Section 6.4: repeats
-that are time periods, or a covariate constant within cells),
+\code{\link{mwperm_irregular}} (irregular layouts, Section 6.4:
+exchangeable replicates with a covariate constant within cells),
 \code{\link{mwperm_missing}} (incomplete arrays, via fully observed
 bicliques) and \code{\link{mwperm_dyadic_het}} (dyadic clustering under
 heteroskedasticity). All return an object of class \code{"mwperm"} with

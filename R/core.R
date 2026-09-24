@@ -106,13 +106,21 @@
 #' @param rep optional within-cell replication identifier; `NULL` means use
 #'   the order of appearance.
 #' @param ncell number of cells (the maximum cell id).
+#' @param ranked `TRUE` when `rep` is already a numeric key with integer
+#'   values (a rank), as `.irregular_design()` passes it: `factor()` is then
+#'   skipped, since the dense rank it would compute is a strictly increasing
+#'   map of such a key and `order()` gives the same permutation either way.
+#'   It is called once per repetition there, 500 times per default fit.
 #' @return integer vector of slot indices, running 1..ell inside each cell.
 #' @keywords internal
 #' @noRd
-.within_cell_slot <- function(cell, rep = NULL, ncell = max(cell)) {
+.within_cell_slot <- function(cell, rep = NULL, ncell = max(cell),
+                              ranked = FALSE) {
   N <- length(cell)
   slot <- integer(N)
-  ord_key <- if (is.null(rep)) seq_len(N) else as.numeric(factor(rep))
+  ord_key <- if (is.null(rep)) seq_len(N)
+             else if (ranked) rep
+             else as.numeric(factor(rep))
   o <- order(cell, ord_key)
   slot[o] <- sequence(tabulate(cell, nbins = ncell))
   slot

@@ -12,14 +12,13 @@ mwperm_irregular(
   col,
   rep = NULL,
   L0,
-  trim = c("random", "levels"),
   K = NULL,
   min_block = 3L,
   block_method = c("greedy", "exact"),
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+  n_reps = 500L,
   seed = NULL,
   grid = NULL,
   aggregate = c("median", "median2"),
@@ -38,27 +37,14 @@ intercept is always added internally. May be \code{NULL}.}
 
 \item{row, col}{Cell identifiers along the two layout dimensions.}
 
-\item{rep}{Optional within-cell index (the replication or period
-identifier). Under \code{trim = "random"} it only orders the observations
-inside a cell (the survivors are ranked by it; order of appearance when
-\code{NULL}), so the fit does not depend on it beyond that order. Under
-\code{trim = "levels"} it is the level the permutation holds fixed -- cell
-(i, j) level s maps to cell (pi(i), sigma(j)) level s -- and must be
-unique within a cell; when \code{NULL}, order of appearance is used.}
+\item{rep}{Optional within-cell index (the replication identifier). It
+only orders the observations inside a cell (the survivors of each
+repetition's draw are ranked by it; order of appearance when \code{NULL}),
+so the fit does not depend on it beyond that order.}
 
 \item{L0}{Integer, at least 2: the number of observations retained per
-cell. Cells with fewer than \code{L0} observations (under
-\code{trim = "levels"}, cells that do not observe every level of the common
-set) are masked out, and every retained cell is reduced to exactly
-\code{L0}. Required.}
-
-\item{trim}{How each retained cell is reduced to exactly \code{L0}
-observations. \code{"random"} (the default) is step (i) of Section 6.4 as
-printed: drop \code{ell_ij - L0} observations at random, independently in
-every cell, redrawn in every repetition. \code{"levels"} keeps the same L0
-\code{rep} levels in every cell, which condition InvB requires when the
-repeats are periods with a common effect; see \emph{When the repeats are
-periods}.}
+cell. Cells with fewer than \code{L0} observations are masked out, and
+every retained cell is reduced to exactly \code{L0}. Required.}
 
 \item{K}{Number of non-identity permutations; defaults to the smallest block
 side over the selected blocks -- that is, the smallest of |I_q| and |J_q|
@@ -85,14 +71,13 @@ Procedure 1 step 3 defines it. For a single covariate the set is computed
 covariates, a joint (grid-based) confidence region. See
 \code{\link{confint.mwperm}}.}
 
-\item{n_reps}{Number of independent runs whose p-values are aggregated by
-\code{aggregate} (the median by default), as recommended for randomised
-tests; the confidence set inverts the same aggregated p-value.
-Defaults to 10: a single run's p-value depends on the random relabelling
-(a seed lottery), and the median of 10 runs stabilises it at roughly ten
-times the cost -- fractions of a second on typical designs. Set
-\code{n_reps = 1} to reproduce the single-run behaviour of versions
-before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
+\item{n_reps}{Number of repetitions, each with its own random per-cell
+trim and its own permutation group; the reported p-value is the median
+over them (Remark 1 of the paper) and the confidence set inverts that
+median. Defaults to 500 -- the paper's Appendix B used 100, which the
+package's advisors consider the low end; use 1000 for a final run. Every
+other front end defaults to 10, because only here is the data itself
+redrawn in every repetition.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -143,13 +128,10 @@ with \code{n_reps = 1} or \code{seed = NULL} expect little or no gain.}
 }
 \value{
 An object of class \code{"mwperm"}, with the extra fields
-  \code{n_blocks}, \code{cells_used}, \code{cells_total}, \code{L0},
-  \code{trim} and \code{rep_levels} (the labels of the L0 retained levels
-  under \code{trim = "levels"}; \code{NULL} otherwise). \code{n_obs} is
-  the number of observations each repetition is computed on,
-  \code{cells_used * L0}. \code{estimate}/\code{se_naive} are the OLS
-  estimate and naive SE on the retained data -- under
-  \code{trim = "random"}, on \emph{all} observations of the retained cells,
+  \code{n_blocks}, \code{cells_used}, \code{cells_total} and \code{L0}.
+  \code{n_obs} is the number of observations each repetition is computed
+  on, \code{cells_used * L0}. \code{estimate}/\code{se_naive} are the OLS
+  estimate and naive SE on \emph{all} observations of the retained cells,
   before the per-repetition trim, so that the point estimate does not
   depend on a subsampling draw; \code{conf_int}/\code{conf_set} (or
   \code{conf_region}/\code{conf_box} for several coefficients) the IPT
@@ -162,25 +144,19 @@ Finite-sample valid test of H0: beta = b for a two-way layout
 \preformatted{  y_ijl = x_ijl' gamma + d_ijl' beta + eps_ijl}
 
 where cell (i, j) holds ell_ij observations indexed by l, the cell sizes are
-unequal, and permuting \emph{within} a cell is either invalid or powerless.
-This is the procedure of Guo, Toulis and Wang (2026), Section 6.4. Two cases
-motivate it, and \code{\link{mwperm_layout}} handles neither:
-\itemize{
-  \item the replication index l is really \emph{time}, so the errors are not
-    exchangeable across l (invariance InvB, not InvA) and within-cell
-    permutation is \strong{invalid};
-  \item d is constant within each (i, j) cell (a dyad-level covariate), so
-    within-cell permutation leaves the residual statistic unchanged and the
-    test has \strong{no power}.
-}
+unequal, and permuting \emph{within} a cell is powerless -- typically
+because d is constant within each (i, j) cell (a dyad-level covariate), so
+within-cell permutation leaves the residual statistic unchanged and
+\code{\link{mwperm_layout}} has \strong{no power}. This is the procedure
+of Guo, Toulis and Wang (2026), Section 6.4, step (i) exactly as printed and
+as the paper applies it in its Appendix B.
 }
 \details{
-In both cases the fix is to permute the \emph{cells}, across i and j,
-exactly as \code{\link{mwperm_dyadic}} does -- which needs equal cell sizes
-and a complete array, neither of which an irregular layout has. Section 6.4
+The fix is to permute the \emph{cells}, across i and j, exactly as
+\code{\link{mwperm_dyadic}} does -- which needs equal cell sizes and a
+complete array, neither of which an irregular layout has. Section 6.4
 obtains both by combining the missing-data machinery of Procedure 2 with the
-panel construction of Case (B). As printed, and as the paper applies it in
-its Appendix B (\code{trim = "random"}, the default):
+panel construction of Case (B):
 \enumerate{
   \item form the cell sizes ell_ij and, for a threshold L0, the mask
     M_ij = 1 if ell_ij >= L0, and 0 otherwise;
@@ -199,30 +175,11 @@ does in Appendix B -- the whole test is repeated and the median p-value
 reported: every one of the \code{n_reps} repetitions here draws its
 \strong{own} subsample from its own seed, together with its own permutation
 group, and the reported p-value and confidence set aggregate over both (see
-\emph{Aggregation over repetitions} in \code{\link{mwperm_dyadic}}).
+\emph{Aggregation over repetitions} in \code{\link{mwperm_dyadic}}). The
+paper's Appendix B used 100 repetitions; the package default is
+\code{n_reps = 500}, and a final run is worth 1000 (runtime is linear in
+\code{n_reps}).
 }
-\section{When the repeats are periods (\code{trim = "levels"})}{
-
-The random trim leaves each cell with L0 observations but says nothing
-about \emph{which} L0. When the within-cell index is a period with a common
-effect zeta_l in the errors, condition InvB carries the \emph{same} l on
-both sides of the invariance, so the retained observations must be the same
-L0 periods in every cell; after independent per-cell draws the l-th survivor
-is one period in one cell and another period in the next, and the position
-the permutation holds fixed is no longer the l of InvB (with a covariate
-that varies within cells and a strong common period effect, that test
-rejected a true null almost always in this package's simulations). For that
-case set \code{trim = "levels"}: a common set S of L0 \code{rep} levels is
-chosen from the observation pattern alone (the L0 levels jointly observed by
-the most cells, greedily, ties to the lower level), the mask becomes
-M_ij = 1 if cell (i, j) observes every level in S, and exactly the
-observations at those levels are kept -- a deterministic cut, with level s
-the same period in every cell. When every cell observes the levels
-1..ell_ij in order (\code{rep = NULL}) the common set is
-\code{{1, ..., L0}} and the mask is again the printed 1\{ell_ij >= L0\},
-with the first L0 observations of each cell kept.
-}
-
 \section{Assumptions}{
 
 This test does \strong{not} assume within-cell exchangeability. What it
@@ -233,19 +190,41 @@ needs is exchangeability of the retained error array across the cell indices
 \preformatted{  (eps_ijl for i in I_q, j in J_q)  has the same distribution,
   given X and D, as  (eps_[pi(i)][sigma(j)]l for i in I_q, j in J_q),}
 
-together with Assumption 4 on the mask: which cells clear L0 (and, under
-\code{trim = "levels"}, which observe the common level set) is independent
+together with Assumption 4 on the mask: which cells clear L0 is independent
 of the errors given the covariates. Under those two conditions the p-value
-is exact in finite samples by the argument of Theorem 4. Under
-\code{trim = "random"} the position l of a retained observation is its rank
-among the survivors, so the condition holds when the repeats inside a cell
-are exchangeable replicates -- individuals sampled within a cell, as in the
-paper's Appendix B -- with any cell-level dependence of the random-effects
-kind (eps_ijl = eta_i + xi_j + u_ijl). It does \strong{not} hold under a
-common effect indexed by l, an arbitrary period effect zeta_l, unless the
-retained l are aligned across cells; that is what \code{trim = "levels"}
-guarantees, and under it zeta_l is carried along unchanged exactly as the
-period effect is in \code{\link{mwperm_panel}}.
+is exact in finite samples by the argument of Theorem 4. The position l of a
+retained observation is its rank among the survivors of a random draw, so
+the condition holds when the observations inside a cell are
+\strong{exchangeable replicates} -- individuals sampled within a cell, as in
+the paper's Appendix B, with no effect attached to the within-cell index --
+with any cell-level dependence of the random-effects kind
+(eps_ijl = eta_i + xi_j + u_ijl).
+}
+
+\section{When the repeats are periods}{
+
+When the within-cell index is a time period, or anything else with an
+effect zeta_l shared across cells, the condition fails: the random trim
+keeps different periods in different cells, the position it holds fixed is
+no longer the period, and the test can over-reject \strong{even with a
+cell-constant \code{d}}. In this package's check (30 x 30 cells, rows 1-15
+observed in periods 1-5 and rows 16-30 in periods 4-8, a period effect of
+0.5 per period, a cell-constant \code{d} correlated with the row cohort,
+\code{L0 = 3}) the size at nominal 0.05 was 0.39, 0.375 at the default
+\code{n_reps = 500}, and 0.105 with a period effect of only 0.2;
+\code{\link{mwperm_panel_missing}} on the same data gave 0.028. A \code{d}
+that also varies over the periods (staggered adoption) is worse still: size
+1.000, against 0.040 for the aligned cut. Earlier checks that found the trim
+at nominal under a strong period effect (0.043 with a cell-constant
+\code{d}, 0.051 with an i.i.d. one) held only because every cell observed
+the same periods. The fit cannot see a period effect, so its note states
+this condition on every fit. For any period index use
+\code{\link{mwperm_panel_missing}} with the period as \code{time} and
+\code{L0 =} the number of periods to keep: it retains the \emph{same} L0
+periods in every cell (chosen from the observation pattern alone) and holds
+the period fixed, which is condition InvB. (Before 0.4.2 that cut was this
+function's \code{trim = "levels"} option;
+\code{mwperm_panel_missing(L0 = , time_fe = FALSE)} reproduces it exactly.)
 }
 
 \section{Choosing L0}{
@@ -257,21 +236,22 @@ them. The paper recommends tuning it by grid
 search to minimise the loss of observations. There is no free lunch in
 choosing it from the data on the \emph{outcome}; select it from the cell
 sizes alone, which are ancillary under Assumption 4. The \code{note} field
-of the fitted object reports how many cells and observations survived, and
-under \code{trim = "levels"} the \code{rep_levels} field reports which
-levels.
+of the fitted object reports how many cells and observations survived.
 }
 
-\section{Reproducibility}{
+\section{Reproducibility and the confidence set}{
 
-Under \code{trim = "random"} the subsample of each repetition is drawn from
-that repetition's seed (rep r uses \code{seed + r - 1}), with the usual
-RNG-state hygiene: a seeded call leaves the caller's random stream exactly
-as it found it, and the rep-parallel path (\code{n_cores > 1} with a
-\code{seed}) reproduces the serial result bit for bit. Under
-\code{trim = "levels"} the retained observations are a deterministic
-function of the observation pattern and \code{L0}, and the only randomness
-is the permutation group.
+The subsample of each repetition is drawn from that repetition's seed (rep
+r uses \code{seed + r - 1}), with the usual RNG-state hygiene: a seeded
+call leaves the caller's random stream exactly as it found it, and the
+rep-parallel path (\code{n_cores > 1} with a \code{seed}) reproduces the
+serial result bit for bit. At the default \code{n_reps = 500} the
+confidence interval is found by outward bracketing and bisection unless
+\code{K} is small (\code{K <= 14}): the exact set evaluates about
+\code{2 K^2 n_reps} candidate end points, which exceeds the engine's
+budget beyond that, and its cost grows like \code{K^3 n_reps^2}. The fit
+records which path it took in \code{ci_method} and in a note; the end
+points agree to the bisection tolerance.
 }
 
 \examples{
@@ -288,11 +268,6 @@ dat$y <- 0.5 * dat$d + dat$eta + rnorm(nrow(dat))
 with(dat, mwperm_irregular(y = y, d = d, row = i, col = j, rep = l,
                            L0 = 4L, min_block = 2L, conf_int = FALSE,
                            seed = 1))
-## the repeats are periods with a common effect: keep the SAME periods in
-## every cell instead of a random subset
-with(dat, mwperm_irregular(y = y, d = d, row = i, col = j, rep = l,
-                           L0 = 4L, trim = "levels", min_block = 2L,
-                           conf_int = FALSE, seed = 1))
 }
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
@@ -302,5 +277,7 @@ Guo, W., Toulis, P. and Wang, Y. (2026). Permutation
 \seealso{
 \code{\link{mwperm_layout}} (Section 6.3, within-cell permutation),
   \code{\link{mwperm_missing}} (Procedure 2 with one observation per cell),
-  \code{\link{mwperm_panel}} (Section 6.2, complete balanced panels).
+  \code{\link{mwperm_panel_missing}} (the same L0 periods in every cell,
+  for repeats that are periods), \code{\link{mwperm_panel}} (Section 6.2,
+  complete balanced panels).
 }

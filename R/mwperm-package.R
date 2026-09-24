@@ -15,7 +15,7 @@
 #' clustering), [mwperm_threeway()] (three-way clustering), [mwperm_panel()]
 #' (panels with an arbitrary time effect), [mwperm_layout()] (replicated
 #' two-way layouts), [mwperm_irregular()] (irregular layouts, Section 6.4:
-#' repeats that are time periods, or a covariate constant within cells),
+#' exchangeable replicates with a covariate constant within cells),
 #' [mwperm_missing()] (incomplete arrays, via fully observed bicliques) and
 #' [mwperm_dyadic_het()] (dyadic clustering under heteroskedasticity). All
 #' return an object of class `"mwperm"` with [print.mwperm()],

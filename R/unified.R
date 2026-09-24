@@ -156,7 +156,11 @@
 #' @param time Optional explicit time dimension: a vector, or the name of a
 #'   column of `data` (or of one of the `index` columns). Forces the panel
 #'   interpretation of that dimension: a complete `(row, col, time)` array
-#'   runs [mwperm_panel()], an incomplete one [mwperm_panel_missing()].
+#'   runs [mwperm_panel()], an incomplete one [mwperm_panel_missing()] (to
+#'   which [mwperm()] also forwards `L0 =`, the number of periods to keep
+#'   when some pairs miss periods). With `design = "irregular"` it runs
+#'   [mwperm_panel_missing()] too: periods are never given the random
+#'   per-cell trim, which is exact only for exchangeable replicates.
 #' @param rep Optional explicit replication identifier (vector or column
 #'   name): declares within-cell replication and forces the layout design.
 #' @param design Force a design instead of auto-detecting (the structure is
@@ -185,9 +189,11 @@
 #'   designs the data cannot select for you -- on a complete dyadic array,
 #'   `design = "dyadic_het"`). For `design = "dyadic_het"` the group order
 #'   is `2^(n_flip - 1)`, so `K_default` is `NA`, the extra field
-#'   `n_flip_default` carries the fit's default `n_flip`, and
-#'   `levels_needed` is the `n_flip` a `(1 - alpha)` set requires. Its
-#'   `print` method lays this out as a short human diagnosis.
+#'   `n_flip_default` carries the fit's default `n_flip` (the smallest whose
+#'   p-value floor is at most `alpha` under the given `aggregate`, capped by
+#'   the smaller dimension: 6 at `alpha = 0.05`), and `levels_needed` is the
+#'   `n_flip` a `(1 - alpha)` set requires. Its `print` method lays this out
+#'   as a short human diagnosis.
 #'
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.
@@ -315,9 +321,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           "inside a cell cannot move a covariate that is constant there. Use ",
           "design = \"irregular\" with an `L0 =` threshold instead: that is ",
           "the Section 6.4 procedure, which permutes the CELLS across rows ",
-          "and columns and is designed for exactly this case (it also ",
-          "handles repeats that are time periods, for which the layout test ",
-          "is not merely powerless but invalid -- see ?mwperm_irregular)."))
+          "and columns and is designed for exactly this case when the ",
+          "repeats are exchangeable replicates; if they are periods, pass ",
+          "them as `time =` instead -- see ?mwperm_irregular)."))
     }
   }
 
@@ -330,8 +336,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
                      "(within-cell order)")
     reason <<- why
     ## K is set by the biclique blocks found under the Section 6.4 mask
-    ## (M_ij = 1{ell_ij >= L0}; under trim = "levels", cell observes every one
-    ## of the L0 retained levels), which depends on L0 -- not knowable here.
+    ## M_ij = 1{ell_ij >= L0}, which depends on L0 -- not knowable here.
     K_default <<- NA_integer_
     balance <<- sprintf(paste0("irregular (%d cells, %d-%d observations ",
                                "each; L0 sets which cells are usable)"),
@@ -340,10 +345,13 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     cells_exp <<- prod(dims[1:2])
     notes <<- c(notes, paste0(
       "The permutation-group order for the Section 6.4 design is set by the ",
-      "biclique blocks found under the mask M_ij = 1{ell_ij >= L0} (under ",
-      "trim = \"levels\", 1{cell observes every one of the L0 retained ",
-      "levels}), so it depends on `L0`; see find_bicliques() and ",
-      "?mwperm_irregular."))
+      "biclique blocks found under the mask M_ij = 1{ell_ij >= L0}, so it ",
+      "depends on `L0`; see find_bicliques() and ?mwperm_irregular. Its ",
+      "random per-cell trim is exact only for exchangeable replicates within ",
+      "a cell; if the within-cell index is a period, or anything else with ",
+      "an effect shared across cells, it can over-reject even with a ",
+      "cell-constant `d` -- use `time =` with `L0 =` instead ",
+      "(mwperm_panel_missing(), the same L0 periods in every cell)."))
   }
 
   ## Structural gate shared by every panel path (auto, tagged, forced). A
@@ -404,7 +412,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         "The array is incomplete, so the test restricts to (row, col) pairs ",
         "observed in EVERY period and to the fully observed blocks the ",
         "biclique search extracts from them; the group order follows those ",
-        "blocks. See ?mwperm_panel_missing and find_bicliques()."))
+        "blocks. If some pairs miss periods, `L0 =` keeps instead the L0 ",
+        "periods jointly observed by the most pairs, the same ones in every ",
+        "cell. See ?mwperm_panel_missing and find_bicliques()."))
   }
 
   if (design != "auto") {
@@ -443,10 +453,13 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       }
       if (design == "dyadic_het") {
         ## The sign-flip group's order is 2^(n_flip - 1) at the fit's default
-        ## n_flip (8, capped by the smaller dimension: .default_n_flip()), and
-        ## K_default has no meaning for it.
+        ## n_flip -- the smallest whose floor clears alpha under the fit's
+        ## aggregation, capped by the smaller dimension: .default_n_flip(),
+        ## called here with the same alpha and aggregate the fit will use --
+        ## and K_default has no meaning for it.
         K_default <- NA_integer_
-        n_flip_default <- min(8L, min(dims[1:2]))
+        n_flip_default <- .default_n_flip(NULL, dims[1L], dims[2L],
+                                          alpha = alpha, aggregate = aggregate)
       }
     } else if (design == "panel") {
       if (is.null(time_v) && C != 3L)
@@ -521,6 +534,37 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
              call. = FALSE)
       finish_layout("forced via design =")
       reason <- "forced via design ="
+    } else if (design == "irregular" && !is.null(time_v)) {
+      ## Section 6.4 with a PERIOD as the within-cell index is the incomplete
+      ## panel with one observation per cell and period (the advisors'
+      ## reading, 2026-09-22), and the random per-cell trim is exact only for
+      ## exchangeable replicates: it keeps different periods in different
+      ## cells and can over-reject under a period effect even with a
+      ## cell-constant d. So a tagged `time =` runs mwperm_panel_missing(),
+      ## which keeps the same L0 periods in every cell and holds the period
+      ## fixed. (Until 0.4.2 `time` was dropped here without a word and the
+      ## random trim ran on the order of appearance.)
+      if (C != 2L)
+        stop(paste0("design = \"irregular\" with `time =` needs exactly 2 ",
+                    "index dimensions (the cells)."), call. = FALSE)
+      if (!is.null(rep_v))
+        stop(paste0("design = \"irregular\" takes one within-cell index: ",
+                    "`time =` if it is a period (the fit then runs ",
+                    "mwperm_panel_missing()), `rep =` if the repeats are ",
+                    "exchangeable replicates -- not both."), call. = FALSE)
+      pc <- panel_cells()
+      finish_panel_missing(paste0("design = \"irregular\" with a `time =` ",
+                                  "index: periods run as the incomplete ",
+                                  "panel"),
+                           complete = pc$complete, expected = pc$expected,
+                           announce = FALSE)
+      notes <- c(notes, paste0(
+        "design = \"irregular\" was given a `time =` index, so this is ",
+        "mwperm_panel_missing(): the random per-cell trim of ",
+        "mwperm_irregular() is exact only for exchangeable replicates, and ",
+        "for periods the same L0 periods must be kept in every cell (pass ",
+        "`L0 =` for that; without it, only the pairs observed in every ",
+        "period are kept)."))
     } else if (design == "irregular") {
       if (C != 2L)
         stop(paste0("design = \"irregular\" needs exactly 2 index ",
@@ -732,7 +776,8 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     panel = sprintf("row = %s, col = %s, time = %s, time_fe = TRUE",
                     roles$row, roles$col, roles$time),
     panel_missing = sprintf(paste0("row = %s, col = %s, time = %s, ",
-                                   "min_block = ..., time_fe = TRUE"),
+                                   "L0 = NULL, min_block = ..., ",
+                                   "time_fe = TRUE"),
                             roles$row, roles$col, roles$time),
     threeway = sprintf("id1 = %s, id2 = %s, id3 = %s",
                        roles$id1, roles$id2, roles$id3),
@@ -848,7 +893,8 @@ print.mwperm_design <- function(x, ...) {
 #' dispatches to the matching test -- [mwperm_dyadic()], [mwperm_panel()],
 #' [mwperm_panel_missing()], [mwperm_threeway()], [mwperm_layout()] or
 #' [mwperm_missing()]; [mwperm_irregular()] is never chosen automatically and
-#' needs `design = "irregular"` with `L0`, and [mwperm_dyadic_het()] is never
+#' needs `design = "irregular"` with `L0` (with a `time =` index that runs
+#' [mwperm_panel_missing()] instead), and [mwperm_dyadic_het()] is never
 #' chosen automatically and needs `design = "dyadic_het"` -- forwarding all
 #' arguments unchanged. A thin convenience layer: the returned object is
 #' exactly what the underlying function returns (plus a record of what was
@@ -882,20 +928,32 @@ print.mwperm_design <- function(x, ...) {
 #'   function. Does not apply to `design = "dyadic_het"`, whose group is
 #'   sized by `n_flip`; supplying it there warns and ignores it.
 #' @param n_flip Passed to [mwperm_dyadic_het()] (`design = "dyadic_het"`
-#'   only: the number of flip groups, group order `2^(n_flip - 1)`;
-#'   supplying it for another design warns and ignores it).
+#'   only: the number of flip groups, group order `2^(n_flip - 1)`; by
+#'   default the smallest number whose p-value floor `1 / 2^(n_flip - 1)`
+#'   (doubled under `aggregate = "median2"`) is at most `alpha`, i.e. 6 at
+#'   `alpha = 0.05`. Supplying it for another design warns and ignores it).
 #' @param time_fe Passed to [mwperm_panel()] or [mwperm_panel_missing()]
 #'   (panel designs only; supplying it for another design warns and ignores
 #'   it).
-#' @param L0 Passed to [mwperm_layout()] or [mwperm_irregular()] (layout and
-#'   irregular only; required for `design = "irregular"`).
-#' @param trim Passed to [mwperm_irregular()] (irregular only): `"random"`,
-#'   the paper's random per-cell trim, or `"levels"`, the same `rep` levels in
-#'   every cell. Supplying it for another design warns and ignores it.
+#' @param L0 Passed to [mwperm_layout()], [mwperm_irregular()] or
+#'   [mwperm_panel_missing()] (layout, irregular and incomplete-panel designs
+#'   only; required for `design = "irregular"`, optional for the other two:
+#'   for an incomplete panel it keeps the L0 periods jointly observed by the
+#'   most pairs, the same ones in every cell).
+#' @param trim Removed in 0.4.2 and refused when supplied: the level-aligned
+#'   cut that was `mwperm_irregular(trim = "levels")` is now
+#'   `mwperm_panel_missing(time = <rep>, L0 = <L0>)` (reached here with
+#'   `time =` and `L0 =`), and [mwperm_irregular()] implements only the
+#'   paper's random per-cell trim.
 #' @param min_block,block_method,permute `min_block` and `block_method` are
 #'   passed to [mwperm_missing()], [mwperm_panel_missing()] or
 #'   [mwperm_irregular()]; `permute` to [mwperm_missing()] only. Supplying any
 #'   of them for another design warns and ignores it.
+#' @param n_reps Number of repetitions whose p-values are aggregated (see
+#'   `aggregate`). `NULL` (the default) means the dispatched function's own
+#'   default: 500 for [mwperm_irregular()], whose random per-cell trim is
+#'   redrawn in every repetition, and 10 for every other design. A value
+#'   given here is forwarded as it is.
 #' @param verbose If `TRUE` (default) print one line stating the detected
 #'   design and the dispatched call.
 #' @inheritParams mwperm_dyadic
@@ -953,14 +1011,21 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                               "panel_missing", "layout", "missing",
                               "irregular", "dyadic_het"),
                    K = NULL, alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                   n_reps = 10L, seed = NULL, grid = NULL, n_cores = 1L,
-                   time_fe = TRUE, L0 = NULL, trim = c("random", "levels"),
+                   n_reps = NULL, seed = NULL, grid = NULL, n_cores = 1L,
+                   time_fe = TRUE, L0 = NULL, trim = NULL,
                    min_block = 3L, block_method = c("greedy", "exact"),
                    permute = c("both", "rows", "cols"), n_flip = NULL,
                    aggregate = c("median", "median2"), verbose = TRUE) {
   design <- match.arg(design)
-  trim <- match.arg(trim)
   aggregate <- match.arg(aggregate)
+  ## `trim` is kept as a slot for one release so that a 0.4.1 call fails with
+  ## the replacement named rather than with R's "unused argument".
+  if (!is.null(trim))
+    stop(paste0("`trim` was removed in 0.4.2: for periods with a common ",
+                "effect use mwperm_panel_missing(time = <rep>, L0 = <L0>) ",
+                "(through mwperm(), pass the period as `time =` together ",
+                "with `L0 =`); mwperm_irregular() now implements only the ",
+                "paper's random per-cell trim."), call. = FALSE)
   cl <- match.call()
   ## capture the caller's expression for d BEFORE evaluation: the front ends
   ## label coefficients by deparse(substitute(d)), which through do.call would
@@ -1032,8 +1097,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                       chk$design), call. = FALSE)
   }
   check_arg("time_fe", c("panel", "panel_missing"))
-  check_arg("L0", c("layout", "irregular"))
-  check_arg("trim", "irregular")
+  check_arg("L0", c("layout", "irregular", "panel_missing"))
   check_arg("min_block", c("missing", "irregular", "panel_missing"))
   check_arg("block_method", c("missing", "irregular", "panel_missing"))
   check_arg("permute", "missing")
@@ -1064,10 +1128,14 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
             "\n  -> running ", chk$call_str)
   }
 
-  common <- list(y = y, d = d, x = x, K = K, alpha = alpha,
-                 beta_null = beta_null, conf_int = conf_int, n_reps = n_reps,
-                 seed = seed, grid = grid, aggregate = aggregate,
-                 n_cores = n_cores)
+  ## n_reps is forwarded only when given: NULL means the dispatched front
+  ## end's own default, which is 500 for mwperm_irregular() (its random
+  ## per-cell trim is redrawn every repetition) and 10 for every other design.
+  common <- c(list(y = y, d = d, x = x, K = K, alpha = alpha,
+                   beta_null = beta_null, conf_int = conf_int),
+              if (!is.null(n_reps)) list(n_reps = n_reps),
+              list(seed = seed, grid = grid, aggregate = aggregate,
+                   n_cores = n_cores))
   ix <- chk$index
   res <- switch(chk$design,
     dyadic = do.call(mwperm_dyadic,
@@ -1086,7 +1154,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                                    time = chk$time, time_fe = time_fe))),
     panel_missing = do.call(mwperm_panel_missing,
                             c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                           time = chk$time,
+                                           time = chk$time, L0 = L0,
                                            min_block = min_block,
                                            block_method = block_method,
                                            time_fe = time_fe))),
@@ -1098,7 +1166,7 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                                     rep = chk$rep, L0 = L0))),
     irregular = do.call(mwperm_irregular,
                         c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                       rep = chk$rep, L0 = L0, trim = trim,
+                                       rep = chk$rep, L0 = L0,
                                        min_block = min_block,
                                        block_method = block_method))))
 
