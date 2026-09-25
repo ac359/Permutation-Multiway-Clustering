@@ -74,22 +74,43 @@ test_that("aggregate = 'median2' reports min(1, 2 x median)", {
 
 test_that("ties count toward the p-value (<=, not <)", {
   ## y = 0 exactly: every residual inner product is an exact zero, so
-  ## a_k = b_k = 0 for all k and every indicator in Eq. (10) is a tie.
-  ## With <= the p-value is (1 + K)/(K + 1) = 1; with < it would be 1/(K+1),
-  ## a rejection of H0 on data with no signal at all.
+  ## a_k = b_k = 0 for all k and every indicator in Eq. (10) is a tie -- in
+  ## floating point, not only in exact arithmetic. With <= the p-value is
+  ## (1 + K)/(K + 1) = 1; with < it would be 1/(K+1), a rejection of H0 on
+  ## data with no signal at all.
   dy <- make_dyadic(10, 10, seed = 56)
   f <- mwperm_dyadic(numeric(nrow(dy)), dy$d, x = dy$x, row = dy$i,
                      col = dy$j, n_reps = 3, seed = 2, conf_int = FALSE)
   expect_identical(f$pvalues_rep, c(1, 1, 1))
-  ## A layout whose d is constant within every cell: every within-cell
-  ## permutation leaves the residualized d unchanged, so b_k = a_k exactly
-  ## for every k, the minimum a_j is matched by its own b_j, and p = 1.
+})
+
+test_that("a d the group cannot move gives p = 1, up to one rounded tie", {
+  ## In a layout whose d is constant within every cell, every within-cell
+  ## permutation leaves D unchanged. The group is closed under inverses, so
+  ## b_k = a_{k'}, where k' = K + 1 - k is the inverse of element k: the b's
+  ## are the a's in another order. The smallest a_j is therefore matched
+  ## exactly by one b_k, every indicator in Eq. (10) holds, and p = 1 -- in
+  ## exact arithmetic. In floating point that one tie is decided by rounding,
+  ## because a_j and its partner b_k are different sums: it goes either way
+  ## with the platform and even the row order (CI runners gave 5/6 in
+  ## different repetitions), in the naive reference as well as the package.
+  ## So the pairing is checked on the reference to rounding error, the
+  ## minimum is checked to be unique (so at most one indicator can be lost),
+  ## and the package's p-values are held to {K/(K+1), 1}.
   ly <- make_layout(4, 4, sizes = 6:8, seed = 57, d_cell_constant = TRUE)
   expect_warning(
     fl <- mwperm_layout(ly$y, ly$d, x = ly$x, row = ly$i, col = ly$j,
                         rep = ly$l, n_reps = 3, seed = 2, conf_int = FALSE),
     "constant within every cell")
-  expect_identical(fl$pvalues_rep, c(1, 1, 1))
+  K <- fl$K
+  for (r in 1:3) {
+    ref <- ref_procedure1(ly$y, ly$d, ref_X(ly$x, nrow(ly)),
+                          ref_groups_layout(ly$i, ly$j, ly$l, K, 2, r))
+    expect_equal(ref$b, rev(ref$a), tolerance = 1e-10)   # b_k = a_{K+1-k}
+    a <- sort(ref$a)
+    expect_gt(a[2] - a[1], 1e-6 * a[2])                   # a unique minimum
+  }
+  expect_true(all(fl$pvalues_rep >= K / (K + 1)))
 })
 
 test_that("D in col(X): p = 1 exactly, as Eq. (10) gives (and a warning)", {

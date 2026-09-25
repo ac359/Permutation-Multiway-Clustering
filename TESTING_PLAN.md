@@ -55,7 +55,7 @@ test's name). **B:** a base-R file in `tests/`, with `ll/` for
 | P4 | y_{pi,sigma}: entry (i,j) is y_{pi(i) sigma(j)} | `.build_obs_perms()` (core.R:570; gather = `match()` or position table on the mapped cell code) | T: procedure1-reference "the package builds y_{pi_k, sigma_k} as GTW define it" |
 | P5 | Proc. 1 step 1: V_k is an orthonormal basis of col([X, X_k])^perp | `.ipt_prepare()` (core.R:297; the eigen pseudo-inverse at core.R:377): residualizes D on [X, X_k], cut at 1e-14 (the rank, not 2p) | T: procedure1-reference (a_k, b_k to 1e-8; row/col FE rank deficiency), designs (panel time FE); B: ll/test-projection §1-4 |
 | P6 | a_k = norm(D' V_k V_k' y), b_k = norm(D' V_k V_k' y_k) | `.ipt_prepare()` (core.R:297) caches u = Dr'y, v = Dr'y_k, M = Dr'Dr, W = Dr'D_k; `.ipt_eval()` (core.R:465) evaluates a = abs(u - M b), b = abs(v - W b), or the norms when d > 1 | T: procedure1-reference; B: ll/test-projection §3 |
-| P7 | Eq. (10): minorized p-value, min over j = 1..K, indicator <= | `.ipt_eval()` `(1 + sum(b >= amin)) / Kp1` (core.R:494); `.pval_matrix()` (engine.R:661, vectorised) | T: procedure1-reference (identical p-values; "min over the K non-identity elements"), pvalue-properties (grid, ties); B: ll/test-pvalue §1-5 |
+| P7 | Eq. (10): minorized p-value, min over j = 1..K, indicator <= | `.ipt_eval()` `(1 + sum(b >= amin)) / Kp1` (core.R:494); `.pval_matrix()` (engine.R:661, vectorised) | T: procedure1-reference (identical p-values; "min over the K non-identity elements"), pvalue-properties (grid, ties, a `D` the group cannot move); B: ll/test-pvalue §1-5 |
 | P8 | testing beta = b means running Proc. 1 on y - D b | the affine form in `.ipt_eval()` (core.R:465); `beta0` in `.ipt_engine()` (engine.R:204) | T: procedure1-reference "a non-zero null ...", invariances "testing beta = b ..."; B: test-equivariance §3 |
 | P9 | Proc. 1 step 3: CI = {b : pval(b) > alpha} | `.invert_ci()` (engine.R:873; exact via `.ci_breakpoints()` engine.R:719 + `.exact_ci_set()` engine.R:775; grid; bisection), `.invert_region()` (engine.R:1063) when d > 1 | T: confidence-sets (duality at every end point, grid and bisection versus exact, region); **D10**; B: ll/test-exact-ci, ll/test-invert-ci-grid |
 | P10 | Theorem 1: P(pval <= alpha given X, D) <= alpha, for p < N/2 | engine guard `N <= 2p` stops (engine.R:261) | T: data-validation "p >= N/2 is refused", montecarlo (ECDF at every atom) |
@@ -119,6 +119,19 @@ test's name). **B:** a base-R file in `tests/`, with `ll/` for
   approximate maximum acceptable, so this costs power only.
 * **WWW's repeat-until loop in Algorithm 1** is dropped, as GTW's Algorithm 1
   drops it.
+* **An exact tie in Eq. (10) is decided in floating point** (found by CI,
+  2026-09-24). When the group cannot move `D` (for example a layout with
+  `d` constant within every cell), closure under inverses gives
+  b_k = a_{K+1-k}, so the smallest a_j is tied exactly with one b_k and
+  p = 1 in exact arithmetic. The two sides are different sums, so rounding
+  decides that one tie: the reported p-value is K/(K+1) or 1 depending on
+  the platform and the row order (5/6 in different repetitions on different
+  CI runners; the naive reference does the same). This cannot produce a
+  rejection at any alpha below K/(K+1), and `mwperm_layout()` already warns
+  that such a `d` leaves the test no power. Making the tie platform-independent (a relative tolerance in
+  the comparison) would change seeded numbers and needs sign-off.
+  `test-pvalue-properties.R` checks the pairing on the reference and holds
+  the package to {K/(K+1), 1}.
 * **Package extensions beyond the paper:**
   * `time_fe = TRUE` (period dummies are invariant under InvB);
   * `aggregate = "median2"`;
@@ -550,6 +563,7 @@ Each mutation was applied alone to a throwaway worktree on branch `mutation-tmp`
 Two notes on the pattern:
 
 * Mutation (a) is caught only where ties are real (y = 0, a cell-constant d, D in col(X), and the irregular example, whose cell-constant d gives exact ties). The reference comparisons avoid near-ties on purpose.
+  *(Later on 2026-09-24: CI showed the cell-constant-d tie is decided by rounding, so that assertion now allows p = K/(K+1) and no longer separates `<=` from `<`; the y = 0 and D-in-col(X) cases still do. See* Documented deviations.*)*
 * Mutation (d) is caught by the two p-value comparisons with the shared-(pi, sigma) reference, and by the golden and panel base files, but not by the structural test. That test cannot reach the front end's own group; see F-1.
 
 #### Runtimes
