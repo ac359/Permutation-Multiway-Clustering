@@ -182,7 +182,7 @@ of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
 | `helper-reference.R` | shared code, loaded by testthat before every file, never a test: a naive Procedure 1 (QR residuals with numerical rank, then `a_k`, `b_k` and Eq. 10); each front end's group rebuilt from its seed by explicit key matching; data generators; Monte Carlo helpers; `skip_discrepancy()` |
 | `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
 | `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
-| `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), `median2`, ties counted (`<=`), `D` in `col(X)` |
+| `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), `median2`, ties counted (`<=`), a `D` the group cannot move, `D` in `col(X)` |
 | `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, testing `b` versus `y - D b`, a common trend under `time_fe`; CI equivariance |
 | `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region |
 | `test-designs.R` | each design's group structure (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) and its p-values against the reference |

@@ -31,6 +31,11 @@
 ##      on the author's setup (n = 12, n_flip = 5): min(a) lowered in ~7.5% of
 ##      draws, the p-value changed in ~2.5%, always in the conservative
 ##      direction, so the original was valid but was not Procedure 1.
+##      The revised paper's Appendix E, read literally, lists the all -1
+##      vector (also the identity on the cells) among its K non-identity
+##      elements; excluding BOTH identity copies is the package's reading,
+##      pending the authors (tests/test-signflip.R section 11 pins the
+##      relation: same grid, the package's p-value never larger).
 ##
 ## One further difference of convention, not of substance: the flip-group
 ## assignments g1 and g2 are ARGUMENTS here rather than drawn inside with
