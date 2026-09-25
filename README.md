@@ -773,11 +773,13 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   errors **independent across cells**; skewed errors are not, and neither are
   **additive cluster effects** $\eta_i + \xi_j$, which change the joint law
   under a sign flip (size 0.12–0.15 at nominal 0.05 in this package's checks
-  when $d$ has a row-level component). The paper's own parameterisation is
-  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ with $u_i, v_j$ i.i.d. symmetric
-  and $h$ unknown — dependence only through symmetric multiplicative factors
-  — and the authors' own simulation design for the test has independent
-  heteroskedastic errors. Exchangeability is *not* required,
+  when $d$ has a row-level component). The paper gives
+  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ ($u_i, v_j$ i.i.d. symmetric, $h$
+  unknown) as a model that satisfies the assumption, which is weaker; its own
+  simulation for the test has independent heteroskedastic errors. On that
+  design (25 clusters per side) this package rejected a true null in 1.0% of
+  1000 simulations at `n_flip = 6` with one repetition. Exchangeability is
+  *not* required,
   and this assumption does not imply it, nor the reverse. The array need not
   be complete: every observed cell is used and nothing is discarded, but
   which cells are observed must then be independent of the errors given
@@ -788,7 +790,11 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
 - **Group order and resolution.** Because the sign enters as a *product*,
   $s$ and $-s$ induce the same transformation: the $2^{n_{\mathrm{flip}}}$ sign
   vectors give only $2^{n_{\mathrm{flip}}-1}$ distinct elements, and
-  `build_flip_set()` enumerates each exactly once. The p-value therefore lives
+  `build_flip_set()` enumerates each exactly once. (`n_flip` is the $c$ of the
+  paper's sign-flipping set construction, whose $K = 2^c - 1$ counts each
+  distinct flip twice: the paper's default $K = 2^5 - 1$ is `n_flip = 5`, 16
+  distinct flips, and its simulation's $K = 2^6 - 1$ is `n_flip = 6`.) The
+  p-value therefore lives
   on multiples of $1/2^{n_{\mathrm{flip}}-1}$, and a 95% confidence set needs
   $2^{n_{\mathrm{flip}}-1} \ge 20$, i.e. **`n_flip ≥ 6`**. The cost is one
   projection per non-identity element, $2^{n_{\mathrm{flip}}-1} - 1$ per
@@ -803,7 +809,7 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   buys resolution, not power: at 25 × 25 with independent heteroskedastic
   symmetric errors and `n_reps = 10`, power at $\beta = 0.10$ was 0.27, 0.34
   and 0.37 for `n_flip` = 6, 7 and 8 (300 simulations each), at 1, 2 and 4
-  times the projections. Under the paper's own model
+  times the projections. Under the model
   $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ the size was 0.014 at
   `n_reps = 1` and 0.002 at the default — conservative, not over-rejecting.
 - **The trade-off.** This is **not a strict upgrade** over `mwperm_dyadic()`.

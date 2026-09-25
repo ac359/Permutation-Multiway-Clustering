@@ -66,11 +66,25 @@ and \code{-s} induce the identical transformation: the action has a kernel
 of order 2, so the \code{2^n_flip} sign vectors produce only
 \code{2^(n_flip - 1)} distinct transformations, each of them twice. This
 function enumerates one representative per pair (coordinate 1 fixed to
-\code{+1}), which is exact: the p-value is bit-identical to what the full
-enumeration would give, at half the cost. The effective group order is
-therefore \code{2^(n_flip - 1)} and the smallest attainable p-value
+\code{+1}), at half the cost. The effective group order is therefore
+\code{2^(n_flip - 1)} and the smallest attainable p-value
 \code{1 / 2^(n_flip - 1)}, so a 95\% confidence set needs
 \code{n_flip >= 6}.
+
+\strong{Relation to the paper.} This is the sign-flipping set construction
+of the revised paper (its Appendix E, not yet public) with \code{n_flip} as
+its \code{c}, applied to the rows and to the columns with one shared sign
+vector per element. The paper lists all \code{2^c} sign vectors,
+\code{K = 2^c - 1}, so its \code{K} counts every distinct flip twice: its
+default \code{K = 2^5 - 1 = 31} is \code{n_flip = 5} (16 distinct flips,
+smallest p-value 1/16), and the \code{K = 2^6 - 1} of its simulation is
+\code{n_flip = 6}, this package's default. One of the paper's \code{K}
+non-identity elements, the all \code{-1} vector, flips every row and every
+column and so is the identity on the cells; read literally, Procedure 1
+then puts the unflipped statistic into \code{min_j a_j}. That p-value is on
+the same grid and never smaller than the one computed here, which excludes
+both copies of the identity; both are valid, and on the paper's own
+simulation design they coincided.
 
 \strong{Every flip group must be used.} If some group were assigned to no
 row cluster and no column cluster its sign would be free, the kernel would
@@ -79,7 +93,9 @@ contain duplicates -- a valid test whose \emph{reported} resolution would
 be wrong. The assignment is therefore resampled until the union of the row
 and column images covers all \code{n_flip} groups. That is rare at small
 \code{n_flip} (about 5\% of draws at \code{n_flip = 10} with 25 clusters
-per side) but it must be guaranteed, not left to chance.
+per side) but it must be guaranteed, not left to chance. (The paper says
+only "randomly partition"; drawn without this check, a group goes unused
+about once in 1,500 draws at \code{n_flip = 6} on a 25 x 25 array.)
 
 The randomness in the assignment is what makes the resulting test a
 \emph{random} invariant test, exactly as the relabelling does in
@@ -89,8 +105,8 @@ aggregates several draws. The same reproducibility caveats apply (same
 \code{RNGkind()}; see \code{\link{build_perm_set}}).
 
 The sign-flip group under the revised paper's Assumption 2 (double
-sign symmetry), drawn at random as Algorithm 1 draws a random cyclic
-subgroup, with one representative per coset \verb{\{s, -s\}}.
+sign symmetry), built by its sign-flipping set construction (Appendix
+E) with one representative per coset \verb{\{s, -s\}}.
 }
 \examples{
 F <- build_flip_set(n_row = 6, n_col = 5, n_flip = 4, seed = 1)
@@ -104,8 +120,8 @@ outer(F[[3]]$row, F[[3]]$col)
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
   multi-way clustering and missing data. arXiv:2601.08610. Procedure 1
-  under the double sign symmetry assumption (Assumption 2 of the revised
-  paper).
+  under the double sign symmetry assumption (Assumption 2 and Appendix E
+  of the revised paper).
 }
 \seealso{
 \code{\link{mwperm_dyadic_het}}, the test built on this group;

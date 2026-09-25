@@ -32,6 +32,10 @@
 ##   8. the dispatcher                  -- opt-in only, dispatch identity,
 ##                                         argument cross-checks
 ##   9. permutation designs untouched   -- seeded anchor and note wording
+##  10. incomplete arrays               -- kernel guard, mask condition
+##  11. the paper's full enumeration    -- the revised paper lists all 2^c
+##                                         sign vectors; the package's p-value
+##                                         is on the same grid, never larger
 ##
 ## Run from the package root after installing:
 ##   R CMD INSTALL . && Rscript tests/test-signflip.R
@@ -477,5 +481,35 @@ f_inc_dis <- mwperm(y = "log_trade", d = "log_dist",
                     design = "dyadic_het", n_flip = 5, n_reps = 1, seed = 3,
                     conf_int = FALSE, verbose = FALSE)
 stopifnot(isTRUE(same_fit(f_inc, f_inc_dis, skip = c("call", "auto"))))
+
+## ---- 11. the paper's full enumeration ----------------------------------------
+## The revised paper's sign-flipping set construction lists ALL 2^c sign
+## vectors (K = 2^c - 1). s and -s flip the same cells, and the all -1 vector
+## is the identity on the cells, so read literally Procedure 1 puts the
+## unflipped statistic into min_j a_j. The package keeps one element per pair
+## and excludes both identity copies. Guard: on the SAME partition the
+## package's p-value must be on the literal version's grid (multiples of
+## 1/2^(c-1): the identity copy always counts, so the literal floor is 2/2^c)
+## and never larger -- a package p-value above the literal one would mean the
+## deduplication had dropped a distinct flip.
+ipt_p <- internal(".ipt_pvalue")
+cc <- 4L; nn <- 12L
+gg <- expand.grid(i = seq_len(nn), j = seq_len(nn))
+S_full <- as.matrix(expand.grid(rep(list(c(1, -1)), cc)))    # row 1 all +1
+for (s in 1:6) {
+  set.seed(40 + s)
+  Xs <- cbind(1, rnorm(nn)[gg$i], rnorm(nn)[gg$j])
+  Ds <- matrix(rnorm(nn)[gg$i] + rnorm(nrow(gg)))
+  ys <- drop(Xs %*% c(1, 1, 1)) + exp(0.5 * Xs[, 2]) * rnorm(nrow(gg))
+  Fs <- build_flip_set(nn, nn, cc, seed = s)
+  g1 <- attr(Fs, "row_groups"); g2 <- attr(Fs, "col_groups")
+  ops_full <- lapply(seq_len(nrow(S_full)), function(k)
+    list(g = NULL, s = S_full[k, g1[gg$i]] * S_full[k, g2[gg$j]]))
+  p_pkg <- ipt_p(ys, Ds, Xs, internal(".build_obs_flips")(cbind(gg$i, gg$j), Fs))$pvalue
+  p_lit <- ipt_p(ys, Ds, Xs, ops_full)$pvalue
+  stopifnot(p_pkg <= p_lit, p_lit >= 2 / 2^cc,
+            isTRUE(all.equal(p_lit * 2^(cc - 1L), round(p_lit * 2^(cc - 1L)))),
+            isTRUE(all.equal(p_pkg * 2^(cc - 1L), round(p_pkg * 2^(cc - 1L)))))
+}
 
 passed("test-signflip.R")

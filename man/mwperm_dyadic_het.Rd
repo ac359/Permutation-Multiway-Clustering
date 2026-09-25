@@ -165,13 +165,15 @@ assumptions are complementary and neither contains the other:
   (or sign-symmetrically dependent) symmetric errors, \strong{no additive
   cluster effects}.
 }
-The paper's own parameterisation of the assumption is
-\code{eps_ij = h(X_ij) u_i v_j} with \code{u_i, v_j} i.i.d. from a
-symmetric distribution and \code{h} an unknown function of the covariates
--- dependence only through symmetric multiplicative factors -- and the
-authors' own simulation design for this test draws errors that are
-independent across cells with a variance increasing in the gravity mean and
-in distance; that is the setting it is meant for.
+The paper gives \code{eps_ij = h(X_ij) u_i v_j}, with \code{u_i, v_j}
+i.i.d. from a symmetric distribution and \code{h} an unknown function of the
+covariates, as a model that satisfies the assumption; the assumption itself
+is weaker. The paper's own simulation for this test draws errors independent
+across cells, \code{eps_ij = sigma_ij eta_ij} with
+\code{eta_ij ~ N(0, 1)} and \code{sigma_ij} increasing in the gravity mean
+and in distance; that is the setting the test is meant for. On that design
+(25 clusters per side, \code{n_flip = 6}, one repetition) this function
+rejected a true null in 1.0\% of 1000 simulations.
 
 Under covariate-dependent heteroskedasticity (25 clusters per side, a
 gravity design with the residual variance increasing in the mean and in the
@@ -205,7 +207,9 @@ observed cells -- see the \code{cells} argument of
 cluster is assigned at random to one of \code{n_flip} flip groups, and a
 sign vector in \code{{-1, +1}^n_flip} multiplies observation \code{(i, j)}
 by the product of its row group's sign and its column group's sign (see
-\code{\link{build_flip_set}}). A sign vector and its negative induce the
+\code{\link{build_flip_set}}: this is the revised paper's sign-flipping set
+construction, Appendix E, with \code{n_flip} as its \code{c}, and its
+\code{K = 2^c - 1} counts each distinct flip twice). A sign vector and its negative induce the
 same transformation, so the group has \code{2^(n_flip - 1)} distinct
 elements, not \code{2^n_flip}; the package enumerates each exactly once.
 Per repetition the p-value therefore lives on the grid
@@ -231,7 +235,7 @@ note; the end points agree to the bisection tolerance). The default buys
 resolution, not power: at 25 x 25 with independent heteroskedastic
 symmetric errors and \code{n_reps = 10}, power at beta = 0.10 was 0.27,
 0.34 and 0.37 for \code{n_flip} = 6, 7 and 8 (300 simulations each), at 1,
-2 and 4 times the projections. Under the paper's own model
+2 and 4 times the projections. Under the model
 \code{eps_ij = h(X_ij) u_i v_j} the size was 0.014 at \code{n_reps = 1}
 and 0.002 at the default -- conservative, not over-rejecting.
 
