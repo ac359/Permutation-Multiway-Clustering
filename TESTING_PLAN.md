@@ -72,7 +72,7 @@ test's name). **B:** a base-R file in `tests/`, with `ll/` for
 | P21 | Sec. 6.3, layout | `mwperm_layout()` (layout.R:146), `.build_obs_perms_layout()` (layout.R:290), `.within_cell_slot()` (core.R:167), `.downsample_to_L0()` (layout.R:265) | T: designs layout (x3); **D7**; B: test-layout |
 | P22 | Sec. 6.4, irregular | `mwperm_irregular()` (irregular.R:192), `.irregular_design()` (irregular.R:363) | T: designs irregular, draft-replication Sec. 6.5; B: test-irregular |
 | P23 | Sec. 9 (open): incomplete panels | `mwperm_panel_missing()` (panel_missing.R:186), `.panel_missing_design()` (panel_missing.R:387), `.choose_common_levels()` (panel_missing.R:336) | T: designs incomplete panel; B: test-panel-missing |
-| P24 | revised Assumption 2 (double sign symmetry) and its Section E procedure | `mwperm_dyadic_het()` (signflip.R:523), `build_flip_set()` (signflip.R:170), `.build_obs_flips()` (signflip.R:318), `.apply_op()` (core.R:217) | B: test-signflip (against the authors' port); T: pvalue-properties (grid 2^(n_flip-1)), dispatch, reproducibility. **Gap:** Section E is not available, so fidelity to the paper's own procedure is unchecked |
+| P24 | revised Assumption 2 (double sign symmetry) and its Section E procedure | `mwperm_dyadic_het()` (signflip.R:523), `build_flip_set()` (signflip.R:170), `.build_obs_flips()` (signflip.R:318), `.apply_op()` (core.R:217) | B: test-signflip (against the authors' port); T: pvalue-properties (grid 2^(n_flip-1)), dispatch, reproducibility; test-signflip section 11 pins the relation to the paper's literal full enumeration (same grid, package p never larger). Section E (Appendix E, Algorithm 2 there) was checked on 2026-09-25: same construction, one sign vector shared by rows and columns (authors confirmed); differences documented in `?build_flip_set` |
 | P25 | Theorems 2, 3, 5 and Proposition 1 (power; asymptotic) | -- | **No test, by nature:** asymptotic statements with no finite-sample assertion. T: montecarlo "power ..." is a sanity check only |
 
 ### RPT paper (Wen, Wang & Wang 2025)
@@ -145,9 +145,10 @@ test's name). **B:** a base-R file in `tests/`, with `ll/` for
 ### Gaps (with reasons)
 
 * P25: asymptotic power theorems. There is no finite-sample assertion to test.
-* P24: the revised paper's Section E is not available, so `build_flip_set()`
-  cannot be checked against the paper's own construction. The base suite
-  checks it against the authors' script instead.
+* P24: closed 2026-09-25. The revised paper's Appendix E became available
+  and `build_flip_set()` is its construction. Two differences are documented,
+  one pinned by test-signflip section 11: one element per pair `{s, -s}`,
+  and a partition redrawn until every group is used.
 * The disconnected-set note on the exact path, and the bisection fallback's
   island guard, have no front-end fixture: no seeded fit out of about 1,200
   tried produced a disconnected set. Base-suite internals cover the helpers,
@@ -517,7 +518,7 @@ and after, as they must be if the comment pass changed no code.
 
 See *Gaps (with reasons)* above. In short:
 * asymptotic power theorems (untestable in finite samples);
-* the revised paper's Section E (not available);
+* the revised paper's Section E (closed 2026-09-25, see P24);
 * the disconnected-set note and the island guard (no natural fixture;
   seam F-3);
 * the draft's Table 3 (not reproducible from its snippet);

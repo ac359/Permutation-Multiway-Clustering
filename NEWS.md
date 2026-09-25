@@ -183,17 +183,35 @@ corrections are below, and they change text only.
 * The revised paper states the assumption behind `mwperm_dyadic_het()` as
   its Assumption 2, *double sign symmetry*: `(eps_ij) =d (s_i t_j eps_ij) |
   X, D` for all sign vectors `s, t`, under which "Procedure 1 would remain
-  unchanged except for the application of random sign flips in Step 1", with
-  the parameterisation `eps_ij = h(X_ij) u_i v_j`, `u_i, v_j` i.i.d.
-  symmetric, `h` unknown. `R/signflip.R`, `man/mwperm_dyadic_het.Rd`,
+  unchanged except for the application of random sign flips in Step 1". The
+  paper gives `eps_ij = h(X_ij) u_i v_j`, `u_i, v_j` i.i.d. symmetric, `h`
+  unknown, as a model satisfying it; the assumption itself is weaker (the
+  authors, 2026-09-25). `R/signflip.R`, `man/mwperm_dyadic_het.Rd`,
   `man/build_flip_set.Rd`, the README and `DESCRIPTION` now say so instead of
   "Section 2 licenses any invariance group" or "the authors' revision
   material"; no section number is cited (the section is not public yet).
   The 0.4.1 statement of scope is kept word for word: independent symmetric
   errors, or dependence only through symmetric multiplicative factors; NOT
-  additive cluster effects. The group construction is untouched -- whether
-  it matches the paper's own procedure is a pending fidelity check that
-  needs that section.
+  additive cluster effects.
+* **The group construction matches the revised paper's** (its Appendix E):
+  a random partition of the rows, and of the columns, into `c = n_flip`
+  groups, with the sign vectors over the groups, and ONE sign vector per
+  element shared by rows and columns (confirmed by the authors). There are two
+  documented differences, and no number changed. The package keeps one
+  element per pair `{s, -s}`, since `s` and `-s` flip the same cells: the
+  paper's `K = 2^c - 1` counts every distinct flip twice. So its default
+  `K = 2^5 - 1 = 31` is `n_flip = 5` (smallest p-value 1/16), and its
+  simulation's `K = 2^6 - 1` is `n_flip = 6`, the package default. And the
+  package redraws the partition until every group is used. On the paper's own
+  simulation design (25 x 25, normal errors, `n_flip = 6`, one repetition),
+  `mwperm_dyadic_het()` rejected a true null in 1.0% of 1000 simulations;
+  power was 0.16 / 0.59 / 0.87 / 0.95 / 0.99 at b = 0.05 / 0.10 / 0.15 /
+  0.20 / 0.30 (400 each). The paper's procedure read literally puts the
+  all -1 element, which acts as the identity, into `min_j a_j`. That p-value
+  is on the same grid and never smaller, and it was identical in all 3,000
+  of those datasets. The docs of `build_flip_set()` and `mwperm_dyadic_het()`
+  now state all of this, and no longer call the deduplication bit-identical to
+  the full enumeration without that qualification.
 * The revised paper is not public yet, and in arXiv:2601.08610v1 "Assumption
   2" is the Section 4 random-effects model; `?mwperm_dyadic_het` and the
   README now say so where they cite it.
@@ -244,8 +262,8 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
 * **The `n_flip` trade-off is documented** (default unchanged). At 25 x 25
   with independent heteroskedastic symmetric errors and `n_reps = 10`, power
   at beta = 0.10 was 0.27 / 0.34 / 0.37 for `n_flip` = 6 / 7 / 8 (300
-  simulations each), at 1 / 2 / 4 times the projections; under the paper's
-  own model `eps_ij = h(X_ij) u_i v_j` the size was 0.014 at `n_reps = 1`
+  simulations each), at 1 / 2 / 4 times the projections; under the model
+  `eps_ij = h(X_ij) u_i v_j` the size was 0.014 at `n_reps = 1`
   and 0.002 at the default.
 * **`print()` names the sign-flip group.** A `mwperm_dyadic_het()` fit prints
   "Invariant sign-flip test (mwperm)"; every permutation fit's header is
