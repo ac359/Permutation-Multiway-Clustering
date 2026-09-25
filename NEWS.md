@@ -15,7 +15,10 @@ field and rewords its note with every number intact
 (`irregular_random_nondefault`, the removed `trim`); the other 25 are
 `identical()`. An audit on 2026-09-23 found the documentation overstating when
 the random trim is exact and when the sign-flip test applies; those
-corrections are below, and they change text only.
+corrections are below, and they change text only. The release also adds a
+second test suite, written against the paper rather than the package's own
+contract, and a paragraph in every help page naming the step of the paper
+the function implements; neither changes a number.
 
 ## The sign-flip default `n_flip` follows the resolution rule
 
@@ -274,6 +277,20 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   sent repeats that are time periods to `mwperm_irregular()`; they now name
   `mwperm_panel()` / `mwperm_panel_missing()`.
 
+## Help pages cite the paper
+
+* **Every help page names what it implements.** The Details of each
+  exported function end with a paragraph citing the procedure, algorithm,
+  equation or section of Guo, Toulis and Wang (2026) behind it -- for
+  example, `?mwperm_dyadic`: Procedure 1 and Eq. (10), with the paired row
+  and column group of Eq. (9) drawn by Algorithm 1, valid by Theorem 1
+  under Assumption 1. The reporting and plotting pages say which stored
+  quantities they show; none of them re-runs the test. The same citations
+  run through the comments in `R/`.
+* `?mwperm_check` said `design = "dyadic_het"` is validated as a complete
+  array. It accepts an incomplete one (a sign flip moves no observation),
+  as the check's own printed offer already said.
+
 ## Tests
 
 * `tests/test-signflip.R` pins `.default_n_flip()` at four `(alpha,
@@ -289,8 +306,31 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   pins parallel == serial (`n_cores = 2`, rep axis) for `mwperm_dyadic_het()`,
   `mwperm_irregular()` and `mwperm_panel_missing(L0 = )`; `tests/test-methods.R`
   pins both print headers; `tests/test-signflip.R` pins the mask condition in
-  the incomplete-array note. `tests/golden/baseline-0.4.1.rds` is the previous
-  snapshot.
+  the incomplete-array note, and (section 11) the relation between its
+  p-value and the literal Appendix E enumeration.
+  `tests/golden/baseline-0.4.1.rds` is the previous snapshot.
+* **A second suite, `tests/testthat/`, checks the code against the paper.**
+  It uses testthat's third edition (`testthat (>= 3.0.0)` joins Suggests,
+  with `Config/testthat/edition: 3`) and has one file per paper object:
+  Algorithm 1, Procedure 1 and Eq. (10), the exact invariances, the
+  confidence sets, each design's group, the biclique finder, dispatch and
+  the S3 methods, input validation and reproducibility. Its reference is a
+  naive Procedure 1 written from the paper
+  (`tests/testthat/helper-reference.R`), and it reruns every seeded output
+  printed in the JSS draft. Monte Carlo size checks run only with
+  `MWPERM_SLOW_TESTS=true`. Tests that record a known difference from the
+  draft are skipped unless `MWPERM_SHOW_DISCREPANCIES=true`. The base-R
+  suite stays the regression contract, and `tests/README.md` sets out which
+  suite answers which question and how to run each one.
+* One case is a tie that rounding decides. With a layout whose `d` is
+  constant within every cell, the smallest `a_j` equals one `b_k` in exact
+  arithmetic, so p = 1. Computed, the two are different sums, and platforms
+  reported 1 or 5/6. The suite holds the package to `p >= K/(K+1)` there. No
+  package code changed; changing the behaviour would move seeded numbers.
+* The repository (not the tarball) gains `ARCHITECTURE.md`, which covers the
+  pipeline, the paper-to-code notation and a file map. It also gains
+  `TESTING_PLAN.md`, which maps each paper object to its code and tests and
+  logs every known difference from the paper and the draft.
 
 # mwperm 0.4.1
 

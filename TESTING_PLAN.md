@@ -33,8 +33,8 @@ How the two test suites are organised, and how to run them, is in
   **Section numbering:** in this build, §6.5 is the irregular layout, §6.6 is
   missing data and §6.7 is the sign-flip test. The task brief's "§6.5,
   diagonal-deleted 40 x 40" refers to what is now §6.6.
-* **Code under test:** package 0.4.2, the working tree on branch
-  `test-suite-paper-fidelity`.
+* **Code under test:** package 0.4.2, as merged into `main` (pull requests
+  #9 and #10).
 
 ---
 
@@ -43,7 +43,7 @@ How the two test suites are organised, and how to run them, is in
 Legend. **T:** a testthat file in `tests/testthat/` (the quoted phrase is the
 test's name). **B:** a base-R file in `tests/`, with `ll/` for
 `lower-level-tests/` and § for the file's own numbered section. Locations are
-`file:line` in the final tree, commit `5ef3343` (after the comment pass). A row with no test gives its reason.
+`file:line` in the final tree, commit `2e811cf` (after the comment pass). A row with no test gives its reason.
 
 ### IPT paper (Guo, Toulis & Wang 2026)
 
@@ -326,8 +326,8 @@ sections above are the part kept current.
    withr is used only through testthat's own dependency and is never called
    directly.
 4. **Branch.** The session works on `test-suite-paper-fidelity`. Its first
-   commit, `1b62733`, is a snapshot of the uncommitted 0.4.2 working tree
-   exactly as found. `release/0.4.1` is untouched.
+   commit, `2ac864a` ("Release 0.4.2: ..."), is the uncommitted 0.4.2
+   working tree exactly as found. `release/0.4.1` is untouched.
 
 ### Checklist
 
@@ -575,14 +575,13 @@ tests alone; about 60 s for the base-R suite; 155 s for
 
 #### Decisions made without the maintainer (please review)
 
-1. **A new branch, and a snapshot commit of your uncommitted 0.4.2 work.**
+1. **A new branch, and one commit for the uncommitted 0.4.2 work.**
    The brief asked for small commits on a new branch. The 0.4.2 changes
    sat uncommitted in the same files, so they were committed unchanged as
-   `1b62733` ("Snapshot: ...") on `test-suite-paper-fidelity`;
+   `2ac864a` ("Release 0.4.2: ...") on `test-suite-paper-fidelity`;
    `release/0.4.1` is untouched.
-   * To undo while keeping everything uncommitted:
-     `git switch test-suite-paper-fidelity && git reset --soft 4d166c9`.
-   * Nothing was pushed.
+   * Settled: the branch was merged into `main` as pull requests #9 and
+     #10, so there is nothing left to undo.
 2. **testthat is alongside, not instead.** The base-R suite was kept rather
    than converted: converting means deleting files this session did not
    create.
