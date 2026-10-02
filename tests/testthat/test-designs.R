@@ -154,6 +154,34 @@ test_that("layout: a cell-constant regressor draws the no-power warning", {
     "constant within every cell")
 })
 
+test_that("layout and irregular: a time-like `rep` draws a warning (0.4.3)", {
+  ## Section 6.3 permutes `rep` and Section 6.4 subsamples it at random;
+  ## both are exact only for exchangeable replicates, and the authors
+  ## (2026-09-30) asked for a warning when the index looks like time.
+  ly <- make_layout(4, 4, sizes = 6:8, seed = 85)
+  fit <- function(r) mwperm_layout(ly$y, ly$d, row = ly$i, col = ly$j,
+                                   rep = r, n_reps = 1, seed = 1,
+                                   conf_int = FALSE)
+  expect_no_warning(fit(ly$l))                        # 1..n in every cell
+  expect_warning(fit(ly$l + 1990), "calendar years")
+  expect_warning(fit(ly$l + 3 * (ly$i > 2)), "cells start at different")
+  expect_warning(fit(as.Date("2020-01-01") + ly$l), "it holds dates")
+  year <- ly$l
+  expect_warning(mwperm_layout(ly$y, ly$d, row = ly$i, col = ly$j,
+                               rep = year, n_reps = 1, seed = 1,
+                               conf_int = FALSE),
+                 "its name 'year' is a time word")
+  ## the warning changes no number
+  expect_identical(suppressWarnings(fit(ly$l + 1990))$pvalues_rep,
+                   fit(ly$l)$pvalues_rep)
+  li <- make_layout(8, 8, sizes = 3:6, seed = 107, d_cell_constant = TRUE)
+  expect_warning(
+    mwperm_irregular(li$y, li$d, row = li$i, col = li$j, rep = li$l + 2000,
+                     L0 = 3, min_block = 3, n_reps = 2, seed = 1,
+                     conf_int = FALSE),
+    "mwperm_panel_missing(time = <rep>, L0 = 3)", fixed = TRUE)
+})
+
 ## ---- missing data (Section 5, Procedure 2) -----------------------------------
 
 test_that("missing: Procedure 2 on the pooled blocks, K + 1 <= smallest side", {
@@ -180,10 +208,32 @@ test_that("missing: Procedure 2 on the pooled blocks, K + 1 <= smallest side", {
   groups <- function(r) ref_groups_blocks(ri[keep], ci[keep], blocks,
                                           fit$K, 7, r)
   expect_reps_match(fit, kd$y, kd$d, ref_X(kd$x, nrow(kd)), groups)
-  ## a K the smallest block cannot carry is refused
+  ## a K no block can carry is refused
   expect_error(mwperm_missing(md$y, md$d, x = md$x, row = md$i, col = md$j,
-                              min_block = 3, K = min(sides), seed = 1),
-               "cannot be larger than that")
+                              min_block = 3, K = max(sides), seed = 1),
+               "largest fully observed block")
+})
+
+test_that("missing: blocks smaller than K + 1 are kept and held fixed (0.4.3)", {
+  ## The method's authors (2026-09-30): it is valid to keep blocks smaller
+  ## than K + 1 and leave them unpermuted. An explicit K above the default
+  ## does that; the reference applies the identity to those blocks.
+  set.seed(90)
+  grp <- c(rep(1L, 12), rep(2L, 5), rep(3L, 3))
+  g <- expand.grid(i = seq_len(20), j = seq_len(20))
+  g <- g[grp[g$i] == grp[g$j], ]
+  g$d <- stats::rnorm(nrow(g)); g$x <- stats::rnorm(nrow(g))
+  g$y <- 0.2 * g$d + stats::rnorm(20)[g$i] + stats::rnorm(nrow(g))
+  fit <- mwperm_missing(g$y, g$d, x = g$x, row = g$i, col = g$j,
+                        min_block = 3, K = 9, n_reps = 3, seed = 7,
+                        conf_int = FALSE)
+  expect_identical(fit$K, 9L)
+  expect_identical(fit$cells_used, nrow(g))           # nothing discarded
+  expect_true(any(grepl("held fixed", fit$note, fixed = TRUE)))
+  blocks <- find_bicliques(dense_id(g$i), dense_id(g$j), min_block = 3)
+  groups <- function(r) ref_groups_blocks(dense_id(g$i), dense_id(g$j),
+                                          blocks, 9L, 7, r)
+  expect_reps_match(fit, g$y, g$d, ref_X(g$x, nrow(g)), groups)
 })
 
 test_that("missing: blocks are permuted separately and never mixed", {

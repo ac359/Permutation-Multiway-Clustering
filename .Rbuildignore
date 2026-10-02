@@ -1,5 +1,5 @@
 ^private$
-^CLAUDE\.md$
+^(?!(README|NEWS)\.md$)[^/]+\.md$
 ^TESTING_PLAN\.md$
 ^ARCHITECTURE\.md$
 ^data-raw$

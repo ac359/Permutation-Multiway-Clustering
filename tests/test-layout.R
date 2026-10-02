@@ -99,4 +99,50 @@ expect_warn(mwperm_layout(yu, d_cell, row = gu$i, col = gu$j, seed = 1,
                           n_reps = 1, conf_int = FALSE),
             "constant within every cell")
 
+## ---- 5. a `rep` that looks like time draws a warning (0.4.3) --------------
+## The layout test permutes `rep`, which is valid only for exchangeable
+## replicates; the authors (2026-09-30): a time dimension cannot be permuted.
+## The data cannot prove what `rep` is, so it is a warning, raised by the
+## name or by values that only periods take. Replicate numbers 1..n restarting
+## in every cell (the fixture's `l`) and global observation ids raise nothing.
+fit_rep <- function(r) warns_of(mwperm_layout(yl, dl, row = gl$i, col = gl$j,
+                                              rep = r, n_reps = 1, seed = 1,
+                                              conf_int = FALSE))
+timelike <- function(w) any(grepl("`rep` looks like time", w, fixed = TRUE))
+year <- gl$l + 2000; period <- gl$l; wave <- gl$l
+gid <- seq_len(Nl)                                   # global observation ids
+stag <- gl$l + 2 * (gl$i > 2)          # rows 3-4 start two periods later
+dates <- as.Date("2020-01-01") + gl$l
+stopifnot(!timelike(fit_rep(gl$l)), !timelike(fit_rep(gid)),
+          timelike(fit_rep(year)), timelike(fit_rep(stag)),
+          timelike(fit_rep(dates)))
+## by name: replicate numbers 1..5 under a time word (read off the call)
+stopifnot(
+  timelike(warns_of(mwperm_layout(yl, dl, row = gl$i, col = gl$j,
+                                  rep = period, n_reps = 1, seed = 1,
+                                  conf_int = FALSE))),
+  timelike(warns_of(with(data.frame(wave = wave), mwperm_layout(
+    yl, dl, row = gl$i, col = gl$j, rep = wave, n_reps = 1, seed = 1,
+    conf_int = FALSE)))))
+w_name <- warns_of(with(list(year = year), mwperm_layout(
+  yl, dl, row = gl$i, col = gl$j, rep = year, n_reps = 1, seed = 1,
+  conf_int = FALSE)))
+w_val <- fit_rep(year)                 # a value: the calendar-year rule fires
+stopifnot(grepl("its name 'year' is a time word", w_name, fixed = TRUE),
+          grepl("calendar years", w_val, fixed = TRUE),
+          grepl("cells start at different values", fit_rep(stag), fixed = TRUE),
+          grepl("mwperm_panel_missing(time = , L0 = )", w_val, fixed = TRUE))
+## the numbers are untouched: the warning is the only difference
+stopifnot(identical(
+  suppressWarnings(mwperm_layout(yl, dl, row = gl$i, col = gl$j, rep = year,
+                                 n_reps = 2, seed = 1))$pvalues_rep,
+  mwperm_layout(yl, dl, row = gl$i, col = gl$j, rep = gl$l, n_reps = 2,
+                seed = 1)$pvalues_rep))
+## through mwperm(), the column name travels with the vector
+dfl <- data.frame(y = yl, d = dl, i = gl$i, j = gl$j, year = year)
+w_m <- warns_of(mwperm(y = "y", d = "d", index = c("i", "j"), rep = "year",
+                       data = dfl, n_reps = 1, seed = 1, conf_int = FALSE,
+                       verbose = FALSE))
+stopifnot(any(grepl("its name 'year' is a time word", w_m, fixed = TRUE)))
+
 passed("test-layout.R")

@@ -3,7 +3,9 @@
 ## The confidence set is the test inverted, so its coverage is inherited from
 ## the test's validity: a nominal 95% interval should cover the true beta at
 ## least 95% of the time. Measured on the dyadic and panel designs at the true
-## null beta = 0, with the package default n_reps = 10 (median aggregation).
+## null beta = 0, with n_reps = 10 (median aggregation) -- the package default
+## from 0.2.0 to 0.4.2, at which expected/ was produced; since 0.4.3 the
+## default is one run, so it is passed explicitly.
 ##
 ## Usage:  Rscript 03_ci_coverage.R      # 1000 sims/cell (default)
 ## Output: out/03_ci_coverage.txt (+ _summary.rds); cache under ./cache.
@@ -15,7 +17,7 @@ N <- as.integer(Sys.getenv("MC_N", "600"))
 BATCH <- 200L
 sink_both("out/03_ci_coverage.txt")
 cat("==== 03 Confidence-interval coverage (nominal 95%) ====\n")
-cat(sprintf("mwperm %s | %d sims/cell | true beta = 0 | default n_reps=10 | %s\n\n",
+cat(sprintf("mwperm %s | %d sims/cell | true beta = 0 | n_reps=10 | %s\n\n",
             as.character(packageVersion("mwperm")), N, format(Sys.time())))
 
 rows <- list()
@@ -23,7 +25,8 @@ rows <- list()
 ## ---- dyadic (n = 40 so a 95% interval is attainable: 1/(K+1) <= .05) --------
 sim_dy <- function(s, dgp_seed, fit_seed) {
   dat <- dgp_dyadic71(40L, "normal", phi2_err = 0.9, beta = 0)
-  fit <- mwperm_dyadic(dat$y, dat$d, dat$x, dat$row, dat$col, seed = fit_seed)
+  fit <- mwperm_dyadic(dat$y, dat$d, dat$x, dat$row, dat$col, n_reps = 10,
+                       seed = fit_seed)
   ci <- fit$conf_int
   c(cover = as.numeric(ci[1] <= 0 && 0 <= ci[2]), width = diff(ci))
 }
@@ -41,7 +44,7 @@ rows[[1L]] <- data.frame(design = "dyadic n=40", coverage = cov_d,
 sim_pan <- function(s, dgp_seed, fit_seed) {
   dat <- dgp_panel(22L, 6L, beta = 0, trend = TRUE)
   fit <- mwperm_panel(dat$y, dat$d, dat$x, dat$row, dat$col, dat$time,
-                      seed = fit_seed)
+                      n_reps = 10, seed = fit_seed)
   ci <- fit$conf_int
   c(cover = as.numeric(ci[1] <= 0 && 0 <= ci[2]), width = diff(ci))
 }

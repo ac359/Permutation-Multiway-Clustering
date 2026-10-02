@@ -11,6 +11,10 @@
 ## Usage:  Rscript 02_power.R           # 1500 sims/cell (default)
 ## Output: out/02_power.txt (+ out/02_power_summary.rds); cache under ./cache.
 ## Runtime ~1 min at the default N.
+##
+## n_reps = 10 throughout: the package default from 0.2.0 to 0.4.2, at which
+## expected/ was produced. Since 0.4.3 the default is one run, so it is
+## passed explicitly.
 
 source("mc_lib.R")
 suppressMessages(library(mwperm))
@@ -27,7 +31,7 @@ for (b in betas) {
   sim <- function(s, dgp_seed, fit_seed) {
     dat <- dgp_dyadic71(30L, "normal", phi2_err = 0.15, beta = b)
     fit <- mwperm_dyadic(dat$y, dat$d, dat$x, dat$row, dat$col,
-                         conf_int = FALSE, seed = fit_seed)
+                         conf_int = FALSE, n_reps = 10, seed = fit_seed)
     c(p = fit$pvalue, est = unname(fit$estimate))
   }
   m <- mc_cell(sprintf("power_dyadic_b%03d_p15_v1", round(100 * b)), N, sim,

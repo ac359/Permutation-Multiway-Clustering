@@ -241,14 +241,36 @@ runs them.
   (zeta_{pi^c_k(l)}) is not equal in law to (zeta_l): the invariance
   Theorem 1 needs fails. Observed (3 x 3 cells of 6, K = 5): the five
   non-identity elements apply 9 different within-cell maps.
-* `?mwperm_layout` already says this component "is not covered" and that
-  simulations found no measurable size effect.
+* Measured 2026-09-30 (10 x 10 cells of 22, K = 21, 1000 simulations
+  each): with a shared zeta_l the size is at nominal when `d` has no
+  pattern in l (0.045 / 0.050), but 0.627 / 0.739 (zeta sd 1 / 3) when `d`
+  follows the same pattern over l in every cell; one common within-cell
+  permutation gives 0.046 / 0.050 on the same data. `?mwperm_layout` used
+  to say simulations "found no measurable size effect"; since 0.4.3 it
+  gives these numbers.
+* Authors' decision (2026-09-30, confirmed the same day): keep step (i);
+  validate on eta_ij + u_ijl. Since 0.4.3 `mwperm_layout()` warns when
+  `rep` looks like time, and `mwperm(design = "layout")` refuses a
+  `time =` index.
 * Verdict: **the paper and the draft should change.** Either drop the
   zeta_l example, or state that it needs one common within-cell permutation
   (possible when cell sizes are equal). Validity under the paper's other
-  example (eta_ij + u_ijl) is unaffected. No code change; a Monte Carlo that
-  quantifies the size effect is follow-up F-6.
+  example (eta_ij + u_ijl) is unaffected. No change to the group.
 * Test: designs "layout under a shared replicate effect zeta_l" (skipped).
+
+**D11: The draft's printed outputs assume n_reps = 10 by default (0.4.3).**
+* The authors (2026-09-30) chose one draw: every front end except
+  `mwperm_irregular()` (500) now defaults to `n_reps = 1`, the procedure
+  Theorem 1 covers. The draft's calls that leave `n_reps` at its default
+  (e.g. Sec. 6.2's incomplete panel, printed with "10 reps" and "the median
+  of 10 reps can fall between grid points") now print one rep, and default
+  confidence intervals move (the reported p-values of the golden default
+  entries did not).
+* Test: "Sec. 6.2: the draft's literal call runs ten repetitions"
+  (skipped); the printed block itself is still checked, with `n_reps = 10`
+  passed explicitly.
+* Verdict: the draft should change (pass `n_reps = 10` where it wants the
+  old numbers, or reprint at the new default).
 
 **D10: Reported CI end points are closures, not members of {b : pval(b) > alpha}.**
 * Reference: GTW Procedure 1 step 3 defines CI = {b : pval(b) > alpha}. The
@@ -294,8 +316,9 @@ median can leave the grid.)
 * **F-4.** Record the rows kept by `mwperm_layout(L0 = )` on the fit, so the
   balancing draw does not have to be re-derived through
   `.downsample_to_L0()`.
-* **F-5.** A seeded Monte Carlo of the layout test under a shared zeta_l
-  (D7), to quantify what the documentation now says qualitatively.
+* ~~**F-5.** A seeded Monte Carlo of the layout test under a shared zeta_l
+  (D7), to quantify what the documentation now says qualitatively.~~ Done
+  2026-09-30; see D7.
 * **F-6.** Replicate draft Sec. 7.4 once the CEPII database can be supplied
   locally.
 
@@ -537,8 +560,9 @@ are in the *Discrepancy log* above.
 | D4 | draft Sec. 6.7 sign-flip print header | draft (0.4.2 text) |
 | D5 | draft Secs. 2.7, 3.2, 6.5: `trim = "levels"` and the old irregular note | draft (0.4.2 text) |
 | D6 | draft Secs. 2.7, 3.7, 6.7: default n_flip = 8 (now 6) | draft (0.4.2 text) |
-| D7 | GTW Sec. 6.3 (and the draft): layout validity under a shared zeta_l | paper and draft; the package docs already hedge |
+| D7 | GTW Sec. 6.3 (and the draft): layout validity under a shared zeta_l | paper and draft; the package documents the measured failure and warns on a time-like `rep` (0.4.3) |
 | D10 | CI end points are closures (documented, conservative) | none needed; any change is numeric and needs sign-off |
+| D11 | the draft's printed outputs assume the 0.4.2 default n_reps = 10 (0.4.3) | the draft |
 
 The four "known leads" in the task brief were all verified:
 * Algorithm 1's mod: D1, and the example's inverse order: D2;

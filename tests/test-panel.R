@@ -23,10 +23,11 @@ fit <- with(trade_panel,
                          seed = 1))
 stopifnot(inherits(fit, "mwperm"),
           identical(fit$type, "panel"),
+          identical(fit$n_reps, 1L),               # the default since 0.4.3
           abs(fit$pvalue - 0.0454545454545455) < 1e-12,
           abs(fit$estimate - 0.677407) < 1e-6,
-          abs(fit$conf_int[1] - 0.442022) < 1e-5,
-          abs(fit$conf_int[2] - 0.880272) < 1e-5,
+          abs(fit$conf_int[1] - 0.484184) < 1e-5,
+          abs(fit$conf_int[2] - 0.836498) < 1e-5,
           identical(unname(fit$n_clusters), c(22L, 22L, 6L)),
           identical(names(fit$n_clusters), c("row", "col", "time")))
 fit_b <- with(trade_panel,
@@ -35,6 +36,14 @@ fit_b <- with(trade_panel,
                            row = importer, col = exporter, time = year,
                            seed = 1))
 stopifnot(isTRUE(same_fit(fit, fit_b)))
+## n_reps = 10 reproduces the 0.4.2 default numbers exactly
+fit10 <- with(trade_panel,
+              mwperm_panel(y = log_trade, d = fta,
+                           x = cbind(log_gdp_i, log_gdp_j),
+                           row = importer, col = exporter, time = year,
+                           n_reps = 10, seed = 1))
+stopifnot(abs(fit10$conf_int[1] - 0.442022) < 1e-5,
+          abs(fit10$conf_int[2] - 0.880272) < 1e-5)
 
 ## ---- 2. InvB: an arbitrary common time trend changes nothing --------------
 ## With `time_fe = TRUE` the period dummies span every zeta_t, so adding one to

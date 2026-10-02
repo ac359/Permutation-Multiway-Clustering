@@ -66,9 +66,15 @@
 ## the all -1 vector among its K non-identity elements, so Procedure 1 puts
 ## the unflipped statistic into min_j a_j -- as the authors' script does,
 ## which takes min over all 2^c. That p-value is on the same grid and never
-## smaller than this one (both valid); on the paper's own Figure 4 design the
-## two agreed in all 3,000 datasets. Which convention the paper intends is
-## an open question to the authors.
+## smaller than this one (both valid). On the datasets of the paper's own
+## Figure 4 and two stronger heteroskedasticity settings (3,000, each run
+## through the authors' script with its own partition), the two readings
+## differed in one dataset and never in the decision at 0.05. The authors'
+## script differs in about 1% of datasets, for a numerical reason: it takes
+## the identity's statistic from a complete QR of [X | X], which has rank p,
+## so its projection drops p true directions of the complement. The
+## authors confirmed that the identity stays out of min_j a_j (Eq. 10); the
+## all -1 vector is the identity on the cells, so both copies stay out.
 ## The effective group order is therefore 2^(n_flip - 1), the smallest
 ## attainable p-value 1/2^(n_flip - 1), and a 95% confidence set needs
 ## n_flip >= 6 (order 32 >= 20). The paper's K = 2^c - 1 counts every
@@ -132,7 +138,9 @@
 #' literally, Procedure 1 then puts the unflipped statistic into
 #' `min_j a_j`. That p-value is on the same grid and never smaller than the
 #' one computed here, which excludes both copies of the identity; both are
-#' valid, and on the paper's own simulation design they coincided.
+#' valid, and on the paper's own simulation design and two stronger
+#' heteroskedasticity settings they differed in one of 3,000 datasets and
+#' never in the decision at the 5% level.
 #'
 #' **Every flip group must be used.** If some group were assigned to no row
 #' cluster and no column cluster its sign would be free, the kernel would be
@@ -429,20 +437,22 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' paper's own simulation for this test draws errors independent across
 #' cells, `eps_ij = sigma_ij eta_ij` with `eta_ij ~ N(0, 1)` and `sigma_ij`
 #' increasing in the gravity mean and in distance; that is the setting the
-#' test is meant for. On that design (25 clusters per side, `n_flip = 6`, one
-#' repetition) this function rejected a true null in 1.0% of 1000
-#' simulations.
+#' test is meant for. On the paper's own 1000 simulated datasets (25 clusters
+#' per side, `n_flip = 6`) this function rejected a true null in 1.7% of them
+#' at the default single run and 0.7% with ten; the paper reports 1.1%
+#' for its own single draw.
 #'
-#' Under covariate-dependent heteroskedasticity (25 clusters per side, a
-#' gravity design with the residual variance increasing in the mean and in
-#' the distance covariate) the permutation test's rejection rate under a true
-#' null rose with the strength of the heteroskedasticity -- to about
-#' 0.06-0.09 at a nominal 0.05 in this package's own 300-replication check
-#' -- while this test stayed at 0.02 or below. That gap is the reason the
-#' function exists. It is **not a strict upgrade**: under homoskedastic,
-#' exchangeable errors the sign-flip test is less powerful (about 0.86
-#' against 0.96 at beta = 0.15 in the same design), because its group is
-#' smaller and coarser than a full relabelling group. Use it when the errors are plausibly independent across cells
+#' Under covariate-dependent heteroskedasticity (the paper's gravity design:
+#' 25 clusters per side, symmetric errors independent across cells, their
+#' variance increasing in the mean and in the distance covariate) the
+#' permutation test's rejection rate under a true null rose with the strength
+#' of the heteroskedasticity -- to 0.076 at a nominal 0.05 in this package's
+#' own check, 500 simulations per setting -- while this test stayed at 0.016
+#' or below. That gap is the reason the function exists. It is **not a
+#' strict upgrade**: under homoskedastic, exchangeable errors the sign-flip
+#' test is less powerful (0.85 against 0.98 at beta = 0.15 in the same
+#' design), because its group is smaller and coarser than a full relabelling
+#' group. Use it when the errors are plausibly independent across cells
 #' with a variance that depends on the covariates; use [mwperm_dyadic()]
 #' when additive cluster effects are the concern. Heteroskedasticity leaves
 #' no trace in the clustering structure, so [mwperm()] never selects this
@@ -454,7 +464,8 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' be independent of the errors given X and D. Dropping zero trade flows
 #' because log(0) is undefined violates it, since whether a flow is zero
 #' depends on its error. Running on an incomplete array is this package's
-#' extension; the paper states Assumption 2 for a complete array. The only
+#' extension, which the method's authors have agreed to; the paper states
+#' Assumption 2 for a complete array. The only
 #' thing an incomplete array changes in the computation is the guard on the
 #' flip-group assignment, which must keep the group's kernel at `{s, -s}` on the
 #' observed cells -- see the `cells` argument of [build_flip_set()].
@@ -481,18 +492,18 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' `1 / 2^(n_flip - 1)` (doubled under `aggregate = "median2"`) is at most
 #' `alpha`: 6 at `alpha = 0.05` (order 32, floor 0.031, 31 projections), 7
 #' under `"median2"`, 8 at `alpha = 0.01`. 6-8 are the useful range, and
-#' the cost doubles with each extra group. At the default with `n_reps =
-#' 10` the confidence set is the exact one (`2 * 31^2 * 10` candidates,
-#' under the engine's budget); at `n_flip = 8` with `n_reps = 10` it exceeds
-#' the budget and the interval is found by bracketing and bisection instead
-#' (the fit says so in a note; the end points agree to the bisection
-#' tolerance). The default buys resolution, not power: at 25 x 25 with
-#' independent heteroskedastic symmetric errors and `n_reps = 10`, power at
-#' beta = 0.10 was 0.27, 0.34 and 0.37 for `n_flip` = 6, 7 and 8 (300
-#' simulations each), at 1, 2 and 4 times the projections. Under the model
-#' `eps_ij = h(X_ij) u_i v_j` the size was 0.014 at
-#' `n_reps = 1` and 0.002 at the default -- conservative, not
-#' over-rejecting.
+#' the cost doubles with each extra group. The confidence set is the exact
+#' one at the default single run (`2 * 31^2` candidates) and still with
+#' `n_reps = 10` (`2 * 31^2 * 10`, under the engine's budget); at `n_flip =
+#' 8` with `n_reps = 10` it exceeds the budget and the interval is found by
+#' bracketing and bisection instead (the fit says so in a note; each end
+#' point is rounded outward, by less than the bisection tolerance). The
+#' default buys resolution, not power: at 25 x 25 with independent
+#' heteroskedastic symmetric errors and `n_reps = 10`, power at beta = 0.10
+#' was 0.27, 0.34 and 0.37 for `n_flip` = 6, 7 and 8 (300 simulations
+#' each), at 1, 2 and 4 times the projections. Under the model `eps_ij =
+#' h(X_ij) u_i v_j` the size was 0.014 at the default `n_reps = 1` and
+#' 0.002 with `n_reps = 10` -- conservative, not over-rejecting.
 #'
 #' The aggregation over `n_reps` repetitions, the exact confidence set and
 #' its closure convention, the `aggregate = "median2"` guarantee and the
@@ -513,13 +524,18 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #'   n_col)` (every group must be reachable by the row assignment alone);
 #'   6-8 are the useful range, and the cost doubles with each extra group.
 #'   Values above 20 are refused, with the number of projections they would
-#'   imply. Must satisfy `2 <= n_flip <= min(n_row, n_col)`.
-#' @param n_reps Number of independent runs whose p-values are aggregated by
-#'   `aggregate` (the median by default), as recommended for randomised
-#'   tests; the confidence set inverts the same aggregated p-value. Defaults
-#'   to 10: a single run's p-value depends on the random assignment of
-#'   clusters to flip groups (a seed lottery), and the median of 10 runs
-#'   stabilises it at roughly ten times the cost. See *Aggregation over
+#'   imply. Must satisfy `2 <= n_flip <= min(n_row, n_col)`. The default
+#'   depends only on `alpha`, `aggregate` and the array's dimensions, never
+#'   on the data. If you set `n_flip` yourself, fix it before looking at the
+#'   results: trying several values and reporting the smallest p-value
+#'   invalidates the test.
+#' @param n_reps Number of independent runs of the test, each with its own
+#'   random assignment of clusters to flip groups. Defaults to 1, the
+#'   procedure Theorem 1 covers; a single run's p-value depends on that
+#'   assignment (a seed lottery), so pass a `seed` to make it reproducible.
+#'   With `n_reps > 1` the runs' p-values are combined by `aggregate` (the
+#'   median by default) and the confidence set inverts the combined value.
+#'   The default was 10 from 0.4.0 to 0.4.2. See *Aggregation over
 #'   repetitions* in [mwperm_dyadic()].
 #' @param aggregate How the `n_reps` per-repetition p-values are combined
 #'   into the reported p-value, and into the confidence set that inverts it.
@@ -564,7 +580,7 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' @export
 mwperm_dyadic_het <- function(y, d, x = NULL, row, col, n_flip = NULL,
                               alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                              n_reps = 10L, seed = NULL, grid = NULL,
+                              n_reps = 1L, seed = NULL, grid = NULL,
                               aggregate = c("median", "median2"),
                               n_cores = 1L) {
   cl <- match.call()                   # stored on the result for printing

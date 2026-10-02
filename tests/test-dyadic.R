@@ -25,17 +25,29 @@ fit <- with(trade_dyadic,
             mwperm_dyadic(y = log_trade, d = log_dist,
                           x = cbind(log_gdp_i, log_gdp_j),
                           row = importer, col = exporter, seed = 1))
+## Since 0.4.3 the default is one run (n_reps = 1, the procedure Theorem 1
+## covers); the 0.2.0-0.4.2 default of ten is pinned just below.
 stopifnot(inherits(fit, "mwperm"),
           identical(fit$type, "dyadic"),
+          identical(fit$n_reps, 1L),
           identical(fit$pvalue, 0.025),
           abs(fit$estimate - (-0.898503)) < 1e-6,
-          abs(fit$conf_int[1] - (-1.251351)) < 1e-5,
-          abs(fit$conf_int[2] - (-0.534468)) < 1e-5,
+          abs(fit$conf_int[1] - (-1.275367)) < 1e-5,
+          abs(fit$conf_int[2] - (-0.513089)) < 1e-5,
           fit$n_obs == 1600L,
           identical(unname(fit$n_clusters), c(40L, 40L)),
           identical(names(fit$n_clusters), c("row", "col")))
 ## the true coefficient is -1 (attr "true_coef"); the interval covers it
 stopifnot(fit$conf_int[1] <= -1, fit$conf_int[2] >= -1)
+## n_reps = 10 reproduces the 0.4.2 default numbers exactly, as the help says
+fit10 <- with(trade_dyadic,
+              mwperm_dyadic(y = log_trade, d = log_dist,
+                            x = cbind(log_gdp_i, log_gdp_j),
+                            row = importer, col = exporter, n_reps = 10,
+                            seed = 1))
+stopifnot(identical(fit10$pvalue, 0.025),
+          abs(fit10$conf_int[1] - (-1.251351)) < 1e-5,
+          abs(fit10$conf_int[2] - (-0.534468)) < 1e-5)
 
 ## same seed, same answer -- every field, not just the p-value
 fit_b <- with(trade_dyadic,
@@ -56,7 +68,7 @@ stopifnot(identical(plc$pvalue, 0.975))
 ## Default K = min(n_row, n_col) - 1, capped at 199, and n_perm = K + 1.
 stopifnot(fit$K == 39L, fit$n_perm == 40L,
           identical(fit$resolution, 1 / 40), identical(fit$p_floor, 1 / 40),
-          length(fit$pvalues_rep) == fit$n_reps, fit$n_reps == 10L)
+          length(fit$pvalues_rep) == fit$n_reps, fit$n_reps == 1L)
 
 set.seed(11)
 g69 <- expand.grid(i = 1:6, j = 1:9)              # non-square: K follows 6

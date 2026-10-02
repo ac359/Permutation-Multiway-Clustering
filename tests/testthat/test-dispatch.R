@@ -131,6 +131,20 @@ test_that("Table 1: design = 'dyadic_het' -> mwperm_dyadic_het(), only on reques
     n_reps = 1, seed = 1, conf_int = FALSE)), "does not apply")
 })
 
+test_that("the layout design refuses a `time =` index (0.4.3)", {
+  ## it permutes the within-cell index, and time cannot be permuted (the
+  ## authors, 2026-09-30); until 0.4.3 the time label was dropped silently
+  expect_error(mwperm_check(index = pn[c("i", "j")], time = pn$t,
+                            design = "layout"),
+               "cannot be permuted")
+  expect_error(quiet(mwperm(pn$y, pn$d, index = pn[c("i", "j")],
+                            time = pn$t, rep = pn$t, seed = 1)),
+               "cannot be permuted")
+  ## `time =` alone stays a panel
+  expect_identical(mwperm_check(index = pn[c("i", "j")], time = pn$t)$design,
+                   "panel")
+})
+
 test_that("mwperm_check() prints a diagnosis for every design", {
   local_reproducible_output(width = 80)
   expect_snapshot(print(mwperm_check(index = dy[c("i", "j")])))
@@ -144,4 +158,24 @@ test_that("mwperm_check() prints a diagnosis for every design", {
                                      design = "irregular")))
   expect_snapshot(print(mwperm_check(index = dy[c("i", "j")],
                                      design = "dyadic_het")))
+})
+
+test_that("mwperm() prints the call it runs, with the arguments it passes", {
+  ## mwperm_check() alone is never given L0, time_fe or n_flip, so its
+  ## "Would run" line (above) shows the defaults. mwperm()'s "-> running"
+  ## line shows what it forwards: design = "irregular" with `time =` runs
+  ## the incomplete panel with the user's L0 (it used to print L0 = NULL).
+  local_reproducible_output(width = 80)
+  expect_snapshot(invisible(mwperm(
+    pm$y, pm$d, x = pm$x, index = pm[c("i", "j")], time = pm$t,
+    design = "irregular", L0 = 2, n_reps = 1, seed = 1, conf_int = FALSE)))
+  expect_snapshot(invisible(mwperm(
+    pn$y, pn$d, x = pn$x, index = pn[c("i", "j")], time = pn$t,
+    time_fe = FALSE, n_reps = 1, seed = 1, conf_int = FALSE)))
+  expect_snapshot(invisible(mwperm(
+    ly$y, ly$d, x = ly$x, index = ly[c("i", "j")], rep = ly$l, L0 = 6,
+    n_reps = 1, seed = 1, conf_int = FALSE)))
+  expect_snapshot(invisible(mwperm(
+    dy$y, dy$d, x = dy$x, index = dy[c("i", "j")], design = "dyadic_het",
+    n_flip = 6, n_reps = 1, seed = 1, conf_int = FALSE)))
 })

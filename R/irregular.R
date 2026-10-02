@@ -97,7 +97,11 @@
 #'   Earlier checks that found the trim at nominal under a strong period
 #'   effect (0.043 with a cell-constant `d`, 0.051 with an i.i.d. one) held
 #'   only because every cell observed the same periods. The fit cannot see a
-#'   period effect, so its note states this condition on every fit. For any
+#'   period effect, so its note states this condition on every fit, and a
+#'   warning is issued when `rep` looks like time: a time word as its name
+#'   (year, period, wave, ...), dates, calendar years, or evenly spaced
+#'   values that the cells share but start from different points, as periods
+#'   observed over different windows do. For any
 #'   period index use [mwperm_panel_missing()] with the period as `time` and
 #'   `L0 =` the number of periods to keep: it retains the *same* L0 periods
 #'   in every cell (chosen from the observation pattern alone) and holds the
@@ -124,7 +128,8 @@
 #'   exact set evaluates about `2 K^2 n_reps` candidate end points, which
 #'   exceeds the engine's budget beyond that, and its cost grows like
 #'   `K^3 n_reps^2`. The fit records which path it took in `ci_method` and
-#'   in a note; the end points agree to the bisection tolerance.
+#'   in a note; each end point is rounded outward, by less than the bisection
+#'   tolerance, so the interval contains the exact one.
 #'
 #' @inheritParams mwperm_dyadic
 #' @param d Numeric vector or matrix of the covariate(s) of interest. Unlike
@@ -142,8 +147,10 @@
 #'   retained cell is reduced to exactly `L0`. Required.
 #' @param K Number of non-identity permutations; defaults to the smallest
 #'   block side over the selected blocks -- that is, the smallest of |I_q| and
-#'   |J_q| over all q -- minus one, capped at 199. Must satisfy `K + 1 <=`
-#'   that smallest block side.
+#'   |J_q| over all q -- minus one, capped at 199, so every block is
+#'   permuted. A larger `K` may be given (0.4.3): blocks whose permuted side is below `K + 1` are then kept and held fixed
+#'   (never relabelled, which keeps the test exact: the blocks share no row
+#'   or column), and the largest block's permuted side caps `K` instead.
 #' @param min_block Minimum block side(s) for the biclique search; see
 #'   [find_bicliques()].
 #' @param block_method `"greedy"` (default) or `"exact"`; see
@@ -153,8 +160,10 @@
 #'   over them (Remark 1 of the paper) and the confidence set inverts that
 #'   median. Defaults to 500 -- the paper's Appendix B used 100, which the
 #'   package's advisors consider the low end; use 1000 for a final run. Every
-#'   other front end defaults to 10, because only here is the data itself
-#'   redrawn in every repetition.
+#'   other front end defaults to one run (0.4.3), the procedure Theorem 1
+#'   covers; this one keeps 500 because only here is the data itself
+#'   redrawn in every repetition, so a single run would rest on one random
+#'   subsample.
 #'
 #' @return An object of class `"mwperm"`, with the extra fields `n_blocks`,
 #'   `cells_used`, `cells_total` and `L0`. `n_obs` is the number of
@@ -209,6 +218,13 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
   if (!is.null(rep) && anyNA(rep))
     stop(paste0("`rep` contains missing values (NA); the within-cell ",
                 "identifier must be complete."), call. = FALSE)
+  ## mwperm() forwards the column name as an attribute (through do.call()
+  ## the expression is gone); a direct call reads it off the expression.
+  rep_label <- NULL
+  if (!is.null(rep)) {
+    rep_label <- attr(rep, "mwperm_label") %||% .arg_label(substitute(rep))
+    attr(rep, "mwperm_label") <- NULL
+  }
   ## Validate the FULL supplied data before the mask and the biclique step
   ## discard anything: the observed cells are the user's data contract.
   .check_finite(list(y = y, d = D, x = X))
@@ -226,6 +242,24 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
   ## --- (i)-(iii) the mask, the blocks and the cut ----------------------------
   pd <- .irregular_design(row, col, rep, L0, min_block = min_block,
                           block_method = block_method)
+  ## The random trim is exact only for exchangeable replicates. If `rep` looks
+  ## like a period (authors' decision, 2026-09-30: warn), say so and name the
+  ## design that holds periods fixed. With staggered windows and a
+  ## cell-constant `d` the trim gave size 0.393 at .05 against 0.028 for
+  ## mwperm_panel_missing(L0 = 2). A warning, not an error: the data cannot
+  ## prove what the index is.
+  why_time <- if (!is.null(rep)) .rep_timelike(rep, rep_label, pd$cell)
+  if (!is.null(why_time))
+    warning(sprintf(paste0(
+      "`rep` looks like time (%s). The random per-cell trim of ",
+      "mwperm_irregular() is exact only if the observations within a cell ",
+      "are exchangeable replicates. A time index cannot be trimmed at random ",
+      "or permuted: with cells observed over different periods the test can ",
+      "over-reject even when `d` is constant within cells. Use ",
+      "mwperm_panel_missing(time = <rep>, L0 = %d) instead, which keeps the ",
+      "same L0 periods in every cell and holds the period fixed. If the ",
+      "observations are exchangeable replicates, ignore this warning."),
+      why_time, L0), call. = FALSE)
   idx <- pd$idx                              # observations of the retained cells
   yk <- y[idx]
   Dk <- D[idx, , drop = FALSE]
@@ -247,8 +281,13 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
                  Nk, n_cells_used, L0, p), call. = FALSE)
 
   ## --- group order: the smallest permuted block side over the blocks ---------
+  ## (by default; an explicit larger K holds the blocks too small for it
+  ## fixed instead, 0.4.3 -- see .block_K())
+  sides <- .block_sides(blocks, "both")
   K_was_null <- is.null(K)
-  K <- .default_K(K, pd$min_side)
+  K <- .block_K(K, sides)
+  held <- attr(K, "held")
+  K <- as.integer(K)
 
   ## Does `d` vary inside any retained cell? The same diagnostic
   ## mwperm_layout() computes for its no-power warning, read the other way
@@ -303,9 +342,10 @@ mwperm_irregular <- function(y, d, x = NULL, row, col, rep = NULL, L0,
         "side is %d, so K = %d. Raise `min_block` so that small blocks ",
         "cannot set K, or retune L0 -- a larger L0 gives deeper cells but ",
         "fewer of them, a smaller one admits more cells and can support ",
-        "larger blocks."),
-        pd$min_side, K)
-    else character(0))
+        "larger blocks%s."),
+        pd$min_side, K, .larger_K_hint(sides))
+    else character(0),
+    .held_blocks_note(held, blocks, K))
 
   ## --- (iv) Procedure 2 on the stacked retained data, position held fixed --
   perm_builder <- function(rep_seed) pd$perm_builder(rep_seed, K)

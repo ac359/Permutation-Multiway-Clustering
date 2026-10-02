@@ -163,10 +163,14 @@ ref_groups_blocks <- function(ri, ci, blocks, K, seed, r, slot = NULL) {
   for (q in seq_along(blocks))
     blk[ri %in% blocks[[q]]$rows & ci %in% blocks[[q]]$cols] <- q
   stopifnot(all(blk > 0L))
-  Gr <- lapply(seq_along(blocks), function(q)
+  ## a block whose smaller side is below K + 1 is held fixed (0.4.3; the
+  ## method's authors: valid, its clusters are fixed points of every element)
+  held <- vapply(blocks, function(b)
+    min(length(b$rows), length(b$cols)) < K + 1L, logical(1))
+  Gr <- lapply(seq_along(blocks), function(q) if (!held[q])
     build_perm_set(length(blocks[[q]]$rows), K,
                    seed = sub_seed(rs, 4 * q - 1, stride)))
-  Gc <- lapply(seq_along(blocks), function(q)
+  Gc <- lapply(seq_along(blocks), function(q) if (!held[q])
     build_perm_set(length(blocks[[q]]$cols), K,
                    seed = sub_seed(rs, 4 * q, stride)))
   s <- if (is.null(slot)) rep(0L, length(ri)) else slot
@@ -175,6 +179,7 @@ ref_groups_blocks <- function(ri, ci, blocks, K, seed, r, slot = NULL) {
     ti <- ri
     tj <- ci
     for (q in seq_along(blocks)) {
+      if (held[q]) next
       b <- blocks[[q]]
       sel <- blk == q
       ti[sel] <- b$rows[Gr[[q]][[k]][match(ri[sel], b$rows)]]

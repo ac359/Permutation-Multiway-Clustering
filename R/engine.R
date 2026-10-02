@@ -434,8 +434,9 @@
           "Confidence interval by outward bracketing and bisection, not the ",
           "exact set: the exact inversion would have to evaluate more than ",
           "the candidate budget (about 2 K^2 x n_reps points, with K = ",
-          K, " and n_reps = ", n_reps, "). The end points are accurate to the ",
-          "bisection tolerance and the set is assumed connected apart from ",
+          K, " and n_reps = ", n_reps, "). Each end point is rounded ",
+          "outward, by less than the bisection tolerance, so the interval ",
+          "contains the exact one; the set is assumed connected apart from ",
           "the island guard. Raise ",
           "options(mwperm.ci_exact_budget = ) to force the exact set."))
       if (isTRUE(attr(ci, "disconnected"))) {
@@ -844,7 +845,10 @@
 #'   as infinite there.
 #' - `bracketing fallback`: used only when the exact path's candidate count
 #'   would exceed its budget (roughly 2 * K^2 * n_reps): outward bracketing
-#'   then bisection to `tol_factor * step`, on the aggregated p-value.
+#'   then bisection to `tol_factor * step`, on the aggregated p-value. Each
+#'   end point is the REJECTED side of its final bracket (0.4.3), i.e. rounded
+#'   outward by less than the tolerance, so the interval contains the exact
+#'   component.
 #'   Accepted per-permutation estimates outside the bracket flag a
 #'   disconnected set and widen the interval to the hull.
 #'
@@ -866,8 +870,9 @@
 #'   attributes `"conf_set"` (components), `"ci_method"`, `"disconnected"`,
 #'   and, in grid mode, `"truncated"` / `"grid_step"` / `"grid_limit"`. On the
 #'   exact path the components, and hence the interval, are the CLOSURE of the
-#'   acceptance set; the grid and bracketing paths instead report attained,
-#'   accepted points (accurate to the grid spacing / bisection tolerance).
+#'   acceptance set; the grid path reports attained, accepted points
+#'   (accurate to the grid spacing), and the bracketing path rejected points
+#'   just outside the set (within the bisection tolerance).
 #' @keywords internal
 #' @noRd
 .invert_ci <- function(prep_list, alpha, centre, scale, y, D, grid = NULL,
@@ -989,7 +994,12 @@
       mid <- (lo + hi) / 2
       if (pval_at(mid) > alpha) lo <- mid else hi <- mid
     }
-    lo                                 # accepted side of the bracket
+    ## The boundary lies in (lo, hi]. Report the REJECTED side, so the end
+    ## point is rounded outward by less than `tol`: the interval then contains
+    ## the exact component, as the exact path's closure does. Until 0.4.3 this
+    ## returned `lo`, which sat up to `tol` (~2e-5 on the trade data) inside
+    ## the exact set (authors' decision, 2026-09-30).
+    hi
   }
 
   ## Island guard. The acceptance set is usually one interval, but nothing

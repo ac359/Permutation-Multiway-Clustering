@@ -1,3 +1,123 @@
+# mwperm 0.4.3
+
+Answers from the method's authors (2026-09-30), implemented as one release:
+every front end except `mwperm_irregular()` now runs the test once by default
+(`n_reps = 1`, was 10); the bisection fallback rounds its interval outward;
+`mwperm_layout()` and `mwperm_irregular()` warn when their within-cell index
+looks like time; the layout design refuses a `time =` index; and the block
+designs accept a `K` larger than their smallest block, holding the blocks too
+small for it fixed. Against the 0.4.2 golden baseline
+(`tests/golden/baseline-0.4.2.rds`) 11 of the 30 entries move -- exactly the
+fits run at the default `n_reps` -- in `n_reps`, `pvalues_rep` and, where there
+is one, the confidence interval; the resolution note of five block-design
+entries gains one clause. No reported p-value, estimate or `K` moves, and the
+other entries are `identical()`.
+
+## One run by default
+
+* **`n_reps` now defaults to 1** in `mwperm_dyadic()`, `mwperm_panel()`,
+  `mwperm_threeway()`, `mwperm_layout()`, `mwperm_missing()`,
+  `mwperm_panel_missing()` and `mwperm_dyadic_het()` (it was 10 from 0.2.0
+  to 0.4.2). One run is the procedure Theorem 1 covers, so the default
+  p-value is exact as stated. With `n_reps > 1` the runs are still combined
+  by `aggregate`: the median (Remark 1, conservative in every simulation but
+  not covered by the theorem) or `"median2"` (covered). `mwperm()` keeps
+  forwarding the front end's own default. **Pass `n_reps = 10` to reproduce
+  0.4.2 results exactly** (tested for the dyadic and panel anchors).
+* **`mwperm_irregular()` keeps its default of 500.** Its repetitions also
+  redraw the random per-cell subsample, so a single run would rest on one
+  random trim; 500 is the advisors' choice of 2026-09-22.
+* What moved, at `seed = 1` on the shipped data: no reported p-value. The
+  default confidence intervals of `mwperm_dyadic()` (log_dist) went from
+  [-1.25135, -0.53447] to [-1.27537, -0.51309], of `mwperm_panel()` (fta)
+  from [0.44202, 0.88027] to [0.48418, 0.83650] (the one-run interval of
+  versions before 0.2.0), and of `mwperm_dyadic_het()` from
+  [-1.16053, -0.62513] to [-1.12868, -0.62402]. The README's panel
+  transcript shows the new interval; its quick start passes `n_reps = 15`
+  and is unchanged.
+* The replication scripts `01`-`04` in `inst/replication/` now pass
+  `n_reps = 10` explicitly, so `expected/` and the numbers taken from it
+  still reproduce.
+
+## Blocks smaller than `K + 1` can be kept and held fixed
+
+* **`mwperm_missing()`, `mwperm_panel_missing()` and `mwperm_irregular()`
+  accept a `K` above the default.** Procedure 2 shares one `K` across the
+  blocks, so by default the smallest block caps it -- often below the 20
+  levels a 95% set needs, however large the other blocks are. Given a
+  larger `K` (up to the largest block's permuted side minus 1), the blocks
+  too small for `K + 1` are now kept and **held fixed**: the identity in every
+  permutation, while the larger blocks are permuted. The method's authors
+  confirmed this is valid (2026-09-30): the blocks share no row or column, so
+  a held block's clusters are fixed points of every permutation. Until 0.4.3
+  such a `K` was an error, and the only way out was a higher `min_block`,
+  which discards the small blocks' cells instead. A note lists the held
+  blocks, and the resolution note of a default fit now names both options.
+* The default `K` is unchanged, so every default fit is identical; a `K` no
+  block can carry is still refused, now naming the largest block.
+* Measured (blocks of 24 x 24, 8 x 8 and 6 x 6 under two-way random effects,
+  1000 simulations, `n_reps = 1`): size 0.040 at nominal 0.05 with `K = 19`
+  and the two small blocks held; power 0.148 / 0.463 at beta = 0.1 / 0.2,
+  against 0.123 / 0.393 when `min_block = 20` discards them. The default
+  `K = 5` cannot reject at 0.05 on that design.
+
+## The bisection fallback rounds its interval outward
+
+* When the exact interval would need more candidate points than its budget
+  (about `2 K^2 n_reps` above 200,000), it is found by bracketing and
+  bisection. Each end point used to be the accepted side of the final
+  bracket, up to the tolerance (about 2e-5 on the trade data) *inside* the
+  exact set. It is now the rejected side: rounded outward by less than the
+  tolerance, so the interval contains the exact one, as the exact route's
+  closure does. The fit's note says so. No golden entry takes this route, so
+  none moves; a fit that does widens by less than the tolerance.
+
+## A time index is never permuted
+
+* **`mwperm_layout()` and `mwperm_irregular()` warn when `rep` looks like
+  time**: a time word as its name (year, period, wave, ..., read from the
+  call or forwarded by `mwperm()`), dates, whole numbers between 1800 and
+  2200, or evenly spaced values that the cells share but do not all start
+  from, as periods observed over different windows do. Replicate numbers
+  1, 2, ... restarting in every cell, and global observation ids, raise
+  nothing. The warning names the panel designs, which hold the period fixed,
+  and changes no number. The reasons, measured: with staggered windows and
+  a cell-constant `d` the irregular trim's size was 0.39 at nominal 0.05
+  against 0.028 for `mwperm_panel_missing(L0 = 2)`; the layout test's was
+  0.63-0.74 with a replicate effect shared across cells and a `d` following
+  it over the periods.
+* **`mwperm(design = "layout")` with `time =`, and `rep =` together with
+  `time =`, are now errors.** The layout design permutes the within-cell
+  index; until 0.4.3 the time label was dropped without a word.
+  `design = "irregular"` with `time =` still runs `mwperm_panel_missing()`,
+  as in 0.4.2.
+* `?mwperm_layout` no longer says simulations found "no measurable size
+  effect" from a replicate effect shared across cells. That held only when
+  `d` had no pattern over the replicate index; the page now gives the
+  numbers above. The method's authors agreed (2026-09-30): the layout test
+  keeps the paper's independent per-cell permutations, and the package
+  claims validity for `eps_ijl = eta_ij + u_ijl` (cell effects plus
+  exchangeable replicates) only.
+
+## Tests
+
+* Base-R suite: `test-dyadic.R` and `test-panel.R` pin the new default
+  anchors and that `n_reps = 10` reproduces the 0.4.2 ones;
+  `test-main.R` checks every front end's default `n_reps` (section 7) and
+  the layout design's refusal of `time =` (section 10); `test-layout.R`
+  (section 5) and `test-irregular.R` the time-like warning, including that it
+  fires on values alone and never on 1..n replicate numbers;
+  `lower-level-tests/test-exact-ci.R` that bisection end points are outside
+  the exact set, within the tolerance, and rejected; `test-missing.R`
+  (section 10) that held blocks map onto themselves in every element while
+  the larger blocks are permuted, in all three block designs.
+* testthat suite: the same behaviours in `test-designs.R`,
+  `test-dispatch.R` and `test-confidence-sets.R`; the held-block p-values
+  match the independent reference, whose block group now holds small blocks
+  fixed too. The draft's Section 6.2
+  printout is now checked with `n_reps = 10` passed explicitly, and its
+  literal call is recorded as discrepancy D11 (skipped).
+
 # mwperm 0.4.2
 
 Three decisions taken by the package's advisors on 2026-09-22, implemented as
@@ -206,15 +326,40 @@ the function implements; neither changes a number.
   `K = 2^5 - 1 = 31` is `n_flip = 5` (smallest p-value 1/16), and its
   simulation's `K = 2^6 - 1` is `n_flip = 6`, the package default. And the
   package redraws the partition until every group is used. On the paper's own
-  simulation design (25 x 25, normal errors, `n_flip = 6`, one repetition),
-  `mwperm_dyadic_het()` rejected a true null in 1.0% of 1000 simulations;
-  power was 0.16 / 0.59 / 0.87 / 0.95 / 0.99 at b = 0.05 / 0.10 / 0.15 /
-  0.20 / 0.30 (400 each). The paper's procedure read literally puts the
-  all -1 element, which acts as the identity, into `min_j a_j`. That p-value
-  is on the same grid and never smaller, and it was identical in all 3,000
-  of those datasets. The docs of `build_flip_set()` and `mwperm_dyadic_het()`
-  now state all of this, and no longer call the deduplication bit-identical to
-  the full enumeration without that qualification.
+  1000 simulated datasets (25 x 25, normal errors, `n_flip = 6`),
+  `mwperm_dyadic_het()` rejected a true null in 1.7% of them with one
+  repetition and 0.7% at the default ten (the paper: 1.1%, one draw); power
+  at b = 0.05 / 0.10 / 0.15 / 0.20 / 0.30 was 0.12 / 0.55 / 0.85 / 0.95 /
+  0.99 with one repetition and 0.11 / 0.64 / 0.97 / 1.00 / 1.00 at the
+  default (the paper: 0.14 / 0.56 / 0.85 / 0.95 / 0.98). The paper's
+  procedure read literally puts the all -1 element, which acts as the
+  identity, into `min_j a_j`. That p-value is on the same grid and never
+  smaller; handed the same partition, it differed from the package's in one
+  of 3,000 datasets (the paper's design and two stronger heteroskedasticity
+  settings) and never in the decision at 0.05. The docs of `build_flip_set()`
+  and `mwperm_dyadic_het()` now state all of this, and no longer call the
+  deduplication bit-identical to the full enumeration without that
+  qualification.
+* **The authors corrected their simulation script, and the package's checks
+  follow it.** The version of the heteroskedastic gravity design first shared
+  with the package drew centred lognormal (asymmetric) errors, under which
+  Assumption 2 fails; the authors confirmed that the errors are N(0, 1), as
+  the paper states, and the corrected script reproduces the paper's Figure 4
+  exactly. The design's port in `tests/helpers/signflip-reference.R` now
+  draws those errors (it reproduces the corrected script's data seed for
+  seed), so the size check in `tests/test-signflip.R` runs where the
+  assumption holds. The trade-off figures in `?mwperm_dyadic_het` and the
+  README are re-measured on that design: the permutation test's size rose
+  to 0.076 at nominal 0.05 under the strongest heteroskedasticity while the
+  sign-flip test stayed at or below 0.016 (was 0.06-0.09 against 0.02 on the
+  lognormal errors), and under homoskedastic errors at beta = 0.15 the power
+  was 0.98 against 0.85 (was 0.96 against 0.86). No computed number changed.
+* **Two answers from the method's authors are recorded in the help.**
+  `?mwperm_dyadic_het` and the README note that they agreed to the
+  incomplete-array extension. The `n_flip` entry now says that its default
+  depends only on `alpha`, `aggregate` and the array's dimensions, never on
+  the data, and that a value set by hand should be fixed before looking at
+  the results.
 * The revised paper is not public yet, and in arXiv:2601.08610v1 "Assumption
   2" is the Section 4 random-effects model; `?mwperm_dyadic_het` and the
   README now say so where they cite it.
@@ -276,6 +421,18 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   duplicate-cell errors of `mwperm_missing()` and `mwperm_panel_missing()`
   sent repeats that are time periods to `mwperm_irregular()`; they now name
   `mwperm_panel()` / `mwperm_panel_missing()`.
+* **`mwperm()` prints the call it actually runs.** Its "-> running" line was
+  `mwperm_check()`'s template, which is never given the design-specific
+  arguments, so it always read `L0 = NULL` and `time_fe = TRUE` and never
+  showed `n_flip`. For example, `mwperm(..., time = , design = "irregular",
+  L0 = 3)` announced `mwperm_panel_missing(..., L0 = NULL, ...)` while
+  correctly running it with `L0 = 3`. The line now shows the `L0`,
+  `time_fe` and `min_block` it forwards (a layout's `L0` and a sign-flip
+  test's `n_flip` when given; `block_method` and `permute` when given), and
+  never an argument the design ignores. `mwperm_check()` on its own still
+  shows the front end's defaults, and its printout is unchanged. Only the
+  message changed: every fit is identical. `tests/test-main.R` (section 9)
+  and a new snapshot in `tests/testthat/test-dispatch.R` pin the line.
 
 ## Help pages cite the paper
 

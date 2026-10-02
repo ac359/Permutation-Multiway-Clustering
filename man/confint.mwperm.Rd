@@ -82,9 +82,10 @@ report, and the exact path reports the bounding jump. A printed or returned
 end point may therefore be a value the test itself \emph{rejects}, while
 every point strictly inside the interval is accepted. The convention errs
 outward -- the interval is conservative and never omits an accepted value --
-and it is the reason a value exactly equal to an end point should not be read
-as "just inside". (The \code{"grid"} and \code{"bisection"} paths report
-attained accepted points instead, to their own accuracy.)
+and it is the reason a value exactly equal to an end point should not be read as "just inside". (The \code{"grid"} path
+reports attained accepted points instead, to the grid spacing; the
+\code{"bisection"} path rounds each end point outward, by less than its
+tolerance, so its interval also contains the exact set.)
 }
 
 \examples{

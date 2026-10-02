@@ -238,4 +238,74 @@ stopifnot(identical(viad$auto$design, "missing"),
           identical(direct$estimate, viad$estimate),
           identical(direct$K, viad$K), identical(direct$type, viad$type))
 
+## ---- 10. blocks smaller than K + 1 are kept and held fixed (0.4.3) ---------
+## Procedure 2 shares one K across blocks, so by default the smallest block
+## caps it. The method's authors confirmed (2026-09-30) that a block too
+## small for K + 1 may instead be kept and left unpermuted: the blocks share
+## no row or column, so its clusters are fixed points of every element. An
+## explicit K up to the largest block's side now does that; the default K is
+## unchanged (the golden baseline pins it).
+set.seed(41)
+nh <- 20L
+grp_h <- c(rep(1L, 12), rep(2L, 5), rep(3L, 3))  # blocks 12x12, 5x5, 3x3
+gh <- expand.grid(i = seq_len(nh), j = seq_len(nh))
+gh <- gh[grp_h[gh$i] == grp_h[gh$j], ]
+gh$d <- rnorm(nrow(gh)); gh$y <- rnorm(nh)[gh$i] + rnorm(nh)[gh$j] +
+  rnorm(nrow(gh))
+fd <- mwperm_missing(gh$y, gh$d, row = gh$i, col = gh$j, min_block = 3,
+                     n_reps = 2, seed = 1, conf_int = FALSE)
+fh <- mwperm_missing(gh$y, gh$d, row = gh$i, col = gh$j, min_block = 3,
+                     K = 9, n_reps = 2, seed = 1, conf_int = FALSE)
+stopifnot(fd$K == 2L, fh$K == 9L,                # 3x3 caps the default
+          fh$cells_used == fd$cells_used,        # nothing is discarded
+          any(grepl("larger `K` (up to 11", fd$note, fixed = TRUE)),
+          any(grepl("2 blocks too small for K + 1 = 10 are kept but held fixed",
+                    fh$note, fixed = TRUE)),
+          any(grepl("5x5, 3x3; 34 (row, col) cells", fh$note, fixed = TRUE)),
+          identical(fh$pvalues_rep, mwperm_missing(
+            gh$y, gh$d, row = gh$i, col = gh$j, min_block = 3, K = 9,
+            n_reps = 2, seed = 1, conf_int = FALSE)$pvalues_rep))
+## the builder: held blocks map onto themselves in every element, the 12x12
+## block is permuted, and every element is a bijection (asserted inside)
+bl <- find_bicliques(gh$i, gh$j, min_block = 3)
+blk_h <- integer(nrow(gh)); lr <- integer(nrow(gh)); lc <- integer(nrow(gh))
+for (q in seq_along(bl)) {
+  s <- gh$i %in% bl[[q]]$rows & gh$j %in% bl[[q]]$cols
+  blk_h[s] <- q; lr[s] <- match(gh$i[s], bl[[q]]$rows)
+  lc[s] <- match(gh$j[s], bl[[q]]$cols)
+}
+ops_h <- mwperm:::.build_obs_perms_blocks(1L, 9L, bl, ri = gh$i, ci = gh$j,
+                                          blk = blk_h, lrow = lr, lcol = lc)
+small <- which(blk_h %in% which(lengths(lapply(bl, `[[`, "rows")) < 10L))
+big <- which(blk_h %in% which(lengths(lapply(bl, `[[`, "rows")) >= 10L))
+stopifnot(length(ops_h) == 10L, length(small) == 34L,
+          all(vapply(ops_h, function(g) identical(g[small], small),
+                     logical(1))),
+          all(vapply(ops_h[-1], function(g) !identical(g[big], big),
+                     logical(1))))
+## at the default K the builder's output is what it always was: every block
+## is permuted, so nothing is held
+ops_d <- mwperm:::.build_obs_perms_blocks(1L, 2L, bl, ri = gh$i, ci = gh$j,
+                                          blk = blk_h, lrow = lr, lcol = lc)
+stopifnot(all(vapply(ops_d[-1], function(g) !identical(g[small], small),
+                     logical(1))))
+## a K no block can carry is refused, naming the bound
+expect_err(mwperm_missing(gh$y, gh$d, row = gh$i, col = gh$j, min_block = 3,
+                          K = 12, seed = 1, conf_int = FALSE),
+           "largest fully observed block has a permuted side of only 12")
+## the same rule in the incomplete panel and the irregular design
+ph <- do.call(rbind, lapply(1:3, function(t) cbind(gh, t = t)))
+ph$y <- ph$y + ph$t
+fp <- mwperm_panel_missing(ph$y, ph$d, row = ph$i, col = ph$j, time = ph$t,
+                           min_block = 3, K = 9, n_reps = 1, seed = 1,
+                           conf_int = FALSE)
+stopifnot(fp$K == 9L, any(grepl("held fixed (5x5, 3x3", fp$note,
+                                fixed = TRUE)))
+fi <- suppressWarnings(mwperm_irregular(ph$y, ph$d, row = ph$i, col = ph$j,
+                                        rep = ph$t, L0 = 2, min_block = 3,
+                                        K = 9, n_reps = 2, seed = 1,
+                                        conf_int = FALSE))
+stopifnot(fi$K == 9L, any(grepl("held fixed (5x5, 3x3", fi$note,
+                                fixed = TRUE)))
+
 passed("test-missing.R")

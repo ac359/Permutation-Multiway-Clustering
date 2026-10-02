@@ -106,8 +106,10 @@ test_that("resolution guard: K + 1 < 1/alpha gives no set, with a note", {
 })
 
 test_that("bisection and a user grid agree with the exact set", {
-  ## Bisection (forced by a zero budget) stops at step * 1e-3; a grid is
-  ## accurate to its spacing and reports attained, accepted grid points.
+  ## Bisection (forced by a zero budget) stops at step * 1e-3 and, since
+  ## 0.4.3, reports the rejected side of its final bracket (rounded outward,
+  ## so it contains the exact set); a grid is accurate to its spacing and
+  ## reports attained, accepted grid points.
   old <- options(mwperm.ci_exact_budget = 0)
   on.exit(options(old))
   fb <- mwperm_dyadic(fx$y, fx$d, x = fx$x, row = fx$i, col = fx$j,
@@ -116,6 +118,12 @@ test_that("bisection and a user grid agree with the exact set", {
   expect_identical(fb$ci_method, "bisection")
   tol <- fit$se_naive * 1e-3
   expect_lt(max(abs(fb$conf_int - fit$conf_int)), tol)
+  expect_lte(fb$conf_int[1], fit$conf_int[1])   # rounded outward,
+  expect_gte(fb$conf_int[2], fit$conf_int[2])   # never inside
+  for (b in fb$conf_int)                        # each end point is rejected
+    expect_lte(mwperm_dyadic(fx$y, fx$d, x = fx$x, row = fx$i, col = fx$j,
+                             beta_null = b, conf_int = FALSE, n_reps = R,
+                             seed = seed)$pvalue, 0.05)
 
   h <- 0.002
   grid <- seq(fit$conf_int[1] - 0.2, fit$conf_int[2] + 0.2, by = h)

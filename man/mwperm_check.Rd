@@ -41,10 +41,15 @@ incomplete one \code{\link{mwperm_panel_missing}} (to which
 \code{\link{mwperm}} also forwards \code{L0 =}, the number of periods to
 keep when some pairs miss periods). With \code{design = "irregular"} it runs
 \code{\link{mwperm_panel_missing}} too: periods are never given the random
-per-cell trim, which is exact only for exchangeable replicates.}
+per-cell trim, which is exact only for exchangeable replicates. With
+\code{design = "layout"}, or together with \verb{rep =}, it is an error: the
+layout design permutes the within-cell index, and a time index cannot
+be permuted.}
 
 \item{rep}{Optional explicit replication identifier (vector or column
-name): declares within-cell replication and forces the layout design.}
+name): declares within-cell replication and forces the layout design.
+\code{\link{mwperm_layout}} and \code{\link{mwperm_irregular}} warn when it looks like time
+(by its name or its values).}
 
 \item{design}{Force a design instead of auto-detecting (the structure is
 still validated against it). \code{"dyadic_het"} -- the sign-flip test of
@@ -76,7 +81,10 @@ An object of class \code{"mwperm_design"}: a list with fields
   smallest reportable p-value at the default K), \code{levels_needed} (the
   smallest permuted dimension a \code{(1 - alpha)} set requires) and
   \code{resolution_ok} (whether that set is attainable), \code{call_str}
-  (the downstream call), \code{reason} (one-line explanation),
+  (the downstream call, at the front end's defaults and with \code{...}
+  where the value is yours to choose; \code{\link{mwperm}()} prints the
+  same call with the values it passes), \code{reason} (one-line
+  explanation),
   \code{warnings}/\code{notes} (the assumption-fork notices etc.) and
   \code{alternatives} (one-line pointers to designs the data cannot select
   for you -- on a complete dyadic array, \code{design = "dyadic_het"}).

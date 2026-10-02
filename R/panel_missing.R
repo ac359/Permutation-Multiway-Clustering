@@ -115,8 +115,10 @@
 #'   periods jointly observed by the most pairs, the same ones in every cell,
 #'   and the pairs observed in all of them; see *Keeping L0 periods*.
 #' @param K Number of non-identity permutations; defaults to `min(smallest
-#'   block side) - 1` capped at 199. Must satisfy `K + 1 <=` the smallest side
-#'   of the smallest selected block.
+#'   block side) - 1` capped at 199, so every block is permuted. A larger `K`
+#'   may be given (0.4.3): blocks whose permuted side is below `K + 1` are then kept and held fixed
+#'   (never relabelled, which keeps the test exact: the blocks share no row
+#'   or column), and the largest block's permuted side caps `K` instead.
 #' @param min_block Minimum block side for the biclique search, a single
 #'   integer or a length-2 integer giving the row and column floors
 #'   separately. Floored at 2.
@@ -126,8 +128,10 @@
 #'   decision.
 #' @param beta_null Null value(s); length 1 or `ncol(d)`.
 #' @param conf_int Logical; compute the confidence set by test inversion.
-#' @param n_reps Number of independent permutation groups; the reported
-#'   p-value is aggregated over them.
+#' @param n_reps Number of independent permutation groups. Defaults to 1,
+#'   the procedure Theorem 1 covers; with more, the reported p-value is
+#'   aggregated over them by `aggregate` (see *Aggregation over repetitions*
+#'   in [mwperm_dyadic()]). The default was 10 from 0.4.0 to 0.4.2.
 #' @param seed Integer seed. Required for reproducibility, and for the
 #'   rep-parallel path.
 #' @param grid Optional explicit grid of null values for the inversion.
@@ -187,7 +191,7 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
                                  K = NULL, min_block = 3L,
                                  block_method = c("greedy", "exact"),
                                  alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                                 n_reps = 10L, seed = NULL, grid = NULL,
+                                 n_reps = 1L, seed = NULL, grid = NULL,
                                  time_fe = TRUE,
                                  aggregate = c("median", "median2"),
                                  n_cores = 1L) {
@@ -231,8 +235,13 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
   n_cells_used <- pd$n_cells_used
 
   ## --- group order: the smallest permuted block side over the blocks --------
+  ## (by default; an explicit larger K holds the blocks too small for it
+  ## fixed instead, 0.4.3 -- see .block_K())
+  sides <- .block_sides(blocks, "both")
   K_was_null <- is.null(K)
-  K <- .default_K(K, pd$min_side)
+  K <- .block_K(K, sides)
+  held <- attr(K, "held")
+  K <- as.integer(K)
 
   sizes <- vapply(blocks, function(b) c(length(b$rows), length(b$cols)),
                   integer(2))
@@ -271,11 +280,12 @@ mwperm_panel_missing <- function(y, d, x = NULL, row, col, time, L0 = NULL,
       sprintf(paste0("Resolution here is set by the smallest selected ",
                      "block: its permuted side is %d, so K = %d. Raise ",
                      "`min_block` so that small blocks cannot set K, or ",
-                     "%s so that more pairs clear the mask."),
+                     "%s so that more pairs clear the mask%s."),
               pd$min_side, K,
               if (is.null(L0)) "drop the sparsest periods"
-              else "lower `L0`")
-    else character(0))
+              else "lower `L0`", .larger_K_hint(sides))
+    else character(0),
+    .held_blocks_note(held, blocks, K))
 
   ## --- (iv) Procedure 2 with the period held fixed --------------------------
   perm_builder <- function(rep_seed) pd$perm_builder(rep_seed, K)

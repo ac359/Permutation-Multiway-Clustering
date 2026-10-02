@@ -14,7 +14,7 @@ mwperm_dyadic(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+    n_reps = 1L,
   seed = NULL,
   grid = NULL,
   aggregate = c("median", "median2"),
@@ -71,14 +71,16 @@ returned in the \code{conf_set} field with their hull in \code{conf_int};
 for several covariates, a joint (grid-based) confidence region. See
 \code{\link{confint.mwperm}}.}
 
-\item{n_reps}{Number of independent runs whose p-values are aggregated by
-\code{aggregate} (the median by default), as recommended for randomised
-tests; the confidence set inverts the same aggregated p-value.
-Defaults to 10: a single run's p-value depends on the random relabelling
-(a seed lottery), and the median of 10 runs stabilises it at roughly ten
-times the cost -- fractions of a second on typical designs. Set
-\code{n_reps = 1} to reproduce the single-run behaviour of versions
-before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
+\item{n_reps}{Number of independent runs of the test, each with its own
+random relabelling. Defaults to 1, the procedure Theorem 1 covers: the
+p-value is exact at any sample size. A single run's p-value depends on
+the random relabelling (a seed lottery), so pass a \code{seed} to make it
+reproducible. With \code{n_reps > 1} the runs' p-values are combined by
+\code{aggregate} (the median by default, Remark 1) and the confidence set
+inverts the same combined p-value; that steadies the result at roughly
+\code{n_reps} times the cost, but it is not covered by Theorem 1 -- see
+\emph{Aggregation over repetitions} in Details. The default was 10 from 0.2.0
+to 0.4.2; pass \code{n_reps = 10} to reproduce results from those versions.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -91,23 +93,24 @@ grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
 
 \item{aggregate}{
-How the \code{n_reps} per-repetition p-values are combined into the reported
-p-value, and into the confidence set that inverts it. \code{"median"} (the
-default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
-(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+How the \code{n_reps} per-repetition p-values are combined into the reported p-value, and into the confidence set that inverts it, when
+\code{n_reps > 1}. \code{"median"} (the default) is the median, as recommended in
+Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
+\code{min(1, 2 * median)}.
 
 The choice decides what "exact" covers. Theorem 1 gives finite-sample
-validity for a single random permutation group, so at \code{n_reps = 1} the
-p-value is exact as stated. The median of several dependent randomised
-p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-behaved in practice, but not itself guaranteed valid at level \code{alpha}.
-Twice the median is guaranteed, under arbitrary dependence across
-repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+validity for a single random permutation group, so at the default
+\code{n_reps = 1} the p-value is exact as stated (there \code{"median"} returns the
+one p-value, and \code{"median2"} doubles it, which only costs resolution). The
+median of several dependent randomised p-values is a de-randomisation
+heuristic: endorsed by Remark 1 and well behaved in practice, but not
+itself guaranteed valid at level \code{alpha}. Twice the median is guaranteed,
+under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
+Wang 2020).
 
-So use \code{"median2"} when the guarantee must hold as stated with
-\code{n_reps > 1}. It is conservative: it never rejects where
-\code{"median"} would not, and its confidence set is never narrower. The
-default is unchanged, so existing numbers stand.
+So with \code{n_reps > 1}, use \code{"median2"} when the guarantee must hold as
+stated. It is conservative: it never rejects where \code{"median"} would not,
+and its confidence set is never narrower.
 
 The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
 so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
@@ -170,8 +173,7 @@ symmetry -- which additive cluster effects violate. Neither assumption
 implies the other.
 
 \strong{Aggregation over repetitions, and what "exact" covers.} Theorem 1
-establishes finite-sample validity for a single random permutation group, so
-with \code{n_reps = 1} the p-value is exact as stated.
+establishes finite-sample validity for a single random permutation group, so at the default \code{n_reps = 1} the p-value is exact as stated.
 
 With \code{n_reps > 1} the reported p-value is the median of the
 per-repetition p-values, following Guo, Toulis and Wang (2026, Remark 1), and

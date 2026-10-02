@@ -14,7 +14,7 @@ mwperm_missing(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+    n_reps = 1L,
   seed = NULL,
   grid = NULL,
   min_block = 3L,
@@ -39,9 +39,11 @@ with several, a joint confidence region (see \code{conf_int}).}
 absent
 from the data are treated as missing.}
 
-\item{K}{Number of non-identity permutations. Defaults to
-\code{min_q min(|I_q|, |J_q|) - 1} over the selected blocks, capped at 199.
-Must not exceed that quantity.}
+\item{K}{Number of non-identity permutations. Defaults to \code{min_q min(|I_q|, |J_q|) - 1} over the selected blocks (the permuted side only, with
+\code{permute = "rows"} or \code{"cols"}), capped at 199, so every block is
+permuted. A larger \code{K} may be given (0.4.3): blocks whose permuted side is below \code{K + 1} are then kept and held fixed
+(never relabelled, which keeps the test exact: the blocks share no row
+or column), and the largest block's permuted side caps \code{K} instead.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -53,13 +55,16 @@ has several columns).}
 inversion: an interval for a single covariate, or a joint (grid-based)
 confidence region for several.}
 
-\item{n_reps}{Number of independent runs whose p-values (and CI end points)
-are aggregated by the median, as recommended for randomised tests.
-Defaults to 10: a single run's p-value depends on the random relabelling
-(a seed lottery), and the median of 10 runs stabilises it at roughly ten
-times the cost -- fractions of a second on typical designs. Set
-\code{n_reps = 1} to reproduce the single-run behaviour of versions
-before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
+\item{n_reps}{Number of independent runs of the test, each with its own
+random relabelling. Defaults to 1, the procedure Theorem 1 covers: the
+p-value is exact at any sample size. A single run's p-value depends on
+the random relabelling (a seed lottery), so pass a \code{seed} to make it
+reproducible. With \code{n_reps > 1} the runs' p-values are combined by
+\code{aggregate} (the median by default, Remark 1) and the confidence set
+inverts the same combined p-value; that steadies the result at roughly
+\code{n_reps} times the cost, but it is not covered by Theorem 1 -- see
+\emph{Aggregation over repetitions} in Details. The default was 10 from 0.2.0
+to 0.4.2; pass \code{n_reps = 10} to reproduce results from those versions.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -163,9 +168,19 @@ its smaller side, so the smallest attainable p-value is
 Adding small blocks pools more data yet can destroy resolution -- rejecting
 at level \code{alpha} requires a fully observed block with both sides at
 least \code{ceiling(1/alpha)} (20 for \code{alpha = 0.05}). When the
-default \code{K} makes rejection at \code{alpha} unattainable the fit says
-so in its \code{note}; raise \code{min_block} to stop small blocks from
-setting \code{K}, at the price of discarding their cells.
+default \code{K} makes rejection at \code{alpha} unattainable the fit says so in its \code{note}. There are two ways out. Raise
+\code{min_block} to stop small blocks from being found, at the price of
+discarding their cells. Or pass a larger \code{K} (since 0.4.3): blocks whose
+permuted side is below \code{K + 1} are then kept and \emph{held fixed} -- the
+identity in every permutation -- while the larger blocks are permuted, so
+their cells still enter the statistic. That is exact too (the method's
+authors confirmed it): the blocks share no row or column, so a held
+block's clusters are fixed points of every permutation, like the clusters
+outside every block. In a simulation with blocks of 24 x 24, 8 x 8 and 6 x
+6 under two-way random effects (1000 datasets, \code{K = 19}) its size was
+0.040 at \code{alpha = 0.05}, and its power 0.148 / 0.463 at beta = 0.1 / 0.2
+against 0.123 / 0.393 for discarding the small blocks; the default \code{K = 5}
+could not reject at all.
 
 \strong{One-sided permutation} (\code{permute = "rows"} or \code{"cols"}):
 permuting only one dimension uses a subgroup of the full invariance group,
