@@ -164,3 +164,39 @@
       Would run       : mwperm_dyadic_het(y, d, x, row = i, col = j)
       
 
+# mwperm() prints the call it runs, with the arguments it passes
+
+    Code
+      invisible(mwperm(pm$y, pm$d, x = pm$x, index = pm[c("i", "j")], time = pm$t,
+      design = "irregular", L0 = 2, n_reps = 1, seed = 1, conf_int = FALSE))
+    Message
+      Detected design: panel_missing (design = "irregular" with a `time =` index: periods run as the incomplete panel)
+        -> running mwperm_panel_missing(y, d, x, row = i, col = j, time = time, L0 = 2, min_block = 3, time_fe = TRUE)
+
+---
+
+    Code
+      invisible(mwperm(pn$y, pn$d, x = pn$x, index = pn[c("i", "j")], time = pn$t,
+      time_fe = FALSE, n_reps = 1, seed = 1, conf_int = FALSE))
+    Message
+      Detected design: panel (`time =` declares a panel)
+        -> running mwperm_panel(y, d, x, row = i, col = j, time = time, time_fe = FALSE)
+
+---
+
+    Code
+      invisible(mwperm(ly$y, ly$d, x = ly$x, index = ly[c("i", "j")], rep = ly$l, L0 = 6,
+      n_reps = 1, seed = 1, conf_int = FALSE))
+    Message
+      Detected design: layout (`rep =` declares within-cell replication)
+        -> running mwperm_layout(y, d, x, row = i, col = j, rep = rep, L0 = 6)
+
+---
+
+    Code
+      invisible(mwperm(dy$y, dy$d, x = dy$x, index = dy[c("i", "j")], design = "dyadic_het",
+      n_flip = 6, n_reps = 1, seed = 1, conf_int = FALSE))
+    Message
+      Detected design: dyadic_het (forced via design =)
+        -> running mwperm_dyadic_het(y, d, x, row = i, col = j, n_flip = 6)
+

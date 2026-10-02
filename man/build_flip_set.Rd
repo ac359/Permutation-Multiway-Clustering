@@ -84,7 +84,9 @@ column and so is the identity on the cells; read literally, Procedure 1
 then puts the unflipped statistic into \code{min_j a_j}. That p-value is on
 the same grid and never smaller than the one computed here, which excludes
 both copies of the identity; both are valid, and on the paper's own
-simulation design they coincided.
+simulation design and two stronger heteroskedasticity settings they
+differed in one of 3,000 datasets and never in the decision at the 5\%
+level.
 
 \strong{Every flip group must be used.} If some group were assigned to no
 row cluster and no column cluster its sign would be free, the kernel would

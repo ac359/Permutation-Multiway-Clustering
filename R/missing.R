@@ -45,8 +45,19 @@
 #' pools more data yet can destroy resolution -- rejecting at level `alpha`
 #' requires a fully observed block with both sides at least `ceiling(1/alpha)`
 #' (20 for `alpha = 0.05`). When the default `K` makes rejection at `alpha`
-#' unattainable the fit says so in its `note`; raise `min_block` to stop small
-#' blocks from setting `K`, at the price of discarding their cells.
+#' unattainable the fit says so in its `note`. There are two ways out. Raise
+#' `min_block` to stop small blocks from being found, at the price of
+#' discarding their cells. Or pass a larger `K` (since 0.4.3): blocks whose
+#' permuted side is below `K + 1` are then kept and *held fixed* -- the
+#' identity in every permutation -- while the larger blocks are permuted, so
+#' their cells still enter the statistic. That is exact too (the method's
+#' authors confirmed it): the blocks share no row or column, so a held
+#' block's clusters are fixed points of every permutation, like the clusters
+#' outside every block. In a simulation with blocks of 24 x 24, 8 x 8 and 6 x
+#' 6 under two-way random effects (1000 datasets, `K = 19`) its size was
+#' 0.040 at `alpha = 0.05`, and its power 0.148 / 0.463 at beta = 0.1 / 0.2
+#' against 0.123 / 0.393 for discarding the small blocks; the default `K = 5`
+#' could not reject at all.
 #'
 #' **One-sided permutation** (`permute = "rows"` or `"cols"`): permuting only
 #' one dimension uses a subgroup of the full invariance group, so the test
@@ -87,8 +98,11 @@
 #'   length-2 vector to `min_block` for full control) -- at some cost in
 #'   power; see Details.
 #' @param K Number of non-identity permutations. Defaults to `min_q min(|I_q|,
-#'   |J_q|) - 1` over the selected blocks, capped at 199. Must not exceed that
-#'   quantity.
+#'   |J_q|) - 1` over the selected blocks (the permuted side only, with
+#'   `permute = "rows"` or `"cols"`), capped at 199, so every block is
+#'   permuted. A larger `K` may be given (0.4.3): blocks whose permuted side is below `K + 1` are then kept and held fixed
+#'   (never relabelled, which keeps the test exact: the blocks share no row
+#'   or column), and the largest block's permuted side caps `K` instead.
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
 #'   the reported p-value, and into the confidence set that inverts it.
@@ -151,7 +165,7 @@
 #' @export
 mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
                            alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                           n_reps = 10L, seed = NULL, grid = NULL,
+                           n_reps = 1L, seed = NULL, grid = NULL,
                            min_block = 3L, block_method = c("greedy", "exact"),
                            permute = c("both", "rows", "cols"),
                            aggregate = c("median", "median2"),
@@ -201,15 +215,16 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 
   ## the smallest PERMUTED block side caps the group order (with permute =
   ## "both" that is the smaller of the two sides, as in Procedure 2)
-  side_of <- switch(permute,
-    both = function(b) min(length(b$rows), length(b$cols)),
-    rows = function(b) length(b$rows),
-    cols = function(b) length(b$cols))
-  ## Procedure 2 uses ONE K for every block (step 2(b)), so K + 1 cannot
-  ## exceed the smallest permuted block side (Algorithm 1 needs K + 1 <= n).
-  min_side <- min(vapply(blocks, side_of, integer(1)))
+  sides <- .block_sides(blocks, permute)
+  ## Procedure 2 uses ONE K for every block (step 2(b)), and Algorithm 1
+  ## needs K + 1 <= n, so by default the smallest permuted block side caps K.
+  ## An explicit larger K holds the blocks too small for it fixed instead
+  ## (0.4.3; .block_K()).
+  min_side <- min(sides)
   K_was_null <- is.null(K)
-  K <- .default_K(K, min_side)
+  K <- .block_K(K, sides)
+  held <- attr(K, "held")
+  K <- as.integer(K)
 
   ## The SMALLEST selected block is the binding constraint on resolution:
   ## under the default K = min_side - 1 a small block caps the attainable
@@ -226,8 +241,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
       "Resolution here is set by the smallest selected block: its permuted ",
       "side is %d, so K = %d. Raise `min_block` so that small blocks cannot ",
       "set K -- a higher floor discards more cells but lifts the attainable ",
-      "resolution."),
-      min_side, K)
+      "resolution%s."),
+      min_side, K, .larger_K_hint(sides))
   }
 
   ## --- restrict data to cells inside the selected blocks ---------------------
@@ -279,7 +294,8 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
             if (N - Nk == 1L) " is" else "s are"),
     sprintf("Block sizes (rows x cols): %s.",
             paste(sprintf("%dx%d", sizes[1, ], sizes[2, ]), collapse = ", ")),
-    res_note
+    res_note,
+    .held_blocks_note(held, blocks, K)
   )
 
   ## --- per-rep observation-permutation builder (block-diagonal) --------------
@@ -398,9 +414,19 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   seed_stride <- max(1000, 4 * length(blocks) + 1)
   rowG <- vector("list", length(blocks))
   colG <- vector("list", length(blocks))
+  ## A block whose permuted side is below K + 1 cannot carry an Algorithm 1
+  ## group of that order; since 0.4.3 it is HELD FIXED -- the identity in
+  ## every element -- instead (the method's authors, 2026-09-30: valid, the
+  ## blocks share no row or column, so its rows and columns are fixed points
+  ## of every element, like the clusters outside all blocks in Procedure 2's
+  ## footnote). At the default K = smallest side - 1 every block is permuted
+  ## and nothing below changes; only an explicit larger K reaches this.
+  perm_q <- .block_sides(blocks, permute) >= K + 1L
   ## Procedure 2, step 2(b): Algorithm 1 on I_q (rows) and on J_q (columns)
-  ## of every block q, all with the same K.
+  ## of every permuted block q, all with the same K. A held block draws
+  ## nothing, so every other block keeps its own seeds.
   for (q in seq_along(blocks)) {
+    if (!perm_q[q]) next
     if (do_rows)
       rowG[[q]] <- build_perm_set(length(blocks[[q]]$rows), K,
                                   seed = .sub_seed(rep_seed, 4L * q - 1L,
@@ -457,6 +483,7 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
         ## local -> permuted -> global. Both maps are indexed by block-local
         ## label, of which there are only |block|, so they are composed at
         ## that length and gathered to cell length once instead of twice.
+        if (!perm_q[q]) next         # held fixed: the cells stay put
         if (do_rows)
           tg_row[sel] <- blocks[[q]]$rows[rowG[[q]][[k]]][lrow_q[[q]]]
         if (do_cols)
@@ -494,9 +521,9 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
         ## when a margin is held fixed its own labels stand in for the image,
         ## and gr[lrow_q] reproduces ri[sel] exactly -- lrow was built as
         ## match(ri[sel], gr), so the round trip is exact by construction
-        rcode <- (if (do_rows) gr[rowG[[q]][[k]]] else gr) - 1L
+        rcode <- (if (do_rows && perm_q[q]) gr[rowG[[q]][[k]]] else gr) - 1L
         ccode <- n_row_max *
-          ((if (do_cols) gc[colG[[q]][[k]]] else gc) - 1L) + 1L
+          ((if (do_cols && perm_q[q]) gc[colG[[q]][[k]]] else gc) - 1L) + 1L
         gi[sel] <- pos[rcode[lrow_q[[q]]] + ccode[lcol_q[[q]]] +
                          (if (is.null(slot)) 0 else scode[sel])]
       }
@@ -513,6 +540,92 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
   ## check it rather than assume it (see .assert_bijection).
   .assert_bijection(ops, length(ri), "missing-data (biclique)")
   ops
+}
+
+#' The permuted side of every block: the smaller side under `permute =
+#' "both"`, else the side that is permuted. Procedure 2's one K must satisfy
+#' K + 1 <= this for every block it permutes.
+#' @details Procedure 2, step 2(b) of GTW (2026): Algorithm 1 needs K + 1 <= n.
+#' @param blocks list of blocks as returned by `find_bicliques()`.
+#' @param permute `"both"`, `"rows"` or `"cols"`.
+#' @return integer vector, one entry per block.
+#' @keywords internal
+#' @noRd
+.block_sides <- function(blocks, permute = "both") {
+  vapply(blocks, function(b) switch(permute,
+    both = min(length(b$rows), length(b$cols)),
+    rows = length(b$rows),
+    cols = length(b$cols)), integer(1))
+}
+
+#' K for a block design (Procedure 2), and which blocks it holds fixed.
+#'
+#' `K = NULL` keeps the paper's rule: the smallest permuted block side caps
+#' the one K every block shares, so every block is permuted. An explicit `K`
+#' may exceed that (0.4.3, the method's authors' answer of 2026-09-30): the
+#' blocks whose permuted side is below K + 1 are then kept and held fixed
+#' (`.build_obs_perms_blocks()` gives them the identity), and only the
+#' largest block caps K. Returns K with attribute "held", the indices of the
+#' held blocks.
+#' @details Procedure 2, step 2(b) of GTW (2026), with blocks smaller than
+#'   K + 1 left unpermuted.
+#' @param K `NULL` or the user's K.
+#' @param sides `.block_sides()` of the selected blocks.
+#' @keywords internal
+#' @noRd
+.block_K <- function(K, sides) {
+  if (is.null(K)) {
+    K <- .default_K(NULL, min(sides))
+  } else {
+    if (!(is.numeric(K) && length(K) == 1L && is.finite(K) &&
+          K == trunc(K) && K >= 1))
+      stop("`K` must be a single integer >= 1 (or NULL for the default).",
+           call. = FALSE)
+    K <- as.integer(K)
+    if (K + 1L > max(sides))
+      stop(sprintf(paste0(
+        "The permutation group has order K + 1 = %d, but the largest fully ",
+        "observed block has a permuted side of only %d, so no block could be ",
+        "permuted. Use K <= %d (blocks smaller than K + 1 are then kept and ",
+        "held fixed), or leave K = NULL to permute every block."),
+        K + 1L, max(sides), max(sides) - 1L), call. = FALSE)
+  }
+  structure(K, held = which(sides < K + 1L))
+}
+
+#' The clause a block design's resolution note adds when a larger `K` is
+#' available (some block is larger than the smallest): "" otherwise.
+#' @details Reporting only; not a paper step.
+#' @keywords internal
+#' @noRd
+.larger_K_hint <- function(sides) {
+  if (max(sides) <= min(sides)) return("")
+  sprintf(paste0(" -- or pass a larger `K` (up to %d, the largest block's ",
+                 "permuted side minus 1): blocks smaller than K + 1 are then ",
+                 "kept and held fixed instead of discarded"), max(sides) - 1L)
+}
+
+#' The note a block design adds when `K` holds some blocks fixed.
+#' @details Reporting only; not a paper step.
+#' @param held indices of the held blocks; `blocks` the selected blocks.
+#' @param K the group order minus one.
+#' @return character(0) or one note.
+#' @keywords internal
+#' @noRd
+.held_blocks_note <- function(held, blocks, K) {
+  if (!length(held)) return(character(0))
+  nr <- vapply(blocks[held], function(b) length(b$rows), integer(1))
+  nc <- vapply(blocks[held], function(b) length(b$cols), integer(1))
+  one <- length(held) == 1L
+  sprintf(paste0(
+    "%d block%s too small for K + 1 = %d %s kept but held fixed (%s; %d ",
+    "(row, col) cell%s): %s cells enter the statistic but are never ",
+    "relabelled, while the larger blocks are permuted. This stays exact: ",
+    "the blocks share no row or column, so a held block's clusters are ",
+    "fixed points of every permutation."),
+    length(held), if (one) "" else "s", K + 1L, if (one) "is" else "are",
+    paste(sprintf("%dx%d", nr, nc), collapse = ", "), sum(nr * nc),
+    if (sum(nr * nc) == 1L) "" else "s", if (one) "its" else "their")
 }
 
 

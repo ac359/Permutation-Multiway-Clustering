@@ -125,6 +125,64 @@
   length(u) >= 2L && isTRUE(all(abs(diff(u) - diff(u)[1L]) < 1e-8))
 }
 
+#' The column name behind an argument expression, if there is one: `year`,
+#' `df$year` and `df[["year"]]` give "year"; anything else (a value forwarded
+#' by do.call(), a computed expression) gives NULL. Never deparses a value.
+#' @details Labelling only; not a paper step.
+#' @keywords internal
+#' @noRd
+.arg_label <- function(expr) {
+  if (is.name(expr)) return(as.character(expr))
+  if (is.call(expr) && length(expr) == 3L &&
+      (identical(expr[[1L]], as.name("$")) ||
+       identical(expr[[1L]], as.name("[[")))) {
+    last <- expr[[3L]]
+    if (is.name(last)) return(as.character(last))
+    if (is.character(last) && length(last) == 1L) return(last)
+  }
+  NULL
+}
+
+#' Does a within-cell index look like time? Returns a short reason, or NULL.
+#'
+#' mwperm_layout() permutes this index and mwperm_irregular() subsamples it at
+#' random, which is exact only for exchangeable replicates; a period index
+#' cannot be treated that way (the authors, 2026-09-30: "if the additional
+#' dimension is time, we typically cannot permute that dimension"). The data
+#' cannot prove what the index is, so this only gates a warning. In order: a
+#' time word as the name (`.timelike_name()`), a date class, whole numbers
+#' between 1800 and 2200 (calendar years), or evenly spaced values that the
+#' cells share but do not all start from -- periods observed over different
+#' windows. Replicate numbers 1..n restart in every cell and raise nothing;
+#' global observation ids are not shared by cells and raise nothing.
+#' @param v the within-cell index (`rep`), full length.
+#' @param label its column name (`.arg_label()`), or NULL.
+#' @param cell integer cell id per observation.
+#' @details Design detection (the advisors' answer of 2026-09-30); not a
+#'   paper step.
+#' @keywords internal
+#' @noRd
+.rep_timelike <- function(v, label, cell) {
+  if (!is.null(label) && .timelike_name(label))
+    return(sprintf("its name '%s' is a time word", label))
+  if (inherits(v, c("Date", "POSIXct", "POSIXlt")))
+    return("it holds dates")
+  if (!is.numeric(v)) return(NULL)
+  x <- as.numeric(v)
+  u <- sort(unique(x))
+  if (length(u) < 2L) return(NULL)
+  if (all(u == round(u)) && u[1L] >= 1800 && u[length(u)] <= 2200)
+    return("its values look like calendar years")
+  dd <- diff(u)
+  regular <- isTRUE(all(abs(dd - dd[1L]) < 1e-8 * max(1, abs(dd[1L]))))
+  starts <- unique(as.numeric(tapply(x, cell, min)))
+  if (regular && length(u) < length(x) / 2 && length(starts) > 1L)
+    return(paste0("its values are evenly spaced and shared by the cells, ",
+                  "but the cells start at different values, as periods do ",
+                  "when cells are observed over different windows"))
+  NULL
+}
+
 ## ---- mwperm_check -----------------------------------------------------------
 
 #' Diagnose a multi-way clustered dataset and choose the appropriate design
@@ -192,9 +250,14 @@
 #'   which [mwperm()] also forwards `L0 =`, the number of periods to keep
 #'   when some pairs miss periods). With `design = "irregular"` it runs
 #'   [mwperm_panel_missing()] too: periods are never given the random
-#'   per-cell trim, which is exact only for exchangeable replicates.
+#'   per-cell trim, which is exact only for exchangeable replicates. With
+#'   `design = "layout"`, or together with `rep =`, it is an error: the
+#'   layout design permutes the within-cell index, and a time index cannot
+#'   be permuted.
 #' @param rep Optional explicit replication identifier (vector or column
 #'   name): declares within-cell replication and forces the layout design.
+#'   [mwperm_layout()] and [mwperm_irregular()] warn when it looks like time
+#'   (by its name or its values).
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it). `"dyadic_het"` -- the sign-flip test of
 #'   [mwperm_dyadic_het()] -- is *opt-in only*: it is never detected, because
@@ -216,7 +279,10 @@
 #'   `balance`, `K_default`, `alpha`, `aggregate`, `p_floor` (the smallest
 #'   reportable p-value at the default K), `levels_needed` (the smallest
 #'   permuted dimension a `(1 - alpha)` set requires) and `resolution_ok`
-#'   (whether that set is attainable), `call_str` (the downstream call),
+#'   (whether that set is attainable), `call_str` (the downstream call,
+#'   at the front end's defaults and with `...` where the value is yours
+#'   to choose; [mwperm()] prints the same call with the values it
+#'   passes),
 #'   `reason` (one-line explanation), `warnings`/`notes` (the
 #'   assumption-fork notices etc.) and `alternatives` (one-line pointers to
 #'   designs the data cannot select for you -- on a complete dyadic array,
@@ -321,6 +387,20 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
   n_flip_default <- NULL
   ## One-line pointers to a design the data cannot select for the user.
   alternatives <- character(0)
+
+  ## The layout design permutes the within-cell index, and a time index cannot
+  ## be permuted (authors, 2026-09-30: give an error when the index is time).
+  ## Until 0.4.3 a `time =` passed with design = "layout", or together with
+  ## `rep =`, was dropped without a word.
+  layout_time_stop <- function()
+    stop(paste0("The layout design permutes the within-cell index, and a ",
+                "`time =` index cannot be permuted: a period effect shared ",
+                "across cells would make the test over-reject. For periods, ",
+                "drop `design =` and `rep =` to run the panel test ",
+                "(mwperm_panel(), or mwperm_panel_missing() when pairs miss ",
+                "periods; `L0 =` keeps the same L0 periods in every cell). If ",
+                "the repeats are exchangeable replicates, pass them as ",
+                "`rep =` instead of `time =`."), call. = FALSE)
 
   finish_layout <- function(why, warn_txt = NULL) {
     cell <- .dense_id(interaction(dense[[1L]], dense[[2L]], drop = TRUE))
@@ -562,6 +642,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           "index. Proceed only if the errors are exchangeable in every ",
           "index."))
     } else if (design == "layout") {
+      if (!is.null(time_v)) layout_time_stop()
       if (C != 2L)
         stop("design = \"layout\" needs exactly 2 index dimensions (cells).",
              call. = FALSE)
@@ -615,6 +696,7 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     }
   } else if (!is.null(rep_v)) {
     ## user declared within-cell replication
+    if (!is.null(time_v)) layout_time_stop()
     if (C != 2L)
       stop("With `rep =`, pass exactly 2 index dimensions (the cells).",
            call. = FALSE)
@@ -794,33 +876,10 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     res_ok <- if (is.na(K_default)) NA else p_floor <= alpha
   }
 
-  ## the exact downstream call
-  fn <- c(dyadic = "mwperm_dyadic", panel = "mwperm_panel",
-          panel_missing = "mwperm_panel_missing",
-          threeway = "mwperm_threeway", layout = "mwperm_layout",
-          missing = "mwperm_missing",
-          irregular = "mwperm_irregular",
-          dyadic_het = "mwperm_dyadic_het")[[chosen]]
-  args <- switch(chosen,
-    dyadic = sprintf("row = %s, col = %s", roles$row, roles$col),
-    dyadic_het = sprintf("row = %s, col = %s", roles$row, roles$col),
-    missing = sprintf("row = %s, col = %s, min_block = ...", roles$row,
-                      roles$col),
-    panel = sprintf("row = %s, col = %s, time = %s, time_fe = TRUE",
-                    roles$row, roles$col, roles$time),
-    panel_missing = sprintf(paste0("row = %s, col = %s, time = %s, ",
-                                   "L0 = NULL, min_block = ..., ",
-                                   "time_fe = TRUE"),
-                            roles$row, roles$col, roles$time),
-    threeway = sprintf("id1 = %s, id2 = %s, id3 = %s",
-                       roles$id1, roles$id2, roles$id3),
-    layout = sprintf("row = %s, col = %s%s", roles$row, roles$col,
-                     if (identical(roles$rep, "(within-cell order)")) ""
-                     else sprintf(", rep = %s", roles$rep)),
-    irregular = sprintf("row = %s, col = %s%s, L0 = ...", roles$row, roles$col,
-                        if (identical(roles$rep, "(within-cell order)")) ""
-                        else sprintf(", rep = %s", roles$rep)))
-  call_str <- sprintf("%s(y, d, x, %s)", fn, args)
+  ## the downstream call, at the front end's defaults: this function is not
+  ## given L0, time_fe, min_block or n_flip, so it cannot know them.
+  ## mwperm() rebuilds the line with the values it actually passes.
+  call_str <- .design_call_str(chosen, roles)
 
   structure(list(
     design = chosen, roles = roles, dims = dims, n_obs = N,
@@ -835,6 +894,76 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
     rep = if (!is.null(rep_v)) rep_v[[1L]] else NULL,
     index = idx
   ), class = "mwperm_design")
+}
+
+#' The downstream front-end call, as printed by mwperm_check() and mwperm()
+#'
+#' One template per design. With no `opts` (mwperm_check() on its own, which
+#' is never told L0, time_fe, min_block or n_flip) the line shows the front
+#' end's defaults, and `...` where the value is the caller's to choose. From
+#' mwperm(), `opts` holds the design-specific arguments it forwards, and the
+#' line shows those values instead. (Until 0.4.2 there was one template, so
+#' mwperm() printed `L0 = NULL` and `time_fe = TRUE` whatever it passed.)
+#' An `opts` entry that is NULL is printed in a template slot (`L0 = NULL`
+#' is the incomplete-panel default) and omitted where the template has no
+#' slot for it (a layout without `L0`, a sign-flip fit at the default
+#' `n_flip`). Arguments a design ignores are never printed for it.
+#'
+#' @details Display only; not a paper step. Nothing here reaches a fit.
+#' @param chosen the design label (`mwperm_check()`'s `design`).
+#' @param roles the role-to-index-name map from `mwperm_check()`.
+#' @param opts named list of forwarded argument values; may be empty.
+#' @return a single string, e.g. `"mwperm_panel(y, d, x, row = i, ...)"`.
+#' @keywords internal
+#' @noRd
+.design_call_str <- function(chosen, roles, opts = list()) {
+  has <- function(nm) nm %in% names(opts)
+  ## the value as R would print it in a call; whole numbers without the
+  ## integer suffix (min_block's default 3L reads "3")
+  show <- function(v) {
+    if (is.null(v)) return("NULL")
+    if (is.numeric(v) && length(v) == 1L && is.finite(v) && v == round(v))
+      return(format(v, scientific = FALSE, trim = TRUE))
+    paste(deparse(v), collapse = " ")
+  }
+  ## a slot the template always prints: the forwarded value if known
+  slot <- function(nm, default) if (has(nm)) show(opts[[nm]]) else default
+  ## an argument printed only when it was forwarded with a value
+  extra <- function(nm)
+    if (has(nm) && !is.null(opts[[nm]]))
+      sprintf(", %s = %s", nm, show(opts[[nm]])) else ""
+  rep_arg <- if (identical(roles$rep, "(within-cell order)")) "" else
+    sprintf(", rep = %s", roles$rep)
+  fn <- c(dyadic = "mwperm_dyadic", panel = "mwperm_panel",
+          panel_missing = "mwperm_panel_missing",
+          threeway = "mwperm_threeway", layout = "mwperm_layout",
+          missing = "mwperm_missing",
+          irregular = "mwperm_irregular",
+          dyadic_het = "mwperm_dyadic_het")[[chosen]]
+  args <- switch(chosen,
+    dyadic = sprintf("row = %s, col = %s", roles$row, roles$col),
+    dyadic_het = sprintf("row = %s, col = %s%s", roles$row, roles$col,
+                         extra("n_flip")),
+    missing = sprintf("row = %s, col = %s, min_block = %s%s%s", roles$row,
+                      roles$col, slot("min_block", "..."),
+                      extra("block_method"), extra("permute")),
+    panel = sprintf("row = %s, col = %s, time = %s, time_fe = %s",
+                    roles$row, roles$col, roles$time,
+                    slot("time_fe", "TRUE")),
+    panel_missing = sprintf(paste0("row = %s, col = %s, time = %s, ",
+                                   "L0 = %s, min_block = %s%s, ",
+                                   "time_fe = %s"),
+                            roles$row, roles$col, roles$time,
+                            slot("L0", "NULL"), slot("min_block", "..."),
+                            extra("block_method"), slot("time_fe", "TRUE")),
+    threeway = sprintf("id1 = %s, id2 = %s, id3 = %s",
+                       roles$id1, roles$id2, roles$id3),
+    layout = sprintf("row = %s, col = %s%s%s", roles$row, roles$col,
+                     rep_arg, extra("L0")),
+    irregular = sprintf("row = %s, col = %s%s, L0 = %s%s%s", roles$row,
+                        roles$col, rep_arg, slot("L0", "..."),
+                        extra("min_block"), extra("block_method")))
+  sprintf("%s(y, d, x, %s)", fn, args)
 }
 
 #' @details The print method lays the diagnosis out for a reader; it computes
@@ -989,29 +1118,31 @@ print.mwperm_design <- function(x, ...) {
 #' @param n_reps Number of repetitions whose p-values are aggregated (see
 #'   `aggregate`). `NULL` (the default) means the dispatched function's own
 #'   default: 500 for [mwperm_irregular()], whose random per-cell trim is
-#'   redrawn in every repetition, and 10 for every other design. A value
-#'   given here is forwarded as it is.
+#'   redrawn in every repetition, and 1 for every other design (one run, the
+#'   procedure Theorem 1 covers). A value given here is forwarded as it is.
 #' @param verbose If `TRUE` (default) print one line stating the detected
 #'   design and the dispatched call.
 #' @inheritParams mwperm_dyadic
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
-#'   the reported p-value, and into the confidence set that inverts it.
-#'   `"median"` (the default) is the median, as recommended in Remark 1 of
-#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
+#'   the reported p-value, and into the confidence set that inverts it, when
+#'   `n_reps > 1`. `"median"` (the default) is the median, as recommended in
+#'   Remark 1 of Guo, Toulis and Wang (2026); `"median2"` is
+#'   `min(1, 2 * median)`.
 #'
 #' The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#' validity for a single random permutation group, so at `n_reps = 1` the
-#' p-value is exact as stated. The median of several dependent randomised
-#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-#' behaved in practice, but not itself guaranteed valid at level `alpha`.
-#' Twice the median is guaranteed, under arbitrary dependence across
-#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#' validity for a single random permutation group, so at the default
+#' `n_reps = 1` the p-value is exact as stated (there `"median"` returns the
+#' one p-value, and `"median2"` doubles it, which only costs resolution). The
+#' median of several dependent randomised p-values is a de-randomisation
+#' heuristic: endorsed by Remark 1 and well behaved in practice, but not
+#' itself guaranteed valid at level `alpha`. Twice the median is guaranteed,
+#' under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
+#' Wang 2020).
 #'
-#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
-#' 1`. It is conservative: it never rejects where `"median"` would not, and
-#' its confidence set is never narrower. The default is unchanged, so existing
-#' numbers stand.
+#' So with `n_reps > 1`, use `"median2"` when the guarantee must hold as
+#' stated. It is conservative: it never rejects where `"median"` would not,
+#' and its confidence set is never narrower.
 #'
 #' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
 #' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
@@ -1073,6 +1204,15 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
   ## .coef_names, which applies the same rule to the direct front ends).
   d_expr <- deparse(substitute(d))
   d_expr <- if (length(d_expr) == 1L) d_expr else "d"
+  ## Likewise the name of the within-cell index, which mwperm_layout() and
+  ## mwperm_irregular() read to warn when it looks like time; do.call() would
+  ## hand them a value, so it travels as an attribute they strip on arrival.
+  rep_lab <- if (is.character(rep) && length(rep) == 1L) rep
+             else .arg_label(substitute(rep))
+  with_label <- function(v) {
+    if (!is.null(v) && !is.null(rep_lab)) attr(v, "mwperm_label") <- rep_lab
+    v
+  }
 
   ## resolve y / d / x against `data`: accept bare vectors, column-name
   ## strings, or character vectors of column names (for x)
@@ -1161,13 +1301,21 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
     ## Two lines. The single-line form ran to ~140 characters and wrapped
     ## wherever the terminal happened to end, splitting the dispatched call
     ## mid-argument; this is also the shape README.md documents.
+    ## The call shows the design-specific values forwarded below, not the
+    ## defaults chk$call_str has to assume; block_method and permute are
+    ## shown only when given, since they are forwarded unresolved.
+    run_str <- .design_call_str(chk$design, chk$roles, opts = c(
+      list(L0 = L0, time_fe = time_fe, min_block = min_block,
+           n_flip = n_flip),
+      if ("block_method" %in% supplied) list(block_method = block_method),
+      if ("permute" %in% supplied) list(permute = permute)))
     message(sprintf("Detected design: %s (%s)", chk$design, chk$reason),
-            "\n  -> running ", chk$call_str)
+            "\n  -> running ", run_str)
   }
 
   ## n_reps is forwarded only when given: NULL means the dispatched front
   ## end's own default, which is 500 for mwperm_irregular() (its random
-  ## per-cell trim is redrawn every repetition) and 10 for every other design.
+  ## per-cell trim is redrawn every repetition) and 1 for every other design.
   common <- c(list(y = y, d = d, x = x, K = K, alpha = alpha,
                    beta_null = beta_null, conf_int = conf_int),
               if (!is.null(n_reps)) list(n_reps = n_reps),
@@ -1200,10 +1348,10 @@ mwperm <- function(y, d, x = NULL, index, data = NULL, time = NULL, rep = NULL,
                                       id3 = ix[[3L]]))),
     layout = do.call(mwperm_layout,
                      c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                    rep = chk$rep, L0 = L0))),
+                                    rep = with_label(chk$rep), L0 = L0))),
     irregular = do.call(mwperm_irregular,
                         c(common, list(row = ix[[1L]], col = ix[[2L]],
-                                       rep = chk$rep, L0 = L0,
+                                       rep = with_label(chk$rep), L0 = L0,
                                        min_block = min_block,
                                        block_method = block_method))))
 

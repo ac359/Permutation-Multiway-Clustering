@@ -236,9 +236,12 @@ startB <- matrix(sample(1:4, mB * nB, TRUE), mB, nB)
 B$d <- as.numeric(B$t >= startB[cbind(B$i, B$j)])
 B$y <- rnorm(mB)[B$i] + rnorm(nB)[B$j] + c(0, 0, 20)[B$t] + rnorm(nrow(B))
 stopifnot(any(tapply(B$d, paste(B$i, B$j), function(v) diff(range(v)) > 0)))
-fBr <- with(B, mwperm_irregular(y = y, d = d, row = i, col = j, rep = t,
-                                L0 = 2L, min_block = 2L, conf_int = FALSE,
-                                n_reps = 1L, seed = 1))
+## (the time-like warning this call raises is checked just below)
+fBr <- suppressWarnings(with(B, mwperm_irregular(y = y, d = d, row = i,
+                                                 col = j, rep = t, L0 = 2L,
+                                                 min_block = 2L,
+                                                 conf_int = FALSE,
+                                                 n_reps = 1L, seed = 1)))
 ## the count mask keeps every cell with >= L0 observations (all 144: not the
 ## level mask), the slot held fixed is the position among the survivors, and
 ## the note fires
@@ -248,11 +251,25 @@ stopifnot(fBr$cells_used == mB * nB, fBr$n_obs == mB * nB * 2L,
           any(grepl("mwperm_panel_missing(time = <rep>, L0 = <L0>)", fBr$note,
                     fixed = TRUE)),
           any(grepl("NOT valid", fBr$note, fixed = TRUE)))
-## it is a note, not a warning
-stopifnot(length(warns_of(
+## it is a note, not a warning. The one warning here (0.4.3) is the
+## time-like one: `rep` is named t and the cells start in different periods.
+wB <- warns_of(
   with(B, mwperm_irregular(y = y, d = d, row = i, col = j, rep = t, L0 = 2L,
                            min_block = 2L, conf_int = FALSE, n_reps = 1L,
-                           seed = 1)))) == 0L)
+                           seed = 1)))
+stopifnot(length(wB) == 1L,
+          grepl("`rep` looks like time (its name 't' is a time word)", wB,
+                fixed = TRUE),
+          grepl("mwperm_panel_missing(time = <rep>, L0 = 2)", wB, fixed = TRUE),
+          !grepl("varies within cells", wB, fixed = TRUE))
+## the values alone are enough: renamed, the staggered windows still warn
+B$wave_id <- B$t
+wB2 <- warns_of(
+  with(B, mwperm_irregular(y = y, d = d, row = i, col = j, rep = wave_id,
+                           L0 = 2L, min_block = 2L, conf_int = FALSE,
+                           n_reps = 1L, seed = 1)))
+stopifnot(length(wB2) == 1L,
+          grepl("cells start at different values", wB2, fixed = TRUE))
 ## absent with a cell-constant d (sections 3-5's fixture), where the first
 ## note still states the condition and the route
 stopifnot(!any(grepl("varies within cells", fi2$note, fixed = TRUE)),

@@ -201,16 +201,21 @@ test_that("Sec. 6.2: the panel fit, with and without time effects", {
                c(0.573, 0.782))
 })
 
+draft_tp_thin <- function() with_seed(1, {
+  tp <- trade_panel
+  pair <- paste(tp$importer, tp$exporter)
+  thin <- sample(unique(pair), 20)
+  tp[!(pair %in% thin & tp$year > min(tp$year)), ]
+})
+
 test_that("Sec. 6.2: the incomplete panel prints as in the draft", {
-  tp <- with_seed(1, {
-    tp <- trade_panel
-    pair <- paste(tp$importer, tp$exporter)
-    thin <- sample(unique(pair), 20)
-    tp[!(pair %in% thin & tp$year > min(tp$year)), ]
-  })
+  ## The draft's call relies on the 0.2.0-0.4.2 default n_reps = 10; since
+  ## 0.4.3 the default is one run, so the printed block is reproduced with
+  ## n_reps = 10 passed explicitly (the literal call is D11, below).
+  tp <- draft_tp_thin()
   fit_pm <- with(tp, mwperm_panel_missing(
     y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j), row = importer,
-    col = exporter, time = year, min_block = 5, seed = 1))
+    col = exporter, time = year, min_block = 5, n_reps = 10, seed = 1))
   expect_identical(
     printed(fit_pm),
     paste("Invariant permutation test (mwperm)",
@@ -235,6 +240,17 @@ test_that("Sec. 6.2: the incomplete panel prints as in the draft", {
           "1 >= 20 -- that is, at least 20 levels in the smallest permuted",
           "dimension. The p-value reported above is unaffected and remains",
           "exact."))
+})
+
+test_that("Sec. 6.2: the draft's literal call runs ten repetitions", {
+  skip_discrepancy("D11", paste("the draft's printed outputs assume the",
+                                "0.2.0-0.4.2 default n_reps = 10; since 0.4.3",
+                                "the default is one run (Theorem 1)"))
+  tp <- draft_tp_thin()
+  fit_pm <- with(tp, mwperm_panel_missing(
+    y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j), row = importer,
+    col = exporter, time = year, min_block = 5, seed = 1))
+  expect_identical(fit_pm$n_reps, 10L)
 })
 
 ## ---- Section 6.3: three-way ------------------------------------------------

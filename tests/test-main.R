@@ -368,12 +368,17 @@ expect_warn(mwperm(y = y2, d = d2, index = list(i = g2$i, j = g2$j),
 ## ---- 7. n_reps: the dispatched front end's own default ---------------------
 ## Since 0.4.2 mwperm_irregular() defaults to 500 repetitions (the paper's
 ## random per-cell trim is redrawn in every repetition, so the median needs
-## many of them) while every other front end keeps 10. mwperm()'s own default
-## is therefore NULL, "whatever the front end says", and it forwards n_reps
+## many of them); since 0.4.3 every other front end defaults to one run (the
+## procedure Theorem 1 covers; it was 10). mwperm()'s own default is
+## therefore NULL, "whatever the front end says", and it forwards n_reps
 ## only when given: the dispatch identity must hold WITHOUT passing it.
+one_run <- c("mwperm_dyadic", "mwperm_panel", "mwperm_threeway",
+             "mwperm_layout", "mwperm_missing", "mwperm_panel_missing",
+             "mwperm_dyadic_het")
 stopifnot(is.null(formals(mwperm)$n_reps),
           identical(formals(mwperm_irregular)$n_reps, 500L),
-          identical(formals(mwperm_dyadic)$n_reps, 10L))
+          all(vapply(one_run, function(f)
+            identical(formals(get(f))$n_reps, 1L), logical(1))))
 set.seed(11)
 dat_irr <- do.call(rbind, lapply(1:8, function(i)
   do.call(rbind, lapply(1:8, function(j) {
@@ -394,10 +399,10 @@ stopifnot(identical(ir_dir$n_reps, 500L), length(ir_dir$pvalues_rep) == 500L,
           identical(ir_dis$n_reps, 500L),
           isTRUE(same_fit(ir_dir, ir_dis, skip = c("call", "auto", "note"))),
           all(ir_dir$note %in% ir_dis$note))
-## every other design still runs 10 repetitions through mwperm()
-dy10 <- mwperm(y = "yy", d = "dd", index = c("i", "j"), data = df2, seed = 2,
-               conf_int = FALSE, verbose = FALSE)
-stopifnot(identical(dy10$n_reps, 10L), length(dy10$pvalues_rep) == 10L)
+## every other design runs one repetition through mwperm()
+dy1 <- mwperm(y = "yy", d = "dd", index = c("i", "j"), data = df2, seed = 2,
+              conf_int = FALSE, verbose = FALSE)
+stopifnot(identical(dy1$n_reps, 1L), length(dy1$pvalues_rep) == 1L)
 ## and an explicit n_reps is forwarded as given, to either
 ir3 <- mwperm(y = "y", d = "d", index = c("i", "j"), rep = "l", data = dat_irr,
               design = "irregular", L0 = 4L, min_block = 2L, conf_int = FALSE,
@@ -437,5 +442,73 @@ stopifnot(identical(chk_st$design, "panel_missing"),
 expect_err(mwperm_check(index = c("i", "j"), time = "t", rep = "t",
                         data = st, design = "irregular"),
            "not both")
+
+## ---- 9. the printed call shows the arguments mwperm() passes --------------
+## The "-> running" line names the front-end call mwperm() makes. It used to
+## be mwperm_check()'s template, which is never given L0, time_fe, min_block
+## or n_flip, so it printed "L0 = NULL ... time_fe = TRUE" whatever was
+## passed: the call just above (design = "irregular" with `time =`,
+## L0 = 2) runs mwperm_panel_missing(L0 = 2) but announced L0 = NULL. The
+## line now carries the forwarded values. The standalone diagnosis still
+## shows the defaults (section 4 pins its "L0 = NULL"), and an argument a
+## design ignores stays off that design's line.
+run_line <- function(m)
+  sub("\n$", "", sub("^.*-> running ", "", grep("-> running", m, value = TRUE)))
+m_st <- msgs_of(mwperm(y = "y", d = "d", index = c("i", "j"), time = "t",
+                       data = st, design = "irregular", L0 = 2L, n_reps = 1L,
+                       conf_int = FALSE, seed = 5))
+m_pl <- msgs_of(mwperm(y = ypl, d = dpl, index = list(row = gpl$i, col = gpl$j),
+                       time = gpl$t, L0 = 3L, min_block = 4, time_fe = FALSE,
+                       block_method = "exact", n_reps = 1L, conf_int = FALSE,
+                       seed = 8))
+m_pa <- msgs_of(mwperm(y = yp, d = dp, index = list(row = gp$i, col = gp$j),
+                       time = gp$t, time_fe = FALSE, n_reps = 1L,
+                       conf_int = FALSE, seed = 3))
+m_la <- msgs_of(mwperm(y = yl, d = dl, index = list(row = gl$i, col = gl$j),
+                       rep = gl$l, L0 = 4L, n_reps = 1L, conf_int = FALSE,
+                       seed = 6))
+m_fl <- msgs_of(mwperm(y = "yy", d = "dd", index = c("i", "j"), data = df2,
+                       design = "dyadic_het", n_flip = 3L, n_reps = 1L,
+                       conf_int = FALSE, seed = 2))
+m_dy <- msgs_of(suppressWarnings(mwperm(y = "yy", d = "dd",
+                                        index = c("i", "j"), data = df2,
+                                        L0 = 3, n_reps = 1L,
+                                        conf_int = FALSE, seed = 2)))
+stopifnot(
+  identical(run_line(m_st), paste0("mwperm_panel_missing(y, d, x, row = i, ",
+    "col = j, time = t, L0 = 2, min_block = 3, time_fe = TRUE)")),
+  identical(run_line(m_pl), paste0("mwperm_panel_missing(y, d, x, row = row, ",
+    "col = col, time = time, L0 = 3, min_block = 4, block_method = \"exact\", ",
+    "time_fe = FALSE)")),
+  identical(run_line(m_pa), paste0("mwperm_panel(y, d, x, row = row, ",
+    "col = col, time = time, time_fe = FALSE)")),
+  identical(run_line(m_la), paste0("mwperm_layout(y, d, x, row = row, ",
+    "col = col, rep = rep, L0 = 4)")),
+  identical(run_line(m_fl), "mwperm_dyadic_het(y, d, x, row = i, col = j, n_flip = 3)"),
+  identical(run_line(m_dy), "mwperm_dyadic(y, d, x, row = i, col = j)"))
+
+## ---- 10. the layout design refuses a `time =` index (0.4.3) ---------------
+## The layout design permutes the within-cell index, and a time index cannot
+## be permuted (the authors, 2026-09-30: an error when the index is time).
+## Until 0.4.3, design = "layout" with `time =`, and `rep =` with `time =`,
+## dropped the time label without a word.
+tl <- expand.grid(t = 1:4, i = 1:5, j = 1:5)
+set.seed(21)
+tl$y <- rnorm(nrow(tl)); tl$d <- rnorm(nrow(tl))
+expect_err(mwperm(y = "y", d = "d", index = c("i", "j"), time = "t",
+                  data = tl, design = "layout", seed = 1, verbose = FALSE),
+           "a `time =` index cannot be permuted")
+expect_err(mwperm(y = "y", d = "d", index = c("i", "j"), time = "t",
+                  rep = "t", data = tl, seed = 1, verbose = FALSE),
+           "a `time =` index cannot be permuted")
+expect_err(mwperm_check(index = c("i", "j"), time = "t", data = tl,
+                        design = "layout"),
+           "pass them as `rep =` instead of `time =`")
+## the same data with `time =` alone is a panel, and with `rep =` a layout
+stopifnot(identical(mwperm_check(index = c("i", "j"), time = "t",
+                                 data = tl)$design, "panel"),
+          identical(suppressWarnings(mwperm_check(index = c("i", "j"),
+                                                  rep = "t",
+                                                  data = tl))$design, "layout"))
 
 passed("test-main.R")

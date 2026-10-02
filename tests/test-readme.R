@@ -33,7 +33,7 @@ readme_lines <- c(
   quick_start_p =
     "H0: beta = 0    p-value = 0.025",
   panel_est =
-    "  fta          OLS estimate = 0.6774   95% IPT CI [0.442, 0.8803]",
+    "  fta          OLS estimate = 0.6774   95% IPT CI [0.4842, 0.8365]",
   panel_p =
     "H0: beta = 0    p-value = 0.045",
   check_resolution =
@@ -44,8 +44,8 @@ readme_lines <- c(
     "Resolution   : p-values are multiples of 1/40 = 0.025 per rep; reported floor 0.025",
   panel_res =
     "Resolution   : p-values are multiples of 1/22 = 0.045 per rep; reported floor 0.045",
-  panel_res_caveat =
-    "               the median of 10 reps can fall between grid points",
+  panel_group =
+    "Permutations : K = 21  (group order 22, 1 rep)",
   quick_start_summary =
     "1 log_dist   -0.8985026   0.08728893  -1.246471  -0.5484962   0.025",
   het_group =
@@ -84,7 +84,7 @@ out_pan <- capture.output(print(fit_pan))
 stopifnot(readme_lines[["panel_est"]] %in% out_pan,
           readme_lines[["panel_p"]] %in% out_pan,
           readme_lines[["panel_res"]] %in% out_pan,
-          readme_lines[["panel_res_caveat"]] %in% out_pan)
+          readme_lines[["panel_group"]] %in% out_pan)
 
 out_chk <- capture.output(print(
   mwperm_check(index = c("importer", "exporter"), data = trade_dyadic)))

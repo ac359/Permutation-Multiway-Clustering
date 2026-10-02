@@ -18,7 +18,7 @@ mwperm_panel_missing(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+    n_reps = 1L,
   seed = NULL,
   grid = NULL,
   time_fe = TRUE,
@@ -47,9 +47,10 @@ period. An integer between 2 and the number of periods keeps instead the L0
 periods jointly observed by the most pairs, the same ones in every cell,
 and the pairs observed in all of them; see \emph{Keeping L0 periods}.}
 
-\item{K}{Number of non-identity permutations; defaults to
-\code{min(smallest block side) - 1} capped at 199. Must satisfy
-\code{K + 1 <=} the smallest side of the smallest selected block.}
+\item{K}{Number of non-identity permutations; defaults to \code{min(smallest block side) - 1} capped at 199, so every block is permuted. A larger \code{K}
+may be given (0.4.3): blocks whose permuted side is below \code{K + 1} are then kept and held fixed
+(never relabelled, which keeps the test exact: the blocks share no row
+or column), and the largest block's permuted side caps \code{K} instead.}
 
 \item{min_block}{Minimum block side for the biclique search, a single
 integer or a length-2 integer giving the row and column floors separately.
@@ -66,8 +67,10 @@ decision.}
 
 \item{conf_int}{Logical; compute the confidence set by test inversion.}
 
-\item{n_reps}{Number of independent permutation groups; the reported
-p-value is aggregated over them.}
+\item{n_reps}{Number of independent permutation groups. Defaults to 1,
+the procedure Theorem 1 covers; with more, the reported p-value is
+aggregated over them by \code{aggregate} (see \emph{Aggregation over repetitions}
+in \code{\link{mwperm_dyadic}}). The default was 10 from 0.4.0 to 0.4.2.}
 
 \item{seed}{Integer seed. Required for reproducibility, and for the
 rep-parallel path.}

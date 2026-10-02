@@ -74,8 +74,8 @@ confidence region for several.}
 \item{n_reps}{Number of repetitions whose p-values are aggregated (see
 \code{aggregate}). \code{NULL} (the default) means the dispatched
 function's own default: 500 for \code{\link{mwperm_irregular}}, whose
-random per-cell trim is redrawn in every repetition, and 10 for every other
-design. A value given here is forwarded as it is.}
+random per-cell trim is redrawn in every repetition, and 1 for every other design (one run, the
+procedure Theorem 1 covers). A value given here is forwarded as it is.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -129,23 +129,24 @@ another design warns and ignores it).}
 them for another design warns and ignores it.}
 
 \item{aggregate}{
-How the \code{n_reps} per-repetition p-values are combined into the reported
-p-value, and into the confidence set that inverts it. \code{"median"} (the
-default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
-(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+How the \code{n_reps} per-repetition p-values are combined into the reported p-value, and into the confidence set that inverts it, when
+\code{n_reps > 1}. \code{"median"} (the default) is the median, as recommended in
+Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
+\code{min(1, 2 * median)}.
 
 The choice decides what "exact" covers. Theorem 1 gives finite-sample
-validity for a single random permutation group, so at \code{n_reps = 1} the
-p-value is exact as stated. The median of several dependent randomised
-p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-behaved in practice, but not itself guaranteed valid at level \code{alpha}.
-Twice the median is guaranteed, under arbitrary dependence across
-repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+validity for a single random permutation group, so at the default
+\code{n_reps = 1} the p-value is exact as stated (there \code{"median"} returns the
+one p-value, and \code{"median2"} doubles it, which only costs resolution). The
+median of several dependent randomised p-values is a de-randomisation
+heuristic: endorsed by Remark 1 and well behaved in practice, but not
+itself guaranteed valid at level \code{alpha}. Twice the median is guaranteed,
+under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
+Wang 2020).
 
-So use \code{"median2"} when the guarantee must hold as stated with
-\code{n_reps > 1}. It is conservative: it never rejects where
-\code{"median"} would not, and its confidence set is never narrower. The
-default is unchanged, so existing numbers stand.
+So with \code{n_reps > 1}, use \code{"median2"} when the guarantee must hold as
+stated. It is conservative: it never rejects where \code{"median"} would not,
+and its confidence set is never narrower.
 
 The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
 so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},

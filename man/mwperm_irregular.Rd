@@ -46,10 +46,12 @@ so the fit does not depend on it beyond that order.}
 cell. Cells with fewer than \code{L0} observations are masked out, and
 every retained cell is reduced to exactly \code{L0}. Required.}
 
-\item{K}{Number of non-identity permutations; defaults to the smallest block
-side over the selected blocks -- that is, the smallest of |I_q| and |J_q|
-over all q -- minus one, capped at 199. Must satisfy \code{K + 1 <=} that
-smallest block side.}
+\item{K}{Number of non-identity permutations; defaults to the smallest
+block side over the selected blocks -- that is, the smallest of |I_q| and
+|J_q| over all q -- minus one, capped at 199, so every block is
+permuted. A larger \code{K} may be given (0.4.3): blocks whose permuted side is below \code{K + 1} are then kept and held fixed
+(never relabelled, which keeps the test exact: the blocks share no row
+or column), and the largest block's permuted side caps \code{K} instead.}
 
 \item{min_block}{Minimum block side(s) for the biclique search; see
 \code{\link{find_bicliques}}.}
@@ -76,8 +78,10 @@ trim and its own permutation group; the reported p-value is the median
 over them (Remark 1 of the paper) and the confidence set inverts that
 median. Defaults to 500 -- the paper's Appendix B used 100, which the
 package's advisors consider the low end; use 1000 for a final run. Every
-other front end defaults to 10, because only here is the data itself
-redrawn in every repetition.}
+other front end defaults to one run (0.4.3), the procedure Theorem 1
+covers; this one keeps 500 because only here is the data itself
+redrawn in every repetition, so a single run would rest on one random
+subsample.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -90,23 +94,24 @@ grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
 
 \item{aggregate}{
-How the \code{n_reps} per-repetition p-values are combined into the reported
-p-value, and into the confidence set that inverts it. \code{"median"} (the
-default) is the median, as recommended in Remark 1 of Guo, Toulis and Wang
-(2026); \code{"median2"} is \code{min(1, 2 * median)}.
+How the \code{n_reps} per-repetition p-values are combined into the reported p-value, and into the confidence set that inverts it, when
+\code{n_reps > 1}. \code{"median"} (the default) is the median, as recommended in
+Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
+\code{min(1, 2 * median)}.
 
 The choice decides what "exact" covers. Theorem 1 gives finite-sample
-validity for a single random permutation group, so at \code{n_reps = 1} the
-p-value is exact as stated. The median of several dependent randomised
-p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-behaved in practice, but not itself guaranteed valid at level \code{alpha}.
-Twice the median is guaranteed, under arbitrary dependence across
-repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+validity for a single random permutation group, so at the default
+\code{n_reps = 1} the p-value is exact as stated (there \code{"median"} returns the
+one p-value, and \code{"median2"} doubles it, which only costs resolution). The
+median of several dependent randomised p-values is a de-randomisation
+heuristic: endorsed by Remark 1 and well behaved in practice, but not
+itself guaranteed valid at level \code{alpha}. Twice the median is guaranteed,
+under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
+Wang 2020).
 
-So use \code{"median2"} when the guarantee must hold as stated with
-\code{n_reps > 1}. It is conservative: it never rejects where
-\code{"median"} would not, and its confidence set is never narrower. The
-default is unchanged, so existing numbers stand.
+So with \code{n_reps > 1}, use \code{"median2"} when the guarantee must hold as
+stated. It is conservative: it never rejects where \code{"median"} would not,
+and its confidence set is never narrower.
 
 The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
 so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
@@ -223,8 +228,11 @@ that also varies over the periods (staggered adoption) is worse still: size
 1.000, against 0.040 for the aligned cut. Earlier checks that found the trim
 at nominal under a strong period effect (0.043 with a cell-constant
 \code{d}, 0.051 with an i.i.d. one) held only because every cell observed
-the same periods. The fit cannot see a period effect, so its note states
-this condition on every fit. For any period index use
+the same periods. The fit cannot see a period effect, so its note states this condition on every fit, and a
+warning is issued when \code{rep} looks like time: a time word as its name
+(year, period, wave, ...), dates, calendar years, or evenly spaced
+values that the cells share but start from different points, as periods
+observed over different windows do. For any period index use
 \code{\link{mwperm_panel_missing}} with the period as \code{time} and
 \code{L0 =} the number of periods to keep: it retains the \emph{same} L0
 periods in every cell (chosen from the observation pattern alone) and holds
@@ -256,8 +264,8 @@ confidence interval is found by outward bracketing and bisection unless
 \code{K} is small (\code{K <= 14}): the exact set evaluates about
 \code{2 K^2 n_reps} candidate end points, which exceeds the engine's
 budget beyond that, and its cost grows like \code{K^3 n_reps^2}. The fit
-records which path it took in \code{ci_method} and in a note; the end
-points agree to the bisection tolerance.
+records which path it took in \code{ci_method} and in a note; each end point is rounded outward, by less than the bisection
+tolerance, so the interval contains the exact one.
 }
 
 \examples{

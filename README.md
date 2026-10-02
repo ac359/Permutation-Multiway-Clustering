@@ -18,11 +18,13 @@ over-rejects, so you find effects that are not there.
 
 `mwperm` does not approximate. Its p-value is **exact in finite samples** —
 the guarantee holds at any number of clusters, and comes from the proof of
-Theorem 1 in Guo et al. (2026) rather than from a limit. That guarantee
-covers a single repetition (`n_reps = 1`) or several combined with
-`aggregate = "median2"`;
-the default, the median over repetitions, follows the paper's Remark 1 and
-sits at or below nominal in simulations, but Theorem 1 does not cover it.
+Theorem 1 in Guo et al. (2026) rather than from a limit. By default each
+test runs once (`n_reps = 1`), which is exactly what Theorem 1 covers; several
+repetitions combined with `aggregate = "median2"` are covered too. The median
+over repetitions (`n_reps > 1`, the paper's Remark 1) sits at or below nominal
+in simulations, but Theorem 1 does not cover it — and `mwperm_irregular()`,
+which redraws its subsample in every repetition, defaults to the median of
+500.
 
 The price is resolution, not validity: with `K + 1` permutations the p-value
 can only take values `1/(K+1), 2/(K+1), …, 1`. See
@@ -306,9 +308,13 @@ Note that $l$ must be an *independent replication*. If the $l$-th observation
 means the same thing in every cell — a period, a survey wave — then errors are
 usually not exchangeable across $l$ at all, and even a benign shared replicate
 effect $\zeta_l$ falls outside this argument, because the independent per-cell
-permutations change its alignment across cells. Treat $l$ as time instead:
-`mwperm_panel()`, or `mwperm_panel_missing(time = , L0 = )` when cells observe
-different periods.
+permutations change its alignment across cells. That is not a technicality:
+with a shared $\zeta_l$ and a `d` that follows the same pattern over $l$ in
+every cell, the layout test rejected a true null 63–74% of the time at
+α = 0.05 (10 × 10 cells of 22, 1000 simulations each), against about 5% when
+`d` had no such pattern. Treat $l$ as time instead: `mwperm_panel()`, or
+`mwperm_panel_missing(time = , L0 = )` when cells observe different periods.
+`mwperm_layout()` warns when `rep` looks like time.
 
 **`mwperm_irregular()` — §6.4.** Procedure 2 combined with the panel
 construction, as the paper prints it and applies it in its Appendix B. Form
@@ -333,7 +339,8 @@ keeps different periods in different cells and the test can over-reject
 **even with a cell-constant `d`**; a `d` that varies over the periods
 (staggered adoption) makes it far worse. The fit cannot see $\zeta_l$. For
 any period index use `mwperm_panel_missing(time = , L0 = )`, which keeps the
-*same* $L_0$ periods in every cell and holds the period fixed. Either way the
+*same* $L_0$ periods in every cell and holds the period fixed;
+`mwperm_irregular()` warns when `rep` looks like time. Either way the
 mask condition below applies: which cells clear $L_0$ must not depend on the
 outcomes.
 
@@ -469,7 +476,14 @@ replicates. When the repeats are *periods*, pass them as `time =` instead,
 whatever `d` does: an incomplete array then routes to
 `mwperm_panel_missing()`, and `L0 =` travels with it. That holds with
 `design = "irregular"` too: a tagged `time =` runs `mwperm_panel_missing()`,
-never the random trim.
+never the random trim. The layout design is different: it permutes the
+within-cell index, so `design = "layout"` with `time =`, or `rep =` and
+`time =` together, is an **error** rather than a silent drop of the time
+label. And `mwperm_layout()` and `mwperm_irregular()` both **warn** when their
+`rep` looks like time — a time word as its name (year, period, wave, …),
+dates, calendar years, or evenly spaced values that the cells share but start
+from different points, as periods observed over different windows do.
+Replicate numbers 1, 2, … restarting in every cell raise nothing.
 
 `mwperm_dyadic_het()` is never chosen automatically either, for a stronger
 reason: heteroskedasticity leaves **no trace in the clustering structure**, so
@@ -605,10 +619,13 @@ permuted ones under $H_0$, which makes this exact. The minimum over $j$
 (*minorization*) is what keeps it valid under heavy tails, at the cost of some
 conservatism.
 
-The permutation group is random, so repeated draws are aggregated by the
-**median** p-value across `n_reps` repetitions (Guo et al., 2026, Remark 1).
-`n_reps` defaults to 10 — except in `mwperm_irregular()`, where the data
-itself is redrawn in every repetition and the default is 500.
+The permutation group is random. By default it is drawn once
+(`n_reps = 1`), the procedure Theorem 1 covers; pass a `seed` to make the draw
+reproducible. With `n_reps > 1` the draws are aggregated by the **median**
+p-value (Guo et al., 2026, Remark 1). `mwperm_irregular()` is the exception:
+its data is redrawn in every repetition, and its default is 500. (From 0.2.0
+to 0.4.2 every other default was `n_reps = 10`; pass it to reproduce earlier
+results.)
 
 ## Confidence sets by test inversion
 
@@ -640,8 +657,9 @@ exact route reports the bounding jump. **A reported end point may therefore be
 a value the test rejects, while every point strictly inside the interval is
 accepted.** The convention is conservative — it never omits an accepted value —
 and it means a `b` sitting exactly on an end point should not be read as "just
-inside". (The `"grid"` and `"bisection"` routes report attained accepted
-points instead, to the grid spacing or bisection tolerance.)
+inside". (The `"grid"` route reports attained accepted points instead, to
+the grid spacing; the `"bisection"` route rounds each end point outward, by
+less than its tolerance, so its interval also contains the exact set.)
 
 With `n_reps > 1` there is one p-value per repetition, and one rule is used
 everywhere: the reported p-value is $\mathrm{median}_r \mathrm{pval}_r(b)$ and
@@ -690,11 +708,10 @@ mwperm(y = "log_trade", d = "fta", x = c("log_gdp_i", "log_gdp_j"),
 Detected design: panel ('year' identified as time by name)
   -> running mwperm_panel(y, d, x, row = importer, col = exporter, time = year, time_fe = TRUE)
 ...
-Permutations : K = 21  (group order 22, 10 reps)
+Permutations : K = 21  (group order 22, 1 rep)
 Resolution   : p-values are multiples of 1/22 = 0.045 per rep; reported floor 0.045
-               the median of 10 reps can fall between grid points
 
-  fta          OLS estimate = 0.6774   95% IPT CI [0.442, 0.8803]
+  fta          OLS estimate = 0.6774   95% IPT CI [0.4842, 0.8365]
 
 H0: beta = 0    p-value = 0.045
 Decision     : reject at alpha = 0.05
@@ -776,17 +793,19 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   when $d$ has a row-level component). The paper gives
   $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ ($u_i, v_j$ i.i.d. symmetric, $h$
   unknown) as a model that satisfies the assumption, which is weaker; its own
-  simulation for the test has independent heteroskedastic errors. On that
-  design (25 clusters per side) this package rejected a true null in 1.0% of
-  1000 simulations at `n_flip = 6` with one repetition. Exchangeability is
+  simulation for the test has independent heteroskedastic errors. On the
+  paper's own 1000 simulated datasets (25 clusters per side, `n_flip = 6`)
+  this package rejected a true null in 1.7% of them at the default single
+  run and 0.7% with ten; the paper reports 1.1% for its own single draw.
+  Exchangeability is
   *not* required,
   and this assumption does not imply it, nor the reverse. The array need not
   be complete: every observed cell is used and nothing is discarded, but
   which cells are observed must then be independent of the errors given
   $\mathbf{X}, \mathbf{D}$ (the analogue of Assumption 4) — dropping zero
   trade flows because $\log 0$ is undefined violates it. Running on an
-  incomplete array is this package's extension: the paper states Assumption 2
-  for a complete array.
+  incomplete array is this package's extension, which the method's authors
+  have agreed to: the paper states Assumption 2 for a complete array.
 - **Group order and resolution.** Because the sign enters as a *product*,
   $s$ and $-s$ induce the same transformation: the $2^{n_{\mathrm{flip}}}$ sign
   vectors give only $2^{n_{\mathrm{flip}}-1}$ distinct elements, and
@@ -805,20 +824,23 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   α = 0.05 (order 32, floor 0.031), 7 under `median2`, 8 at α = 0.01; 6–8
   are the useful range, and the cost doubles with each extra group. The
   default is capped at the smaller cluster count, and values above 20 are
-  refused. At the default the confidence set is the exact one. The default
+  refused. At the default (and still with `n_reps = 10`) the confidence set
+  is the exact one. The default
   buys resolution, not power: at 25 × 25 with independent heteroskedastic
   symmetric errors and `n_reps = 10`, power at $\beta = 0.10$ was 0.27, 0.34
   and 0.37 for `n_flip` = 6, 7 and 8 (300 simulations each), at 1, 2 and 4
   times the projections. Under the model
-  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ the size was 0.014 at
-  `n_reps = 1` and 0.002 at the default — conservative, not over-rejecting.
+  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ the size was 0.014 at the default
+  `n_reps = 1` and 0.002 with `n_reps = 10` — conservative, not
+  over-rejecting.
 - **The trade-off.** This is **not a strict upgrade** over `mwperm_dyadic()`.
-  On the authors' heteroskedastic gravity design (25 clusters per side, error
-  sd increasing in the gravity mean and in distance) the permutation test's
-  size rose with the heteroskedasticity, to 0.06–0.09 at nominal 0.05 in this
-  package's 300-replication check, while the sign-flip test stayed at 0.02 or
+  On the authors' heteroskedastic gravity design (25 clusters per side,
+  symmetric errors independent across cells, their sd increasing in the
+  gravity mean and in distance) the permutation test's size rose with the
+  heteroskedasticity, to 0.076 at nominal 0.05 in this package's check (500
+  simulations per setting), while the sign-flip test stayed at 0.016 or
   below. Under homoskedastic errors, at $\beta = 0.15$, the permutation
-  test's power was 0.96 against the sign-flip test's 0.86: a smaller, coarser
+  test's power was 0.98 against the sign-flip test's 0.85: a smaller, coarser
   group buys robustness with power. Use it when the errors are plausibly
   independent across cells with a covariate-driven variance; when additive
   cluster effects are the concern, stay with `mwperm_dyadic()`.
@@ -867,10 +889,19 @@ malfunction: it is what leaves the permutation acting on data whose
 exchangeability structure is intact. The fit reports exactly how many cells
 were kept.
 
-Second, **the smallest selected block caps `K`**, and therefore the resolution.
-A fit can be perfectly valid yet unable to reject at α = 0.05 because one small
-block set `K = 4`. `mwperm` says so explicitly in a note; raise `min_block` to
-stop small blocks from setting `K`.
+Second, **by default the smallest selected block caps `K`**, and therefore the
+resolution. A fit can be perfectly valid yet unable to reject at α = 0.05
+because one small block set `K = 4`. `mwperm` says so explicitly in a note, and
+offers two ways out: raise `min_block` so that small blocks are not found (their
+cells are discarded), or pass a larger `K`. Blocks too small for `K + 1` are
+then **kept and held fixed** — never relabelled — while the larger blocks are
+permuted. That stays exact (the method's authors confirmed it): the blocks
+share no row or column, so a held block's clusters are fixed points of every
+permutation. It applies to `mwperm_missing()`, `mwperm_panel_missing()` and
+`mwperm_irregular()`. With blocks of 24 × 24, 8 × 8 and 6 × 6 under two-way
+random effects (1000 simulations, `K = 19`), size was 0.040 at α = 0.05 and
+power 0.46 at β = 0.2, against 0.39 when the small blocks are discarded; the
+default `K = 5` could not reject at all.
 
 Maximum-biclique search is NP-hard, so the default is a greedy heuristic
 (`block_method = "exact"` runs branch-and-bound with a node budget, falling
@@ -887,8 +918,9 @@ call never disturbs your global RNG stream**.
 
 With `seed = NULL` the permutations come from the ambient RNG and results vary
 between runs. Because the p-value depends on a random group, reporting a seed
-alongside a p-value is good practice; `n_reps > 1` with the median aggregation
-reduces the dependence on any one draw.
+alongside a p-value is good practice. `n_reps > 1` reduces the dependence on
+any one draw: the median aggregation (Remark 1) is not covered by Theorem 1,
+while `aggregate = "median2"` is.
 
 ## Performance and parallelism
 
@@ -935,7 +967,8 @@ search reuses cached factorizations and adds only a few percent.
 - **`mwperm` tests coefficients; it does not estimate them.** Point estimates
   are OLS. There is no IPT estimator or IPT standard error.
 - The p-value depends on a random permutation group, so different seeds give
-  slightly different values. Use `n_reps > 1` and report your seed.
+  slightly different values. Report your seed; `n_reps > 1` steadies the
+  value (with `aggregate = "median2"` if the guarantee must hold as stated).
 
 ## Data
 

@@ -136,13 +136,14 @@ stopifnot(identical(apply_op(g, M), M[g, , drop = FALSE]),
 
 ## ---- 4. size under heteroskedasticity ---------------------------------------
 ## Guards the reason the test exists: on the heteroskedastic gravity DGP (the
-## author's simulate_gravity_model(), error sd increasing in the gravity mean
-## and in the distance covariate) the sign-flip test must reject a true null
-## at or below the nominal rate, heteroskedastic or not. Small and seeded (R
-## CMD check runs this), so it asserts validity of the NEW test only, with
-## Monte-Carlo slack; the permutation test's over-rejection on the same DGP
-## -- 0.06-0.09 against the sign-flip test's 0.02 at n = 25 and 300
-## replications, rising with the strength of the heteroskedasticity -- is a
+## author's simulate_gravity_model(), symmetric N(0, 1) errors whose sd
+## increases in the gravity mean and in the distance covariate, so Assumption
+## 2 holds) the sign-flip test must reject a true null at or below the
+## nominal rate, heteroskedastic or not. Small and seeded (R CMD check runs
+## this), so it asserts validity of the NEW test only, with Monte-Carlo
+## slack; the permutation test's over-rejection on the same DGP -- 0.076
+## against the sign-flip test's 0.016 at n = 25 and 500 simulations, rising
+## with the strength of the heteroskedasticity -- is a
 ## comparison between two different p-value grids that 40 draws at a small n
 ## cannot resolve, and is recorded in the design note instead.
 n_mc <- 20L
@@ -232,13 +233,13 @@ f01 <- with(trade_dyadic,
                               conf_int = FALSE))
 stopifnot(identical(fm2$n_flip, 7L), identical(fm2$n_perm, 64L),
           identical(f01$n_flip, 8L), identical(f01$n_perm, 128L))
-## at the default (n_flip = 6, n_reps = 10) the confidence set takes the
-## exact path: 2 x 31^2 x 10 = 19,220 candidates, under the 2e5 budget
+## at the default (n_flip = 6, n_reps = 1) the confidence set takes the
+## exact path: 2 x 31^2 = 1,922 candidates, under the 2e5 budget
 fdef <- with(trade_dyadic,
              mwperm_dyadic_het(y = log_trade, d = log_dist,
                                x = cbind(log_gdp_i, log_gdp_j),
                                row = importer, col = exporter, seed = 1))
-stopifnot(identical(fdef$n_flip, 6L), identical(fdef$n_reps, 10L),
+stopifnot(identical(fdef$n_flip, 6L), identical(fdef$n_reps, 1L),
           identical(fdef$ci_method, "exact"), length(fdef$conf_int) == 2L)
 ## the default is capped by the smaller dimension, and the cap is enforced
 g5 <- expand.grid(i = 1:5, j = 1:9)
@@ -394,10 +395,13 @@ expect_warn(mwperm(y = "log_trade", d = "log_dist", x = c("log_gdp_i", "log_gdp_
 ## Guards the numerics of every existing path through the shared engine: the
 ## seeded dyadic anchor (also pinned by test-dyadic.R and the golden
 ## baseline) and the permutation vocabulary of the resolution note.
+## (n_reps = 10: the anchor below is the 0.4.2 default's, kept so this check
+## still compares against the numbers it was written for)
 fit_dy <- with(trade_dyadic,
                mwperm_dyadic(y = log_trade, d = log_dist,
                              x = cbind(log_gdp_i, log_gdp_j),
-                             row = importer, col = exporter, seed = 1))
+                             row = importer, col = exporter, n_reps = 10,
+                             seed = 1))
 stopifnot(identical(fit_dy$pvalue, 0.025),
           abs(fit_dy$estimate - (-0.898503)) < 1e-6,
           abs(fit_dy$conf_int[1] - (-1.251351)) < 1e-5,

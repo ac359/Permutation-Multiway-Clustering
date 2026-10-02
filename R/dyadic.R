@@ -42,7 +42,7 @@
 #'
 #' **Aggregation over repetitions, and what "exact" covers.** Theorem 1
 #' establishes finite-sample validity for a single random permutation group,
-#' so with `n_reps = 1` the p-value is exact as stated.
+#' so at the default `n_reps = 1` the p-value is exact as stated.
 #'
 #' With `n_reps > 1` the reported p-value is the median of the per-repetition
 #' p-values, following Guo, Toulis and Wang (2026, Remark 1), and the
@@ -129,14 +129,16 @@
 #'   returned in the `conf_set` field with their hull in `conf_int`; for
 #'   several covariates, a joint (grid-based) confidence region. See
 #'   [confint.mwperm()].
-#' @param n_reps Number of independent runs whose p-values are aggregated by
-#'   `aggregate` (the median by default), as recommended for randomised tests;
-#'   the confidence set inverts the same aggregated p-value. Defaults to 10: a
-#'   single run's p-value depends on the random relabelling (a seed lottery),
-#'   and the median of 10 runs stabilises it at roughly ten times the cost --
-#'   fractions of a second on typical designs. Set `n_reps = 1` to reproduce
-#'   the single-run behaviour of versions before 0.2.0. See *Aggregation over
-#'   repetitions* in Details.
+#' @param n_reps Number of independent runs of the test, each with its own
+#'   random relabelling. Defaults to 1, the procedure Theorem 1 covers: the
+#'   p-value is exact at any sample size. A single run's p-value depends on
+#'   the random relabelling (a seed lottery), so pass a `seed` to make it
+#'   reproducible. With `n_reps > 1` the runs' p-values are combined by
+#'   `aggregate` (the median by default, Remark 1) and the confidence set
+#'   inverts the same combined p-value; that steadies the result at roughly
+#'   `n_reps` times the cost, but it is not covered by Theorem 1 -- see
+#'   *Aggregation over repetitions* in Details. The default was 10 from 0.2.0
+#'   to 0.4.2; pass `n_reps = 10` to reproduce results from those versions.
 #' @param seed Optional integer; if supplied, run `r` uses seed `seed + r - 1`
 #'   for reproducibility.
 #' @param grid Optional candidate beta values for the confidence set. For a
@@ -157,22 +159,24 @@
 #'   or `seed = NULL` expect little or no gain.
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
-#'   the reported p-value, and into the confidence set that inverts it.
-#'   `"median"` (the default) is the median, as recommended in Remark 1 of
-#'   Guo, Toulis and Wang (2026); `"median2"` is `min(1, 2 * median)`.
+#'   the reported p-value, and into the confidence set that inverts it, when
+#'   `n_reps > 1`. `"median"` (the default) is the median, as recommended in
+#'   Remark 1 of Guo, Toulis and Wang (2026); `"median2"` is
+#'   `min(1, 2 * median)`.
 #'
 #' The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#' validity for a single random permutation group, so at `n_reps = 1` the
-#' p-value is exact as stated. The median of several dependent randomised
-#' p-values is a de-randomisation heuristic: endorsed by Remark 1 and well
-#' behaved in practice, but not itself guaranteed valid at level `alpha`.
-#' Twice the median is guaranteed, under arbitrary dependence across
-#' repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#' validity for a single random permutation group, so at the default
+#' `n_reps = 1` the p-value is exact as stated (there `"median"` returns the
+#' one p-value, and `"median2"` doubles it, which only costs resolution). The
+#' median of several dependent randomised p-values is a de-randomisation
+#' heuristic: endorsed by Remark 1 and well behaved in practice, but not
+#' itself guaranteed valid at level `alpha`. Twice the median is guaranteed,
+#' under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
+#' Wang 2020).
 #'
-#' So use `"median2"` when the guarantee must hold as stated with `n_reps >
-#' 1`. It is conservative: it never rejects where `"median"` would not, and
-#' its confidence set is never narrower. The default is unchanged, so existing
-#' numbers stand.
+#' So with `n_reps > 1`, use `"median2"` when the guarantee must hold as
+#' stated. It is conservative: it never rejects where `"median"` would not,
+#' and its confidence set is never narrower.
 #'
 #' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
 #' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
@@ -210,7 +214,7 @@
 #' @export
 mwperm_dyadic <- function(y, d, x = NULL, row, col, K = NULL,
                           alpha = 0.05, beta_null = 0, conf_int = TRUE,
-                          n_reps = 10L, seed = NULL, grid = NULL,
+                          n_reps = 1L, seed = NULL, grid = NULL,
                           aggregate = c("median", "median2"),
                           n_cores = 1L) {
   cl <- match.call()                   # stored on the result for printing

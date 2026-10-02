@@ -14,7 +14,7 @@ mwperm_dyadic_het(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+    n_reps = 1L,
   seed = NULL,
   grid = NULL,
   aggregate = c("median", "median2"),
@@ -46,7 +46,11 @@ whose p-value floor \code{1 / 2^(n_flip - 1)} (doubled under
 the row assignment alone); 6-8 are the useful range, and the cost doubles
 with each extra group. Values above 20 are refused, with the number of
 projections they would imply. Must satisfy
-\code{2 <= n_flip <= min(n_row, n_col)}.}
+\code{2 <= n_flip <= min(n_row, n_col)}. The default depends only on
+\code{alpha}, \code{aggregate} and the array's dimensions, never on the
+data. If you set \code{n_flip} yourself, fix it before looking at the
+results: trying several values and reporting the smallest p-value
+invalidates the test.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -63,12 +67,13 @@ returned in the \code{conf_set} field with their hull in \code{conf_int};
 for several covariates, a joint (grid-based) confidence region. See
 \code{\link{confint.mwperm}}.}
 
-\item{n_reps}{Number of independent runs whose p-values are aggregated by
-\code{aggregate} (the median by default), as recommended for randomised
-tests; the confidence set inverts the same aggregated p-value.
-Defaults to 10: a single run's p-value depends on the random assignment
-of clusters to flip groups (a seed lottery), and the median of 10 runs
-stabilises it at roughly ten times the cost. See \emph{Aggregation over
+\item{n_reps}{Number of independent runs of the test, each with its own
+random assignment of clusters to flip groups. Defaults to 1, the
+procedure Theorem 1 covers; a single run's p-value depends on that
+assignment (a seed lottery), so pass a \code{seed} to make it reproducible.
+With \code{n_reps > 1} the runs' p-values are combined by \code{aggregate} (the
+median by default) and the confidence set inverts the combined value.
+The default was 10 from 0.4.0 to 0.4.2. See \emph{Aggregation over
 repetitions} in \code{\link{mwperm_dyadic}}.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
@@ -171,20 +176,22 @@ covariates, as a model that satisfies the assumption; the assumption itself
 is weaker. The paper's own simulation for this test draws errors independent
 across cells, \code{eps_ij = sigma_ij eta_ij} with
 \code{eta_ij ~ N(0, 1)} and \code{sigma_ij} increasing in the gravity mean
-and in distance; that is the setting the test is meant for. On that design
-(25 clusters per side, \code{n_flip = 6}, one repetition) this function
-rejected a true null in 1.0\% of 1000 simulations.
+and in distance; that is the setting the test is meant for. On the paper's
+own 1000 simulated datasets (25 clusters per side, \code{n_flip = 6}) this
+function rejected a true null in 1.7\% of them at the default single run
+and 0.7\% with ten; the paper reports 1.1\% for its own single draw.
 
-Under covariate-dependent heteroskedasticity (25 clusters per side, a
-gravity design with the residual variance increasing in the mean and in the
-distance covariate) the permutation test's rejection rate under a true null
-rose with the strength of the heteroskedasticity -- to about 0.06-0.09 at
-a nominal 0.05 in this package's own 300-replication check -- while this
-test stayed at 0.02 or below. That gap is the reason the function exists.
-It is \strong{not a strict upgrade}: under homoskedastic, exchangeable
-errors the sign-flip test is less powerful (about 0.86 against 0.96 at
-beta = 0.15 in the same design), because its group is smaller and coarser
-than a full relabelling group. Use it when the
+Under covariate-dependent heteroskedasticity (the paper's gravity design:
+25 clusters per side, symmetric errors independent across cells, their
+variance increasing in the mean and in the distance covariate) the
+permutation test's rejection rate under a true null rose with the strength
+of the heteroskedasticity -- to 0.076 at a nominal 0.05 in this package's
+own check, 500 simulations per setting -- while this test stayed at 0.016
+or below. That gap is the reason the function exists. It is
+\strong{not a strict upgrade}: under homoskedastic, exchangeable errors the
+sign-flip test is less powerful (0.85 against 0.98 at beta = 0.15 in the
+same design), because its group is smaller and coarser than a full
+relabelling group. Use it when the
 errors are plausibly independent across cells with a variance that depends
 on the covariates; use \code{\link{mwperm_dyadic}} when additive cluster
 effects are the concern. Heteroskedasticity leaves no trace in the
@@ -197,7 +204,8 @@ What is needed is the analogue of Assumption 4: which cells are observed
 must be independent of the errors given X and D. Dropping zero trade flows
 because log(0) is undefined violates it, since whether a flow is zero
 depends on its error. Running on an incomplete array is this package's
-extension; the paper states Assumption 2 for a complete array. The only
+extension, which the method's authors have agreed to; the paper states
+Assumption 2 for a complete array. The only
 thing an incomplete array changes in the computation is the guard on the
 flip-group assignment, which must keep the group's kernel at \code{{s, -s}} on the
 observed cells -- see the \code{cells} argument of
@@ -226,18 +234,19 @@ floor \code{1 / 2^(n_flip - 1)} (doubled under
 \code{aggregate = "median2"}) is at most \code{alpha}: 6 at
 \code{alpha = 0.05} (order 32, floor 0.031, 31 projections), 7 under
 \code{"median2"}, 8 at \code{alpha = 0.01}. 6-8 are the useful range, and
-the cost doubles with each extra group. At the default with
-\code{n_reps = 10} the confidence set is the exact one
-(\code{2 * 31^2 * 10} candidates, under the engine's budget); at
+the cost doubles with each extra group. The confidence set is the exact
+one at the default single run (\code{2 * 31^2} candidates) and still with
+\code{n_reps = 10} (\code{2 * 31^2 * 10}, under the engine's budget); at
 \code{n_flip = 8} with \code{n_reps = 10} it exceeds the budget and the
 interval is found by bracketing and bisection instead (the fit says so in a
-note; the end points agree to the bisection tolerance). The default buys
-resolution, not power: at 25 x 25 with independent heteroskedastic
-symmetric errors and \code{n_reps = 10}, power at beta = 0.10 was 0.27,
-0.34 and 0.37 for \code{n_flip} = 6, 7 and 8 (300 simulations each), at 1,
-2 and 4 times the projections. Under the model
-\code{eps_ij = h(X_ij) u_i v_j} the size was 0.014 at \code{n_reps = 1}
-and 0.002 at the default -- conservative, not over-rejecting.
+note; each end point is rounded outward, by less than the bisection
+tolerance). The default buys resolution, not power: at 25 x 25 with
+independent heteroskedastic symmetric errors and \code{n_reps = 10}, power
+at beta = 0.10 was 0.27, 0.34 and 0.37 for \code{n_flip} = 6, 7 and 8 (300
+simulations each), at 1, 2 and 4 times the projections. Under the model
+\code{eps_ij = h(X_ij) u_i v_j} the size was 0.014 at the default
+\code{n_reps = 1} and 0.002 with \code{n_reps = 10} -- conservative, not
+over-rejecting.
 
 The aggregation over \code{n_reps} repetitions, the exact confidence set
 and its closure convention, the \code{aggregate = "median2"} guarantee and

@@ -16,7 +16,7 @@ mwperm_layout(
   alpha = 0.05,
   beta_null = 0,
   conf_int = TRUE,
-  n_reps = 10L,
+    n_reps = 1L,
   seed = NULL,
   grid = NULL,
   aggregate = c("median", "median2"),
@@ -84,13 +84,16 @@ has several columns).}
 inversion: an interval for a single covariate, or a joint (grid-based)
 confidence region for several.}
 
-\item{n_reps}{Number of independent runs whose p-values (and CI end points)
-are aggregated by the median, as recommended for randomised tests.
-Defaults to 10: a single run's p-value depends on the random relabelling
-(a seed lottery), and the median of 10 runs stabilises it at roughly ten
-times the cost -- fractions of a second on typical designs. Set
-\code{n_reps = 1} to reproduce the single-run behaviour of versions
-before 0.2.0. See \emph{Aggregation over repetitions} in Details.}
+\item{n_reps}{Number of independent runs of the test, each with its own
+random relabelling. Defaults to 1, the procedure Theorem 1 covers: the
+p-value is exact at any sample size. A single run's p-value depends on
+the random relabelling (a seed lottery), so pass a \code{seed} to make it
+reproducible. With \code{n_reps > 1} the runs' p-values are combined by
+\code{aggregate} (the median by default, Remark 1) and the confidence set
+inverts the same combined p-value; that steadies the result at roughly
+\code{n_reps} times the cost, but it is not covered by Theorem 1 -- see
+\emph{Aggregation over repetitions} in Details. The default was 10 from 0.2.0
+to 0.4.2; pass \code{n_reps = 10} to reproduce results from those versions.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -158,16 +161,19 @@ applied only within cells, over the replication index l, drawn
 condition that errors are exchangeable with respect to l within each
 cell (condition InvA restricted to l), e.g.
 eps_ijl = eta_ij + u_ijl with arbitrary cell effects
-eta_ij and u_ijl i.i.d. within each cell. Note that a
-replicate effect zeta_l \emph{shared across cells} (the same draw
-entering every cell's l-th replicate) is not covered by the
-within-cell invariance argument, because the independent per-cell
-permutations change the cross-cell alignment of zeta; simulations
-found no measurable size effect from such a component, but validity is
-only guaranteed when the within-cell exchangeability holds cell by cell.
-The test is appropriate when l indexes independent replications
-(two-way layouts in randomised experiments). See Guo, Toulis and Wang
-(2026), Section 6.3.
+eta_ij and u_ijl i.i.d. within each cell. A replicate effect zeta_l \emph{shared across cells} (the same draw
+entering every cell's l-th replicate) is \strong{not} covered: the independent
+per-cell permutations change the cross-cell alignment of zeta, and with a
+\code{d} that follows the same pattern over l in every cell the test rejected a
+true null 63-74\% of the time at alpha = 0.05 (10 x 10 cells of 22, 1000
+simulations each; about 5\% when \code{d} had no such pattern). The test is
+appropriate when l indexes independent replications (two-way layouts in
+randomised experiments). If l is a period or a survey wave, treat it as
+time: \code{\link{mwperm_panel}}, or \code{\link{mwperm_panel_missing}} with \verb{time =} and
+\verb{L0 =}, hold it fixed. A warning is issued when \code{rep} looks like time: a
+time word as its name (year, period, wave, ...), dates, calendar years, or
+evenly spaced values that the cells share but start from different points.
+See Guo, Toulis and Wang (2026), Section 6.3.
 }
 \details{
 Note: the covariate of interest must vary within cells. If d_ijl is

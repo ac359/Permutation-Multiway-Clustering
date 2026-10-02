@@ -307,9 +307,10 @@ summary.mwperm <- function(object, ...) {
 #' test itself *rejects*, while every point strictly inside the interval is
 #' accepted. The convention errs outward -- the interval is conservative and
 #' never omits an accepted value -- and it is the reason a value exactly equal
-#' to an end point should not be read as "just inside". (The `"grid"` and
-#' `"bisection"` paths report attained accepted points instead, to their own
-#' accuracy.)
+#' to an end point should not be read as "just inside". (The `"grid"` path
+#' reports attained accepted points instead, to the grid spacing; the
+#' `"bisection"` path rounds each end point outward, by less than its
+#' tolerance, so its interval also contains the exact set.)
 #'
 #' @param object An object of class `"mwperm"`.
 #' @param parm Optional subset of coefficients: names (matching the rows of

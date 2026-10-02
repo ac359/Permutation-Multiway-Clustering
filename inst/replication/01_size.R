@@ -11,6 +11,10 @@
 ##   MC_N=10000 Rscript 01_size.R      # tighter Monte-Carlo error
 ## Output: out/01_size.txt (+ out/01_size_summary.rds); cache under ./cache
 ## (redirect with MWPERM_REPL_CACHE). Runtime ~1-2 min at the default N.
+##
+## n_reps = 10 throughout: the package default from 0.2.0 to 0.4.2, at which
+## expected/ was produced. Since 0.4.3 the default is one run, so it is
+## passed explicitly.
 
 source("mc_lib.R")
 suppressMessages(library(mwperm))
@@ -36,7 +40,7 @@ for (cc in dy_cells) {
   sim <- function(s, dgp_seed, fit_seed) {
     dat <- dgp_dyadic71(40L, cc$cov, phi2_err = cc$phi2, beta = 0)
     fit <- mwperm_dyadic(dat$y, dat$d, dat$x, dat$row, dat$col,
-                         conf_int = FALSE, seed = fit_seed)
+                         conf_int = FALSE, n_reps = 10, seed = fit_seed)
     c(p_ipt = fit$pvalue, K = fit$K,
       p_ols = naive_ols_p(dat$y, cbind(1, dat$x), dat$d))
   }
@@ -66,7 +70,7 @@ cat("\n---- panel (InvB) and three-way (InvA), IPT ----\n")
 sim_pan <- function(s, dgp_seed, fit_seed) {
   dat <- dgp_panel(20L, 6L, beta = 0, trend = TRUE)
   fit <- mwperm_panel(dat$y, dat$d, dat$x, dat$row, dat$col, dat$time,
-                      conf_int = FALSE, seed = fit_seed)
+                      conf_int = FALSE, n_reps = 10, seed = fit_seed)
   c(p = fit$pvalue, K = fit$K)
 }
 mp <- mc_cell("size_panel_n20T6_v1", N, sim_pan,
@@ -86,7 +90,7 @@ rows[[length(rows) + 1L]] <- data.frame(
 sim_tw <- function(s, dgp_seed, fit_seed) {
   dat <- dgp_threeway(20L, 20L, beta = 0)
   fit <- mwperm_threeway(dat$y, dat$d, dat$x, dat$id1, dat$id2, dat$id3,
-                         conf_int = FALSE, seed = fit_seed)
+                         conf_int = FALSE, n_reps = 10, seed = fit_seed)
   c(p = fit$pvalue, K = fit$K)
 }
 mt <- mc_cell("size_threeway_n20T20_v1", N, sim_tw,

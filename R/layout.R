@@ -13,7 +13,9 @@
 ##   with a zeta_l SHARED across cells as a covered case. With independent
 ##   per-cell draws, as step (i) prescribes and this file does, that law is
 ##   not invariant (the cells are permuted differently); the roxygen below
-##   says so (discrepancy D7 in TESTING_PLAN.md).
+##   says so (discrepancy D7 in TESTING_PLAN.md). The authors (2026-09-30)
+##   keep step (i) and validate on eta_ij + u_ijl only; a rep that looks
+##   like time draws a warning (.rep_timelike(), unified.R).
 ## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation
 ##   construction -> projection engine -> median aggregation -> test
 ##   inversion -> S3 methods.
@@ -30,15 +32,19 @@
 #' valid under the relaxed condition that errors are exchangeable with respect
 #' to l within each cell (condition InvA restricted to l), e.g. eps_ijl =
 #' eta_ij + u_ijl with arbitrary cell effects eta_ij and u_ijl i.i.d. within
-#' each cell. Note that a replicate effect zeta_l *shared across cells* (the
-#' same draw entering every cell's l-th replicate) is not covered by the
-#' within-cell invariance argument, because the independent per-cell
-#' permutations change the cross-cell alignment of zeta; simulations found no
-#' measurable size effect from such a component, but validity is only
-#' guaranteed when the within-cell exchangeability holds cell by cell. The
-#' test is appropriate when l indexes independent replications (two-way
-#' layouts in randomised experiments). See Guo, Toulis and Wang (2026),
-#' Section 6.3.
+#' each cell. A replicate effect zeta_l *shared across cells* (the same draw
+#' entering every cell's l-th replicate) is **not** covered: the independent
+#' per-cell permutations change the cross-cell alignment of zeta, and with a
+#' `d` that follows the same pattern over l in every cell the test rejected a
+#' true null 63-74% of the time at alpha = 0.05 (10 x 10 cells of 22, 1000
+#' simulations each; about 5% when `d` had no such pattern). The test is
+#' appropriate when l indexes independent replications (two-way layouts in
+#' randomised experiments). If l is a period or a survey wave, treat it as
+#' time: [mwperm_panel()], or [mwperm_panel_missing()] with `time =` and
+#' `L0 =`, hold it fixed. A warning is issued when `rep` looks like time: a
+#' time word as its name (year, period, wave, ...), dates, calendar years, or
+#' evenly spaced values that the cells share but start from different points.
+#' See Guo, Toulis and Wang (2026), Section 6.3.
 #'
 #' Note: the covariate of interest must vary within cells. If d_ijl is
 #' constant within every (i, j) cell (a cell-level covariate), within-cell
@@ -146,7 +152,7 @@
 mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                           K = NULL, alpha = 0.05, beta_null = 0,
                           conf_int = TRUE,
-                          n_reps = 10L, seed = NULL, grid = NULL,
+                          n_reps = 1L, seed = NULL, grid = NULL,
                           aggregate = c("median", "median2"),
                           n_cores = 1L) {
   cl <- match.call()
@@ -161,12 +167,37 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   if (!is.null(rep) && anyNA(rep))
     stop(paste0("`rep` contains missing values (NA); the replication ",
                 "identifier must be complete."), call. = FALSE)
+  ## mwperm() forwards the column name as an attribute (through do.call()
+  ## the expression is gone); a direct call reads it off the expression.
+  rep_label <- NULL
+  if (!is.null(rep)) {
+    rep_label <- attr(rep, "mwperm_label") %||% .arg_label(substitute(rep))
+    attr(rep, "mwperm_label") <- NULL
+  }
 
   cell <- .dense_id(interaction(.dense_id(row, "row"), .dense_id(col, "col"),
                                 drop = TRUE))  # dense (row,col) cell id
   ncell <- max(cell)                   # number of occupied cells
   ell <- tabulate(cell,
                   nbins = ncell) # replicate count per cell (the cell sizes)
+
+  ## Section 6.3 permutes the within-cell index, which is valid only for
+  ## exchangeable replicates. A period index cannot be permuted: a period
+  ## effect shared across cells then over-rejects, badly when `d` follows the
+  ## periods (0.63-0.74 at .05 in a 10 x 10 x 22 simulation). Checked on the
+  ## full data, before any L0 trim; a warning, since the data cannot prove
+  ## what the index is.
+  why_time <- if (!is.null(rep)) .rep_timelike(rep, rep_label, cell)
+  if (!is.null(why_time))
+    warning(sprintf(paste0(
+      "`rep` looks like time (%s). mwperm_layout() permutes the observations ",
+      "within each cell, which is valid only if they are exchangeable ",
+      "replicates. A time index cannot be permuted: a period effect shared ",
+      "across cells makes the test over-reject, badly when `d` also changes ",
+      "over the periods. For periods use mwperm_panel(time = ) on a complete ",
+      "panel, or mwperm_panel_missing(time = , L0 = ) otherwise; both hold ",
+      "the period fixed. If the observations are exchangeable replicates, ",
+      "ignore this warning."), why_time), call. = FALSE)
 
   ## Optional balancing: keep dense cells, downsample each to exactly L0. The
   ## threshold is Section 6.4's; the test applied afterwards is Section 6.3's.

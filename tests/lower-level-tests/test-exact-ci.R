@@ -75,7 +75,10 @@ for (nr in c(1L, 3L)) {
 
 ## ---- 2. the bisection fallback finds the same set -------------------------
 ## Forcing the fallback (budget 0) must reproduce the exact end points to within
-## the bisection tolerance -- the two routes compute the same object.
+## the bisection tolerance -- the two routes compute the same object. Since
+## 0.4.3 each end point is the REJECTED side of its final bracket: rounded
+## outward, so the interval contains the exact one and each end point is a
+## value the test rejects (the authors' decision of 2026-09-30).
 fit_e <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
                        alpha = alpha, n_reps = 2L, seed = 7)
 old_opt <- options(mwperm.ci_exact_budget = 0)
@@ -84,7 +87,16 @@ fit_b <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j,
 options(old_opt)
 stopifnot(identical(fit_b$ci_method, "bisection"),
           any(grepl("bracketing and bisection", fit_b$note)),
-          isTRUE(all.equal(fit_e$conf_int, fit_b$conf_int, tolerance = 1e-3)))
+          any(grepl("rounded outward", fit_b$note)),
+          isTRUE(all.equal(fit_e$conf_int, fit_b$conf_int, tolerance = 1e-3)),
+          fit_b$conf_int[1L] <= fit_e$conf_int[1L],
+          fit_b$conf_int[2L] >= fit_e$conf_int[2L],
+          max(abs(fit_b$conf_int - fit_e$conf_int)) < fit_e$se_naive * 1e-3)
+for (b in fit_b$conf_int) {
+  f <- mwperm_dyadic(y, d, x = x1, row = g$i, col = g$j, beta_null = b,
+                     alpha = alpha, conf_int = FALSE, n_reps = 2L, seed = 7)
+  stopifnot(f$pvalue <= alpha)
+}
 
 ## ---- 3. the explicit-grid route agrees to the grid spacing ----------------
 gr <- seq(fit_e$conf_int[1L] - 0.5, fit_e$conf_int[2L] + 0.5, by = 0.002)

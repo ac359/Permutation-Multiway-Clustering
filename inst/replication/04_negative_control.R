@@ -13,6 +13,10 @@
 ## Usage:  Rscript 04_negative_control.R   # 1000 sims/cell (default)
 ## Output: out/04_negative_control.txt (+ _summary.rds); cache under ./cache.
 ## Runtime ~1 min at the default N.
+##
+## n_reps = 10 throughout: the package default from 0.2.0 to 0.4.2, at which
+## expected/ was produced. Since 0.4.3 the default is one run, so it is
+## passed explicitly.
 
 source("mc_lib.R")
 suppressMessages(library(mwperm))
@@ -28,9 +32,9 @@ cat(sprintf("rejection measured at alpha = %.2g\n\n", ALPHA))
 sim <- function(s, dgp_seed, fit_seed) {
   dat <- dgp_panel(25L, 6L, beta = 0, trend = TRUE)
   ft <- mwperm_threeway(dat$y, dat$d, dat$x, dat$row, dat$col, dat$time,
-                        conf_int = FALSE, seed = fit_seed)
+                        conf_int = FALSE, n_reps = 10, seed = fit_seed)
   fp <- mwperm_panel(dat$y, dat$d, dat$x, dat$row, dat$col, dat$time,
-                     conf_int = FALSE, seed = fit_seed)
+                     conf_int = FALSE, n_reps = 10, seed = fit_seed)
   c(p_threeway = ft$pvalue, p_panel = fp$pvalue)
 }
 m <- mc_cell("negctrl_trendpanel_n25T6_v1", N, sim,

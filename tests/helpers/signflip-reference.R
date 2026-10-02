@@ -119,9 +119,13 @@ rpt_signflip_ref <- function(Y, X, D, group1, group2, n_flip,
 ## in long format (one row per (i, j), i varying fastest -- the same order as
 ## the column-major flattening above). rho1 scales the error sd with the
 ## standardised gravity mean, rho2 with the standardised distance covariate;
-## rho1 = rho2 = 0 is homoskedastic. The errors are centred lognormal
-## (asymmetric), exactly as in the original; see the design note for why
-## that matters for what the size check can and cannot show.
+## rho1 = rho2 = 0 is homoskedastic. The errors are sigma_ij * N(0, 1):
+## independent across cells and symmetric, so Assumption 2 (double sign
+## symmetry) holds and the size check below tests validity. This follows the
+## author's correction of the script: the version first sent drew centred
+## lognormal (asymmetric) errors, under which Assumption 2 fails. The draws
+## are made in the original's order, so a given seed reproduces the author's
+## corrected simulate_gravity_model() data.
 sim_gravity_het <- function(n, b, rho1, rho2, phi1 = 0.4, phi2 = 0.4) {
   m <- n
   log_gdp <- rnorm(n, mean = log(500), sd = 1.2)
@@ -138,8 +142,7 @@ sim_gravity_het <- function(n, b, rho1, rho2, phi1 = 0.4, phi2 = 0.4) {
   D <- log_dist
   mu <- 4 + 0.8 * X[, 2L] + 0.8 * X[, 3L] + b * D
   sigma <- 0.35 * exp(rho1 * as.numeric(scale(mu)) + rho2 * as.numeric(scale(D)))
-  u <- rlnorm(m * n, meanlog = 0, sdlog = 1)
-  eta <- (u - exp(0.5)) / sqrt((exp(1) - 1) * exp(1))   # centred, unit sd
+  eta <- rnorm(m * n)                  # symmetric (the author's corrected line)
   y <- mu + sigma * eta
   list(y = y, d = D, x = X[, 2:3], i = g$i, j = g$j, m = m, n = n)
 }
