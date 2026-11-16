@@ -1131,8 +1131,9 @@ print.mwperm_design <- function(x, ...) {
 #'   `min(1, 2 * median)`.
 #'
 #' The choice decides what "exact" covers. Theorem 1 gives finite-sample
-#' validity for a single random permutation group, so at the default
-#' `n_reps = 1` the p-value is exact as stated (there `"median"` returns the
+#' validity for a single random permutation group, so with `n_reps = 1` --
+#' the default for every design except `"irregular"` -- the p-value is exact
+#' as stated (there `"median"` returns the
 #' one p-value, and `"median2"` doubles it, which only costs resolution). The
 #' median of several dependent randomised p-values is a de-randomisation
 #' heuristic: endorsed by Remark 1 and well behaved in practice, but not

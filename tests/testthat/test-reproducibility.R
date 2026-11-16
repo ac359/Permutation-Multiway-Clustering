@@ -91,3 +91,17 @@ test_that("an unseeded fit draws from, and so advances, the global stream", {
   b <- fitters$dyadic(n_reps = 2, conf_int = FALSE)
   expect_identical(a$pvalues_rep, b$pvalues_rep)
 })
+
+test_that("a serial fit never looks up the core count", {
+  ## .n_cores_max() calls parallel::detectCores(), which shells out on macOS;
+  ## it used to run 2 + n_reps times per fit even at n_cores = 1, where the
+  ## count is not needed. Any call now fails the fit.
+  local_mocked_bindings(
+    .n_cores_max = function() stop("the core count was looked up"),
+    .package = "mwperm")
+  for (nm in c("dyadic", "panel", "sign_flip"))
+    expect_no_error(fitters[[nm]](n_reps = 3, seed = 17))
+  expect_identical(mwperm:::.plapply(as.list(1:3), function(i) i * 2,
+                                     n_cores = 1L),
+                   lapply(as.list(1:3), function(i) i * 2))
+})

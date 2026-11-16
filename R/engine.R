@@ -26,7 +26,7 @@
 ## Deviation from the printed text. The paper's set is {b : pval(b) > alpha};
 ##   the exact route reports each connected component CLOSED, so an end
 ##   point can be a rejected jump while every interior point is accepted
-##   (outward, i.e. conservative; discrepancy D10 in TESTING_PLAN.md).
+##   (outward, i.e. conservative).
 ## Pipeline. mwperm() -> dispatch -> design worker -> permutation
 ##   construction -> [projection engine] -> [median aggregation] -> [test
 ##   inversion] -> S3 methods. Called by every mwperm_* front end.
@@ -59,8 +59,12 @@
   n_cores <- suppressWarnings(as.integer(n_cores))
   if (length(n_cores) != 1L || is.na(n_cores))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
+  ## Serial requests return before the core count is looked up:
+  ## parallel::detectCores() shells out on macOS (several ms a call), and this
+  ## function runs once per repetition.
+  if (is.null(cl) && (n_cores <= 1L || length(X) < 2L)) return(lapply(X, FUN))
   n_cores <- max(1L, min(n_cores, .n_cores_max()))
-  if (is.null(cl) && (n_cores == 1L || length(X) < 2L)) return(lapply(X, FUN))
+  if (is.null(cl) && n_cores == 1L) return(lapply(X, FUN))
   wrap <- function(x) {                # run in the worker
     if (requireNamespace("RhpcBLASctl", quietly = TRUE))
       try(RhpcBLASctl::blas_set_num_threads(1L), silent = TRUE)
@@ -128,7 +132,27 @@
     sigma2 <- sum(res^2) / dfres       # homoskedastic error-variance estimate
     ## (W'W)^{-1}, or NULL if singular
     XtXi <- tryCatch(solve(crossprod(W)), error = function(e) NULL)
-    if (!is.null(XtXi)) se <- sqrt(sigma2 * diag(XtXi)[idx])
+    if (!is.null(XtXi)) {
+      se <- sqrt(sigma2 * diag(XtXi)[idx])
+    } else {
+      ## solve() refuses a W'W it judges numerically singular, and W'W squares
+      ## the condition number of W: a nuisance column in large units, or on a
+      ## large origin, is enough, although the coefficients of D and their
+      ## standard errors are perfectly well determined. They are then taken
+      ## from the QR of W that lm.fit() already holds, which does not depend
+      ## on the scale of a column -- as summary.lm() does. Without this the
+      ## joint region of a d > 1 fit was searched on a grid of step 1 and came
+      ## back as one or a handful of points, and a d = 1 interval on the
+      ## bisection path took its step and tolerance from sd(y) / sd(D). Only
+      ## this branch is new: wherever solve() succeeds the value above is
+      ## returned exactly as before. A coefficient of D that lm.fit() found
+      ## aliased keeps NA.
+      r <- fit$rank
+      Ri <- chol2inv(qr.R(fit$qr)[seq_len(r), seq_len(r), drop = FALSE])
+      pos <- match(idx, fit$qr$pivot)  # where D's columns sit after pivoting
+      ok <- pos <= r
+      se[ok] <- sqrt(sigma2 * diag(Ri)[pos[ok]])
+    }
   }
   list(estimate = as.numeric(est), se = as.numeric(se))
 }
@@ -242,8 +266,8 @@
         n_cores >= 1 && n_cores == trunc(n_cores)))
     stop("`n_cores` must be a single integer >= 1.", call. = FALSE)
   n_cores <- as.integer(n_cores)
-  nc_max <- .n_cores_max()
-  if (n_cores > nc_max) {
+  ## the core count is only needed to clamp a parallel request
+  if (n_cores > 1L && n_cores > (nc_max <- .n_cores_max())) {
     warning(sprintf(paste0("`n_cores` = %d exceeds the %d available cores ",
                            "(detectCores(), or getOption(\"mc.cores\") if ",
                            "set); using %d."),
@@ -264,6 +288,27 @@
                         "covariates or add data."), N, p), call. = FALSE)
   }
 
+  ## A covariate of interest far from zero in units of its own spread costs
+  ## accuracy: the residualized D is orthogonal to the intercept only to
+  ## rounding, and its cross products with the unresidualized D_k multiply
+  ## that rounding by the origin (log_dist + 1e7 sd moved the interval by
+  ## 0.02 with no warning), and the check below compares the residual with
+  ## the UNcentred sum of squares (from about 1e8 sd it called such a d
+  ## constant). Every front end puts the intercept in X, so subtracting a
+  ## column mean from D changes no statistic in exact arithmetic. Only a
+  ## column whose mean exceeds 1e3 of its standard deviations is centred;
+  ## every other fit keeps its arithmetic bit for bit.
+  ## Centring is exact only because the constant vector is in col(X):
+  ## .make_X() puts the intercept in every front end's X. Check it rather
+  ## than assume it, so a design without one is left alone.
+  has_one <- any(vapply(seq_len(p), function(j) all(X[, j] == 1),
+                        logical(1)))
+  mD <- colMeans(D)
+  sD <- sqrt(colSums(sweep(D, 2L, mD)^2) / max(1L, N - 1L))
+  far <- has_one & sD > 0 & abs(mD) > 1e3 * sD
+  D_given <- D
+  if (any(far)) D[, far] <- sweep(D[, far, drop = FALSE], 2L, mD[far])
+
   ## A `d` with no variation after partialling out X (constant, or collinear
   ## with a nuisance column) leaves beta unidentified: every residualized
   ## statistic is exactly zero in exact arithmetic, so p = 1 by the
@@ -273,7 +318,16 @@
   ## catches the global case; per-permutation degeneracy is handled silently
   ## by the slice floor.
   D_resid0 <- qr.resid(qr(X), D)
-  unidentified <- sum(D_resid0 * D_resid0) <= 1e-16 * sum(D * D)
+  ## A centred column keeps only the resolution of its old origin: what
+  ## varies within a few units in the last place of that origin is the
+  ## rounding of the user's own arithmetic (d = x + 1e9, say), not
+  ## variation, so it still counts as none; the uncentred D is then put
+  ## back, so that every slice is zeroed and p = 1, as the warning says.
+  res_floor <- if (any(far))
+    N * sum((16 * .Machine$double.eps * mD[far])^2) else 0
+  unidentified <- sum(D_resid0 * D_resid0) <=
+    max(1e-16 * sum(D * D), res_floor)
+  if (unidentified && any(far)) D <- D_given
   if (unidentified)
     warning(paste0("`d` has no variation after partialling out `x` (it is ",
                    "constant or collinear with the nuisance covariates): ",
@@ -405,7 +459,10 @@
         voc$order, need_lvl, voc$need, agg_why))
       warned_res <- TRUE
     } else if (d == 1L) {
-      ci <- .invert_ci(prep_list, alpha = 1 - conf_level,
+      ## alpha itself, never 1 - conf_level: that round trip is not exact
+      ## (1 - (1 - 0.1) < 0.1), and a null value with p == alpha, which the
+      ## test rejects, would then be accepted into the set.
+      ci <- .invert_ci(prep_list, alpha = alpha,
                        centre = ref$estimate, scale = ref$se,
                        y = y, D = D, grid = grid, agg = ci_agg)
       conf_set <- attr(ci, "conf_set")
@@ -472,7 +529,7 @@
           "conservative inward by at most that much."), gs))
       ci <- as.numeric(ci)             # drop the internal flag attributes
     } else {
-      reg <- .invert_region(prep_list, alpha = 1 - conf_level,
+      reg <- .invert_region(prep_list, alpha = alpha,   # as above
                             centre = ref$estimate, scale = ref$se,
                             d_names = d_names, grid = grid, agg = ci_agg)
       conf_region <- reg$points
@@ -1158,6 +1215,16 @@
     paste0("Joint confidence region still reaches the grid boundary (it may ",
            "be unbounded); pass an explicit `grid` to widen it.")
   else character(0)
+  ## A region of a handful of grid points is resolved only to the grid
+  ## step: membership is known at the grid points alone, so the set can
+  ## reach up to a step beyond the outermost retained point and the box can
+  ## understate it. Say so; a finer grid traces it. (Before 0.4.4 a badly
+  ## scaled nuisance column collapsed the default grid this way unnoticed.)
+  if (nrow(pts) < 10L)
+    note <- c(note, sprintf(paste0(
+      "Joint confidence region holds only %d point%s of the searched grid, ",
+      "so its extent is known only to the grid step; pass a finer `grid` ",
+      "to trace it."), nrow(pts), if (nrow(pts) == 1L) "" else "s"))
   list(points = pts, box = box, note = note)
 }
 

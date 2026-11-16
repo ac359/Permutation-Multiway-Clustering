@@ -13,7 +13,7 @@
 ##   with a zeta_l SHARED across cells as a covered case. With independent
 ##   per-cell draws, as step (i) prescribes and this file does, that law is
 ##   not invariant (the cells are permuted differently); the roxygen below
-##   says so (discrepancy D7 in TESTING_PLAN.md). The authors (2026-09-30)
+##   says so. The authors (2026-09-30)
 ##   keep step (i) and validate on eta_ij + u_ijl only; a rep that looks
 ##   like time draws a warning (.rep_timelike(), unified.R).
 ## Pipeline. mwperm() -> dispatch -> [design worker] -> permutation

@@ -1,5 +1,5 @@
 ==== 03 Confidence-interval coverage (nominal 95%) ====
-mwperm 0.3.0 | 600 sims/cell | true beta = 0 | default n_reps=10 | 2026-08-26 16:50:35
+mwperm 0.3.0 | 600 sims/cell | true beta = 0 | n_reps=10 | 2026-08-26 16:50:35
 
   dyadic n=40   coverage = 99.3% (CP [98.3, 99.8])   mean width = 1.04
   panel 22xT6   coverage = 99.2% (CP [98.1, 99.7])   mean width = 0.64

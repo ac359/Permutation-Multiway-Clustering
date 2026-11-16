@@ -72,8 +72,8 @@ function enumerates one representative per pair (coordinate 1 fixed to
 \code{n_flip >= 6}.
 
 \strong{Relation to the paper.} This is the sign-flipping set construction
-of the revised paper (its Appendix E, not yet public) with \code{n_flip} as
-its \code{c}, applied to the rows and to the columns with one shared sign
+of the revised paper (Algorithm 1 in Section S1.1 of its Supplementary
+Material, not yet public) with \code{n_flip} as its \code{c}, applied to the rows and to the columns with one shared sign
 vector per element. The paper lists all \code{2^c} sign vectors,
 \code{K = 2^c - 1}, so its \code{K} counts every distinct flip twice: its
 default \code{K = 2^5 - 1 = 31} is \code{n_flip = 5} (16 distinct flips,
@@ -107,8 +107,9 @@ aggregates several draws. The same reproducibility caveats apply (same
 \code{RNGkind()}; see \code{\link{build_perm_set}}).
 
 The sign-flip group under the revised paper's Assumption 2 (double
-sign symmetry), built by its sign-flipping set construction (Appendix
-E) with one representative per coset \verb{\{s, -s\}}.
+sign symmetry, Section 3.3), built by its sign-flipping set construction
+(Section S1.1 of its Supplementary Material) with one representative per
+coset \verb{\{s, -s\}}.
 }
 \examples{
 F <- build_flip_set(n_row = 6, n_col = 5, n_flip = 4, seed = 1)
@@ -122,8 +123,8 @@ outer(F[[3]]$row, F[[3]]$col)
 \references{
 Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference under
   multi-way clustering and missing data. arXiv:2601.08610. Procedure 1
-  under the double sign symmetry assumption (Assumption 2 and Appendix E
-  of the revised paper).
+  under the double sign symmetry assumption (Section 3.3 and Assumption
+  2, and Section S1.1 of the Supplementary Material, of the revised paper).
 }
 \seealso{
 \code{\link{mwperm_dyadic_het}}, the test built on this group;

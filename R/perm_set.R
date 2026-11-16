@@ -10,7 +10,7 @@
 ##   composition, which Theorem 1 needs). Adapted from Algorithm 1 of Wen,
 ##   Wang & Wang (2025, "WWW"); like GTW, it omits WWW's repeat-until loop on
 ##   the trace criterion, which serves power, not validity.
-## Two readings of the printed algorithm, both recorded in TESTING_PLAN.md:
+## Two readings of the printed algorithm:
 ##   * the display's "i mod (K+1)" must be the 1-based residue
 ##     ((i - 1) mod (K + 1)) + 1, or psi~_k is not a permutation (D1);
 ##   * the worked example S_1^k lists the inverse of the displayed map (D2).
@@ -36,9 +36,11 @@
 #'
 #' The randomness in the relabelling is what makes the resulting test a
 #' *random* invariant test: different seeds yield slightly different p-values.
-#' Aggregating several runs (see the `n_reps` argument of the `mwperm_*`
-#' functions) by taking the median p-value is recommended; see
-#' [mwperm_dyadic()] for the exact status of that aggregation.
+#' A single run is exact and is the default; several runs (the `n_reps`
+#' argument of the `mwperm_*` functions) can be combined by the median
+#' p-value or, with a finite-sample guarantee, by twice the median
+#' (`aggregate = "median2"`); see [mwperm_dyadic()] for the exact status
+#' of each.
 #'
 #' **Reproducibility.** A seeded result is reproducible only under the same
 #' RNG configuration: the same `RNGkind()` (generator *and* sample kind -- R's

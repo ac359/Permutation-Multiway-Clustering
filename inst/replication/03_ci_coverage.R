@@ -7,7 +7,7 @@
 ## from 0.2.0 to 0.4.2, at which expected/ was produced; since 0.4.3 the
 ## default is one run, so it is passed explicitly.
 ##
-## Usage:  Rscript 03_ci_coverage.R      # 1000 sims/cell (default)
+## Usage:  Rscript 03_ci_coverage.R      # 600 sims/cell (default)
 ## Output: out/03_ci_coverage.txt (+ _summary.rds); cache under ./cache.
 ## Runtime ~2-4 min at the default N (interval inversion is heavier per fit).
 

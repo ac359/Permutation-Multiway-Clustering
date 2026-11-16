@@ -93,32 +93,31 @@ de-randomisation as the reported p-value; an acceptance region reaching a
 grid edge is reported as unbounded on that side). For several, a list of
 one numeric vector per covariate defining the region search grid.}
 
-\item{aggregate}{
-How the \code{n_reps} per-repetition p-values are combined into the reported p-value, and into the confidence set that inverts it, when
+\item{aggregate}{How the \code{n_reps} per-repetition p-values are combined into
+the reported p-value, and into the confidence set that inverts it, when
 \code{n_reps > 1}. \code{"median"} (the default) is the median, as recommended in
 Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
 \code{min(1, 2 * median)}.
 
-The choice decides what "exact" covers. Theorem 1 gives finite-sample
-validity for a single random permutation group, so at the default
-\code{n_reps = 1} the p-value is exact as stated (there \code{"median"} returns the
-one p-value, and \code{"median2"} doubles it, which only costs resolution). The
-median of several dependent randomised p-values is a de-randomisation
-heuristic: endorsed by Remark 1 and well behaved in practice, but not
-itself guaranteed valid at level \code{alpha}. Twice the median is guaranteed,
-under arbitrary dependence across repetitions (Ruschendorf 1982; Vovk and
-Wang 2020).
+The choice decides what "exact" covers. Under the conditions in Details
+the p-value of each repetition is exact (the argument of Theorem 4), so
+with \code{n_reps = 1} the reported p-value is exact as stated; this
+function's default is \code{n_reps = 500}. The median of several dependent
+randomised p-values is a de-randomisation heuristic: endorsed by Remark 1
+and well behaved in practice, but not itself guaranteed valid at level
+\code{alpha}. Twice the median is guaranteed, under arbitrary dependence
+across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
 
 So with \code{n_reps > 1}, use \code{"median2"} when the guarantee must hold as
 stated. It is conservative: it never rejects where \code{"median"} would not,
 and its confidence set is never narrower.
 
-The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)},
-so its smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)},
-and rejecting at level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at
-\code{alpha = 0.05} that is 40 levels in the smallest permuted dimension,
-twice what \code{"median"} needs. Below that the p-value is still exact but
-cannot reach \code{alpha}, and the fit says so in a note.}
+The cost is resolution. \code{"median2"} reports \code{min(1, 2 * median)}, so its
+smallest attainable p-value is \code{2/(K+1)}, not \code{1/(K+1)}, and rejecting at
+level \code{alpha} needs \code{K + 1 >= 2/alpha} -- at \code{alpha = 0.05} that is 40
+levels in the smallest permuted dimension, twice what \code{"median"} needs.
+Below that the p-value is still valid but cannot reach \code{alpha}, and the
+fit says so in a note.}
 
 \item{n_cores}{Number of CPU cores for the permutation computations
 (default 1 = serial). Parallelism is over the \code{n_reps} repetitions
@@ -203,7 +202,11 @@ needs is exchangeability of the retained error array across the cell indices
 
 together with Assumption 4 on the mask: which cells clear L0 is independent
 of the errors given the covariates. Under those two conditions the p-value
-is exact in finite samples by the argument of Theorem 4. The position l of a
+of each repetition is exact in finite samples by the argument of Theorem 4.
+The default reports the median over 500 repetitions, which no finite-sample
+theorem covers (see the \code{aggregate} argument);
+\code{aggregate = "median2"} (twice the median) is guaranteed valid at level
+\code{alpha}, conservatively. The position l of a
 retained observation is its rank among the survivors of a random draw, so
 the condition holds when the observations inside a cell are
 \strong{exchangeable replicates} -- individuals sampled within a cell, as in

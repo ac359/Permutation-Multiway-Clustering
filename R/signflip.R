@@ -5,13 +5,15 @@
 ##   joint row-and-column sign changes in place of the permutation group;
 ##   build_flip_set() draws that group and .build_obs_flips() lifts it to the
 ##   observations as signed gathers list(g = NULL, s = +/-1).
-## Paper. The revised Guo, Toulis & Wang paper (not public yet), Assumption 2
-##   (double sign symmetry: (eps_ij) =d (s_i t_j eps_ij) | X, D) and its
-##   Appendix E: Procedure 1 "without further modification" on a row and a
-##   column sign-flipping group, each from the paper's sign-flipping set
-##   construction (its Algorithm 2; in arXiv v1 "Algorithm 2" is the biclique
-##   search): randomly partition the index set into c subsets and take all
-##   2^c sign vectors over them, K = 2^c - 1. build_flip_set() is that
+## Paper. The revised Guo, Toulis & Wang paper (not public yet): Section 3.3,
+##   Assumption 2 (double sign symmetry: (eps_ij) =d (s_i t_j eps_ij) | X, D),
+##   and Section S1.1 of its Supplementary Material: Procedure 1 run
+##   unchanged on a row and a column sign-flipping group, each
+##   from the paper's sign-flipping set construction (Algorithm 1 of the
+##   Supplementary Material, not the permutation-set Algorithm 1 of the main
+##   text; an earlier draft had this as Appendix E): randomly partition the
+##   index set into c subsets and take all 2^c sign vectors over them,
+##   K = 2^c - 1. build_flip_set() is that
 ##   construction with n_flip = c, applied to rows and columns with ONE sign
 ##   vector per element (confirmed by the authors, 2026-09-25), and matches
 ##   their research script (tests/test-signflip.R). It differs in two
@@ -62,12 +64,14 @@
 ## enumeration the p-value is bit-identical PROVIDED both copies of the
 ## identity (all +1 and all -1) are treated as the identity: every other
 ## a_k, b_k then appears twice, so min_j a_j is unchanged and both the count
-## and the group order double. The paper's Algorithm 2 read literally lists
-## the all -1 vector among its K non-identity elements, so Procedure 1 puts
-## the unflipped statistic into min_j a_j -- as the authors' script does,
-## which takes min over all 2^c. That p-value is on the same grid and never
-## smaller than this one (both valid). On the datasets of the paper's own
-## Figure 4 and two stronger heteroskedasticity settings (3,000, each run
+## and the group order double. The paper's construction (Section S1.1) read
+## literally lists the all -1 vector among its K non-identity elements, so
+## Procedure 1 puts the unflipped statistic into min_j a_j -- as the
+## authors' script does, which takes min over all 2^c. That p-value is on
+## the same grid and never smaller than this one (both valid). On the
+## datasets of the paper's own heteroskedastic simulation (Section S4 of
+## its Supplementary Material) and two stronger heteroskedasticity
+## settings (3,000, each run
 ## through the authors' script with its own partition), the two readings
 ## differed in one dataset and never in the decision at 0.05. The authors'
 ## script differs in about 1% of datasets, for a numerical reason: it takes
@@ -127,7 +131,8 @@
 #' `1 / 2^(n_flip - 1)`, so a 95% confidence set needs `n_flip >= 6`.
 #'
 #' **Relation to the paper.** This is the sign-flipping set construction of
-#' the revised paper (its Appendix E, not yet public) with `n_flip` as its
+#' the revised paper (Algorithm 1 in Section S1.1 of its Supplementary
+#' Material, not yet public) with `n_flip` as its
 #' `c`, applied to the rows and to the columns with one shared sign vector
 #' per element. The paper lists all `2^c` sign vectors, `K = 2^c - 1`, so its
 #' `K` counts every distinct flip twice: its default `K = 2^5 - 1 = 31` is
@@ -161,8 +166,9 @@
 #' [build_perm_set()]).
 #'
 #' @details The sign-flip group under the revised paper's Assumption 2 (double
-#'   sign symmetry), built by its sign-flipping set construction (Appendix
-#'   E) with one representative per coset `{s, -s}`.
+#'   sign symmetry, Section 3.3), built by its sign-flipping set construction
+#'   (Section S1.1 of its Supplementary Material) with one representative per
+#'   coset `{s, -s}`.
 #' @param n_row,n_col Integer cluster counts along the two dimensions.
 #' @param n_flip Integer, the number of flip groups, at least 2 and at most
 #'   `n_row + n_col` (so that every group can be reached). Group order is
@@ -198,8 +204,8 @@
 #'
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610. Procedure
-#'   1 under the double sign symmetry assumption (Assumption 2 and Appendix E
-#'   of the revised paper).
+#'   1 under the double sign symmetry assumption (Section 3.3 and Assumption
+#'   2, and Section S1.1 of the Supplementary Material, of the revised paper).
 #'
 #' @seealso [mwperm_dyadic_het()], the test built on this group;
 #'   [build_perm_set()] for the permutation group the other designs use.
@@ -393,8 +399,9 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #'
 #' This is the invariant test of Guo, Toulis and Wang (2026) run with a
 #' *sign-flip* group in place of the permutation group: the *double sign
-#' symmetry* assumption (Assumption 2 of the revised paper), under which
-#' Procedure 1 is unchanged except that Step 1 applies random sign flips.
+#' symmetry* assumption (Assumption 2, Section 3.3 of the revised paper),
+#' under which Procedure 1 is unchanged except that Step 1 applies random
+#' sign flips.
 #' It is the test the authors call IPT-Het. Same model, same null, same
 #' statistic, same confidence set by test inversion; only the group changes,
 #' and with it the assumption. (The revised paper is not public yet; in
@@ -437,10 +444,11 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' paper's own simulation for this test draws errors independent across
 #' cells, `eps_ij = sigma_ij eta_ij` with `eta_ij ~ N(0, 1)` and `sigma_ij`
 #' increasing in the gravity mean and in distance; that is the setting the
-#' test is meant for. On the paper's own 1000 simulated datasets (25 clusters
-#' per side, `n_flip = 6`) this function rejected a true null in 1.7% of them
-#' at the default single run and 0.7% with ten; the paper reports 1.1%
-#' for its own single draw.
+#' test is meant for. On 10,000 datasets of that design (25 clusters per
+#' side, `n_flip = 6`) this function rejected a true null in 1.36% of them at
+#' the default single run, and the method authors' own research code in
+#' 1.41%. (On the first 1000 of those datasets: 1.7% at a single run, 0.7%
+#' with ten, and 1.1% for the authors' code.)
 #'
 #' Under covariate-dependent heteroskedasticity (the paper's gravity design:
 #' 25 clusters per side, symmetric errors independent across cells, their
@@ -460,8 +468,9 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #'
 #' **Incomplete arrays.** No fully observed block is needed: every observed
 #' cell is used and nothing is discarded (the fit says so in a note). What
-#' is needed is the analogue of Assumption 4: which cells are observed must
-#' be independent of the errors given X and D. Dropping zero trade flows
+#' is needed is the analogue of Assumption 4 of arXiv v1 (Assumption 5 of
+#' the revision): which cells are observed must be independent of the errors
+#' given X and D. Dropping zero trade flows
 #' because log(0) is undefined violates it, since whether a flow is zero
 #' depends on its error. Running on an incomplete array is this package's
 #' extension, which the method's authors have agreed to; the paper states
@@ -474,9 +483,9 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #' is assigned at random to one of `n_flip` flip groups, and a sign vector in
 #' `{-1, +1}^n_flip` multiplies observation `(i, j)` by the product of its
 #' row group's sign and its column group's sign (see [build_flip_set()]:
-#' this is the revised paper's sign-flipping set construction, Appendix E,
-#' with `n_flip` as its `c`, and its `K = 2^c - 1` counts each distinct flip
-#' twice). A
+#' this is the revised paper's sign-flipping set construction, Section S1.1
+#' of its Supplementary Material, with `n_flip` as its `c`, and its
+#' `K = 2^c - 1` counts each distinct flip twice). A
 #' sign vector and its negative induce the same transformation, so the group
 #' has `2^(n_flip - 1)` distinct elements, not `2^n_flip`; the package
 #' enumerates each exactly once. Per repetition the p-value therefore lives
@@ -513,7 +522,7 @@ build_flip_set <- function(n_row, n_col, n_flip, seed = NULL, cells = NULL) {
 #'
 #' @details Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
 #'   sign flips in Step 1 in place of the permutation group, under the revised
-#'   paper's Assumption 2 (double sign symmetry).
+#'   paper's Assumption 2 (double sign symmetry, Section 3.3).
 #' @inheritParams mwperm_dyadic
 #' @param n_flip Number of flip groups. The group has order `2^(n_flip - 1)`,
 #'   so the smallest attainable p-value is `1 / 2^(n_flip - 1)` and a 95%

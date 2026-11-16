@@ -36,9 +36,11 @@ the returned set is closed under composition (a cyclic group of order
 \details{
 The randomness in the relabelling is what makes the resulting test a
 \emph{random} invariant test: different seeds yield slightly different
-p-values. Aggregating several runs (see the \code{n_reps} argument of the
-\code{mwperm_*} functions) by taking the median p-value is recommended;
-see \code{\link{mwperm_dyadic}} for the exact status of that aggregation.
+p-values. A single run is exact and is the default; several runs (the
+\code{n_reps} argument of the \code{mwperm_*} functions) can be combined by
+the median p-value or, with a finite-sample guarantee, by twice the median
+(\code{aggregate = "median2"}); see \code{\link{mwperm_dyadic}} for the
+exact status of each.
 
 \strong{Reproducibility.} A seeded result is reproducible only under the
 same RNG configuration: the same \code{RNGkind()} (generator \emph{and}

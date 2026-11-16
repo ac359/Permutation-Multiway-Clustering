@@ -135,8 +135,9 @@ Remark 1 of Guo, Toulis and Wang (2026); \code{"median2"} is
 \code{min(1, 2 * median)}.
 
 The choice decides what "exact" covers. Theorem 1 gives finite-sample
-validity for a single random permutation group, so at the default
-\code{n_reps = 1} the p-value is exact as stated (there \code{"median"} returns the
+validity for a single random permutation group, so with \code{n_reps = 1} --
+the default for every design except \code{"irregular"} -- the p-value is exact
+as stated (there \code{"median"} returns the
 one p-value, and \code{"median2"} doubles it, which only costs resolution). The
 median of several dependent randomised p-values is a de-randomisation
 heuristic: endorsed by Remark 1 and well behaved in practice, but not

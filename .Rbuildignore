@@ -1,7 +1,5 @@
 ^private$
 ^(?!(README|NEWS)\.md$)[^/]+\.md$
-^TESTING_PLAN\.md$
-^ARCHITECTURE\.md$
 ^data-raw$
 ^LICENSE\.md$
 ^inst/replication/out$

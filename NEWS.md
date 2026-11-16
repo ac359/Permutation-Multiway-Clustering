@@ -1,3 +1,180 @@
+# mwperm 0.4.4
+
+Fixes from an independent audit of 0.4.3, and documentation brought in line
+with the revised submission of the method paper. Three defects could change
+a result: the p-value could depend on the units or the origin of a nuisance
+covariate (and, far out, on the origin of the covariate of interest); with
+two or more coefficients of interest the joint region of such a fit could
+come back as one or a handful of points; and an interval at `alpha = 0.10`,
+`0.20` or `0.075` could contain, strictly inside it, a value the test
+rejects. All three are fixed. All 30 entries of the golden
+baseline are `identical()` to 0.4.3, and so are the outputs of every
+help-page example and of replication scripts 01 to 06: none of them reaches
+any of the three.
+
+## The p-value no longer depends on the units of a nuisance covariate
+
+* The projection of Procedure 1 was computed through the Gram matrix of the
+  stack `[X | X_k]`, with a rank cut relative to its largest column. A
+  nuisance covariate in large units (GDP in levels rather than in logs) or
+  with a large mean and a small spread could push the intercept and the
+  other nuisance columns under that cut. They were then silently not
+  partialled out, with no warning or note. The error could go either way:
+  in a simulation under a true null, with one nuisance column multiplied
+  by 1e7, the rejection rate at 0.05 rose from 0.03 to 0.88. On
+  `trade_dyadic`, with the two
+  GDP columns in levels and multiplied by 10, `mwperm_dyadic()` (log_dist,
+  `seed = 1`) returned p = 1 and the interval (-Inf, Inf), where the same
+  fit in the original units gives p = 0.025. `mwperm_panel()` was affected
+  too: on `trade_panel` (fta, `seed = 1`), with the GDP levels times 10, it
+  returned p = 0.32 (0.41 with `row` and `col` swapped) where the correct
+  fit gives p = 0.045, and in their own units its end points were already
+  off in the fifth or sixth significant digit. `mwperm_dyadic_het()` was
+  affected already with the GDP levels in
+  their own units: its interval was [-1.10054, -0.44050] where the correct
+  one, which this version returns and which 0.4.3 gave on `scale()`d
+  columns, is [-1.10082, -0.54366]; with the levels times 10 it returned
+  [2.616, 2.790], on the wrong side of zero, at p = 0.031. Refit any
+  earlier fit whose nuisance columns are in large units.
+* The Gram route is now trusted only when it keeps as many directions as
+  the column-equilibrated Gram matrix and its kept spectrum spans less than
+  1e8. Otherwise the stack is residualized by a QR, whose tolerance is
+  relative to each column, as in `lm()`. The `mwperm_dyadic()` fit above
+  now gives p = 0.025 and [-1.15737, -0.43556] with the GDP levels in their
+  own units, times 10 and times 1000. One exception remains: two nuisance
+  columns that agree to within about 1e-7 of their spread sit at the rank
+  tolerance of both routes, and whether their difference is partialled out
+  can then depend on the route, and so on the units of another column.
+* Fits whose nuisance design is well conditioned never reach the fallback
+  and are bit-identical to 0.4.3. A design that reaches it without having
+  lost anything (a calendar-year column beside an intercept is enough) can
+  move in the 8th to 11th significant digit of an interval end point (most
+  for a column that is constant within a cluster, such as a year per
+  importer). The new value is the more accurate one: it agrees to about
+  1e-12 with the same fit on `scale()`d columns. The p-value is unchanged
+  except where two of the statistics it compares agree to within
+  rounding. Such a design also runs slower, about 1.5
+  times the CPU per fit with two nuisance covariates, about twice with six
+  and more beyond,
+  because every element then takes a QR of the stacked design. The result
+  does not depend on the origin of a
+  nuisance column either, up to about a million standard deviations; from
+  about ten million the column is collinear with the intercept at the
+  QR's relative tolerance of 1e-7 and is dropped, as `lm()` drops it.
+* A covariate of interest `d` whose mean lies more than 1e3 of its
+  standard deviations from zero is now centred before the projection.
+  That changes no statistic in exact arithmetic (every design includes an
+  intercept), but such an origin used to cost accuracy silently: on
+  `trade_dyadic`, log_dist shifted by 1e5 of its standard deviations moved
+  the interval end points by about 5e-6, shifted by 1e7 by about 0.02, and
+  from about 1e8 the fit wrongly warned that `d` had no variation and
+  returned p = 1. All three now match the unshifted fit to within 1e-9.
+  A calendar-year `d` spanning about seven years or fewer qualifies (2000
+  to 2006 lies about 1000 standard deviations from zero, 2000/2001 about
+  4000); such fits move toward the exact value, on a two-period panel by
+  about 1e-4 in an end point (3e-6 of the interval's width). Every other
+  fit is bit-identical. A `d` whose only variation beyond the nuisance
+  covariates lies within rounding of its own origin is still reported as
+  having no variation. With an earlier version, `scale()` the nuisance
+  columns and centre `d` first.
+* With two or more coefficients of interest, the joint confidence region of
+  such a fit, or of a fit with exactly collinear nuisance columns, came back
+  as one or a handful of grid points, with no note. The grid it is searched
+  on takes its step from the naive OLS standard error, which was `NA`
+  because `solve()` refused the badly scaled or singular cross-product
+  matrix, and the step then fell back to 1. The standard error is now
+  taken from the QR of the
+  design when `solve()` fails, so `se_naive` (`ols_se_naive` in `summary()`)
+  is no longer `NA` for such a design and the region matches the one the
+  same fit gives in well-scaled units. The test was never affected, and
+  nothing changes where `solve()` succeeds. For a single coefficient the
+  exact interval does not use that standard error and is unchanged; where
+  the interval falls back to bisection (a very large `K` with several
+  repetitions) its bracketing step and stopping tolerance come from it, so
+  for such a design the end points can move by less than that tolerance.
+  Both versions contain the exact set.
+* A joint region that holds fewer than ten points of the searched grid now
+  carries a note: membership is known at the grid points alone, so its
+  extent is then resolved only to the grid step. Pass a finer `grid`.
+
+## Confidence sets are inverted at `alpha` itself
+
+* The set was inverted at `1 - (1 - alpha)`, which in floating point lies
+  just below `alpha` for levels such as 0.10, 0.20 and 0.075. A null value
+  whose p-value equals `alpha` exactly is rejected by the test (`p <= alpha`)
+  but was accepted into the set. The interval and the joint region now use
+  `alpha`, so the set and the test agree. `alpha = 0.05` (and 0.01, 0.025)
+  is unaffected.
+* At the affected levels the interval becomes slightly narrower, and no
+  point strictly inside it is rejected. (As at every level, a reported end
+  point is the boundary of the accepted set and can itself be rejected;
+  see "What the end points mean" in the README.) On `trade_dyadic`
+  (log_dist, `seed = 1`,
+  `alpha = 0.10`) it went from [-1.25642, -0.51311] to [-1.24118, -0.53854];
+  -0.5258, inside the old interval, has p = 0.1 and is rejected.
+
+## Serial fits no longer look up the core count
+
+* With `n_cores = 1` the engine no longer calls `parallel::detectCores()`,
+  which on macOS starts a subprocess, once per repetition. A default
+  `mwperm_irregular()` fit (500 repetitions) drops from about 3 s to
+  about 0.2 s on macOS. No number changes.
+
+## Documentation and replication
+
+* The documentation of the sign-flip test now cites the revised submission
+  by its current numbering: Section 3.3 and Assumption 2 for double sign
+  symmetry, and Section S1.1 of its Supplementary Material (Algorithm 1
+  there) for the sign-flipping set construction. Earlier help pages cited a
+  draft's "Appendix E", and source comments its "Algorithm 2" and its
+  "Figure 4". Every other reference keeps the public arXiv v1 numbering;
+  the README says so.
+* The notes on the projection (README, `?mwperm_dyadic`) describe the QR
+  fallback above.
+* `inst/replication/07_size_signflip.R` now draws N(0, 1) innovations, as
+  the authors' corrected simulation code does. It drew centred lognormal
+  ones, which are skewed
+  and so violate the double sign symmetry the test assumes. Its expected
+  output is regenerated: across the strong, mild and no-heteroskedasticity
+  settings the sign-flip test's size is 1.6%, 1.2% and 0.6% (2.8%, 1.6% and
+  0.8% before) and the permutation test's 7.6%, 3.2% and 1.2% (9.0%, 3.0%
+  and 1.4% before); power at beta = 0.15 is 98.4% against 85.0% (95.6%
+  against 87.6% before). These are the numbers the help pages already
+  quoted.
+* `?mwperm_dyadic_het` and the README no longer quote a rate from an
+  earlier draft of the paper for the sign-flip test's size. On 10,000
+  datasets of the paper's heteroskedastic design the test rejects a true
+  null in 1.36% of them and the authors' own implementation in 1.41%.
+* Regression tests for all of the above, in both suites: the units and the
+  origin of a nuisance column through the dyadic, panel and sign-flip
+  front ends, with the fallback taken and not taken; the joint region
+  under a badly scaled column; the test and the set agreeing at
+  `alpha = 0.075`, `0.10` and `0.20`; a serial fit not looking up the core
+  count; a layout or panel whose `d` and `x` no element moves keeping
+  p = 1 on the fallback; a covariate of interest on a far origin; the
+  note on a joint region of a few grid points. `Suggests` now asks for testthat >= 3.1.7, which the suite's
+  mocking helper needs (the suite already needed 3.1.5).
+* `?mwperm_irregular` said its p-value is exact in finite samples. That
+  holds for each repetition; the default reports the median over 500
+  repetitions, which no finite-sample theorem covers, and the page now
+  says so and names `aggregate = "median2"`, as the README already did;
+  its description of `aggregate`, and that of `?mwperm`, no longer give the
+  default as one run for every design.
+* The vignette and `?build_perm_set` no longer recommend several runs
+  combined by the median as the usual practice (one run is exact and is
+  the default), and the vignette gives the
+  sign-flip test's default `n_flip` as 6 at `alpha = 0.05` (it said 8).
+  The README says which norm the statistic uses with several coefficients
+  of interest (the Euclidean one).
+* `ARCHITECTURE.md` and `TESTING_PLAN.md`, notes for the package's
+  developers, are no longer part of the public repository;
+  `tests/README.md` describes the test suites.
+* The replication harness no longer stops where `parallel::detectCores()`
+  returns `NA` (some containers): it then runs on one core. No output
+  depends on the core count. Two stale lines in its material are
+  corrected (the header of `expected/03_ci_coverage.txt`, the default
+  simulation count in the usage line of script 03).
+
 # mwperm 0.4.3
 
 Answers from the method's authors (2026-09-30), implemented as one release:

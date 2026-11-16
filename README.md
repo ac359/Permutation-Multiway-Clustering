@@ -376,8 +376,12 @@ $I_q \times J_q$ and applies the two-way invariance inside each; cells outside
 the blocks are discarded, and the fit reports how many.
 
 **`mwperm_dyadic_het()` — double sign symmetry (Assumption 2 of the revised
-paper).** The revised paper is not public yet; in arXiv:2601.08610v1,
-"Assumption 2" is the §4 random-effects model. For all
+paper, §3.3).** The revised paper is not public yet; in arXiv:2601.08610v1,
+"Assumption 2" is the §4 random-effects model. The revision also renumbers
+other objects of v1 (Assumption 4 becomes Assumption 5, and the appendices
+become Sections S2–S10 of a supplement whose new Section S1 holds the
+sign-flip construction), so a reference in this README that does not say
+"revised" uses the v1 numbering. For all
 row signs $s \in \lbrace -1, +1 \rbrace^m$ and column signs
 $t \in \lbrace -1, +1 \rbrace^n$,
 
@@ -602,12 +606,19 @@ a permutation maps the intercept to itself (and, in a panel with time effects,
 maps the period dummies among themselves), so the projection keeps strictly
 more than $N-2p$ dimensions. `mwperm` uses the rank, which is what the two
 orthogonality conditions actually ask for and is the only well-defined reading
-when the stack is rank-deficient. Then compute
+when the stack is rank-deficient. The package computes it from the
+$2p \times 2p$ Gram matrix of the stack, or by a QR of the stack when that
+matrix is badly conditioned (a nuisance covariate in large units, or with a
+large mean and a small spread), so the result does not depend on the units of
+a nuisance covariate. Then compute
 
 $$a_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top} \mathbf{y}\rVert,
 \qquad
 b_k = \lVert \mathbf{D}^{\top} V_k V_k^{\top}
 \mathbf{y}_{\pi_k,\sigma_k}\rVert.$$
+
+Here $\lVert\cdot\rVert$ is the Euclidean norm (for a single coefficient of
+interest, the absolute value).
 
 **3. Randomization p-value.** (Guo et al., 2026, Eq. 10)
 
@@ -693,8 +704,8 @@ once per index set, and composes the three into a joint group under InvA.
 **Panel data** (`mwperm_panel()`) applies Algorithm 1 twice, to $[m]$ and
 $[n]$, then uses that *same* row/column relabelling in every period with time
 held fixed — so the dyadic test runs within each period and the unknown trend
-is never disturbed. This is the first finite-sample-valid test of $\beta = 0$
-under (InvB). Time fixed effects (`time_fe = TRUE`, the default) de-bias the
+is never disturbed. To the method authors' knowledge this is the first
+finite-sample-valid test of $\beta = 0$ under (InvB). Time fixed effects (`time_fe = TRUE`, the default) de-bias the
 point estimate; they are invariant to the within-period permutation, so they do
 not disturb validity.
 
@@ -770,7 +781,7 @@ every cell and holds the period fixed (until 0.4.1 that cut was
 
 **Heteroskedasticity: the sign-flip test** (`mwperm_dyadic_het()`, IPT-Het).
 The revised paper states a second invariance assumption, *double sign
-symmetry* (its Assumption 2), under which Procedure 1 is unchanged except
+symmetry* (its Assumption 2, §3.3), under which Procedure 1 is unchanged except
 that Step 1 applies random sign flips: the partialling-out and minorization
 argument is not specific to permutations. This test keeps everything — the
 model, the null, the statistic
@@ -793,10 +804,10 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   when $d$ has a row-level component). The paper gives
   $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ ($u_i, v_j$ i.i.d. symmetric, $h$
   unknown) as a model that satisfies the assumption, which is weaker; its own
-  simulation for the test has independent heteroskedastic errors. On the
-  paper's own 1000 simulated datasets (25 clusters per side, `n_flip = 6`)
-  this package rejected a true null in 1.7% of them at the default single
-  run and 0.7% with ten; the paper reports 1.1% for its own single draw.
+  simulation for the test has independent heteroskedastic errors. On 10,000
+  datasets of that design (25 clusters per side, `n_flip = 6`) this package
+  rejected a true null in 1.36% of them at the default single run, and the
+  method authors' own research code in 1.41%.
   Exchangeability is
   *not* required,
   and this assumption does not imply it, nor the reverse. The array need not
@@ -810,9 +821,11 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   $s$ and $-s$ induce the same transformation: the $2^{n_{\mathrm{flip}}}$ sign
   vectors give only $2^{n_{\mathrm{flip}}-1}$ distinct elements, and
   `build_flip_set()` enumerates each exactly once. (`n_flip` is the $c$ of the
-  paper's sign-flipping set construction, whose $K = 2^c - 1$ counts each
-  distinct flip twice: the paper's default $K = 2^5 - 1$ is `n_flip = 5`, 16
-  distinct flips, and its simulation's $K = 2^6 - 1$ is `n_flip = 6`.) The
+  revised paper's sign-flipping set construction, §S1.1 of its supplement,
+  whose $K = 2^c - 1$ counts each distinct flip twice: the paper's default
+  $K = 2^5 - 1$ is `n_flip = 5`, 16 distinct flips, so its smallest p-value
+  is 1/16 and it cannot reject at 0.05; its simulation's $K = 2^6 - 1$ is
+  `n_flip = 6`, this package's default at $\alpha = 0.05$.) The
   p-value therefore lives
   on multiples of $1/2^{n_{\mathrm{flip}}-1}$, and a 95% confidence set needs
   $2^{n_{\mathrm{flip}}-1} \ge 20$, i.e. **`n_flip ≥ 6`**. The cost is one
@@ -995,14 +1008,8 @@ If you use this package, please cite the method paper:
 
 ## Working on the package
 
-To change the code, start with `ARCHITECTURE.md`. It maps each step of the
-method to the code, lists the conventions a correct change must keep, and
-gives a reading order and a repository map. Then:
-
 - `tests/README.md` describes the two test suites, how to run them, and
   where a new test goes;
-- `TESTING_PLAN.md` traces each object in the papers to the function and
-  tests behind it, and logs where the code deliberately differs;
 - `inst/replication/` reproduces the size, power and coverage claims by
   simulation.
 

@@ -157,3 +157,51 @@ test_that("d > 1: retained region points are accepted by the joint test", {
   expect_lte(pj(out[1, ]), f$alpha)
   expect_equal(unname(f$conf_box[1, ]), unname(apply(pts, 2, min)))
 })
+
+test_that("alpha off the 1 - conf_level round trip: test and set agree", {
+  ## The set is {b : pval(b) > alpha}. Inverting at 1 - conf_level instead,
+  ## which is just below alpha for alpha = 0.075, 0.10 and 0.20, admitted
+  ## values whose p-value is exactly alpha -- values the test rejects. The
+  ## shipped trade_dyadic has K = 39, so those levels are on its p-value
+  ## grid. Probed just inside every end point, a tenth of the way to the next
+  ## jump of the step function, and at every retained point of a joint region.
+  ## The probes just outside each end point are the other half of the
+  ## duality: they also pass with the old inversion, and guard against the
+  ## fix shrinking the set.
+  data(trade_dyadic, package = "mwperm", envir = environment())
+  td <- trade_dyadic
+  xt <- cbind(td$log_gdp_i, td$log_gdp_j)
+  X <- ref_X(xt, nrow(td))
+  td_fit <- function(D, a, ...)
+    mwperm_dyadic(td$log_trade, D, x = xt, row = td$importer,
+                  col = td$exporter, seed = 1, alpha = a, ...)
+  groups <- function(K) ref_groups_crossed(list(td$importer, td$exporter),
+                                           K, 1, 1)
+  for (a in c(0.075, 0.10, 0.20)) {
+    f <- td_fit(td$log_dist, a)
+    expect_identical(f$ci_method, "exact")
+    roots <- mwperm:::.ci_breakpoints(list(mwperm:::.ipt_prepare(
+      td$log_trade, as.matrix(td$log_dist), X, groups(f$K))))
+    gap <- function(e) {
+      others <- roots[abs(roots - e) > 1e-12 * (1 + abs(e))]
+      min(abs(others - e)) / 10
+    }
+    for (i in seq_len(nrow(f$conf_set))) {
+      lo <- f$conf_set[i, 1]
+      hi <- f$conf_set[i, 2]
+      for (b in c(lo + gap(lo), hi - gap(hi)))
+        expect_gt(td_fit(td$log_dist, a, beta_null = b,
+                         conf_int = FALSE)$pvalue, a)
+      for (b in c(lo - gap(lo), hi + gap(hi)))
+        expect_lte(td_fit(td$log_dist, a, beta_null = b,
+                          conf_int = FALSE)$pvalue, a)
+    }
+  }
+  D2 <- cbind(log_dist = td$log_dist, border = td$border)
+  f2 <- td_fit(D2, 0.10)
+  prep <- mwperm:::.ipt_prepare(td$log_trade, D2, X, groups(f2$K))
+  p_ret <- apply(f2$conf_region, 1L,
+                 function(b) mwperm:::.ipt_eval(prep, b)$pvalue)
+  expect_gt(length(p_ret), 20L)
+  expect_true(all(p_ret > 0.10))
+})

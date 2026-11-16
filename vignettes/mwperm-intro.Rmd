@@ -122,9 +122,12 @@ summary(fit)
 confint(fit)
 ```
 
-Because the test is *randomised* (it draws a random permutation group), running
-it several times and aggregating by the median p-value is recommended; that is
-what `n_reps` does. `plot(fit)` shows how stable the p-value is across those
+Because the test is *randomised* (it draws a random permutation group), its
+p-value depends on the draw. A single run is exact, and is the default.
+`n_reps` repeats the test with fresh groups and combines the p-values: by the
+median (the default `aggregate`), or by twice the median
+(`aggregate = "median2"`), which keeps the finite-sample guarantee at some
+cost in resolution. `plot(fit)` shows how stable the p-value is across those
 replications.
 
 ## Resolution: why 20 clusters?
@@ -209,7 +212,8 @@ is the setting the authors designed it for.
 
 The group has $2^{n_\text{flip}-1}$ elements, where `n_flip` is the number of
 flip groups the clusters are randomly assigned to, so a 95% interval needs
-`n_flip >= 6` (order 32); the default is 8.
+`n_flip >= 6` (order 32); the default is the smallest `n_flip` that can reach
+`alpha`, which is 6 at `alpha = 0.05`.
 
 ```{r het}
 fit_h <- with(trade_dyadic,

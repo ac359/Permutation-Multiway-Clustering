@@ -5,7 +5,7 @@
 ## relabelling of the clusters; that fails under heteroskedasticity. The
 ## sign-flip design replaces the permutation group by the group of joint
 ## row-and-column sign changes. It is valid under the revised paper's
-## Assumption 2, "double sign symmetry" (Guo, Toulis & Wang):
+## Assumption 2, "double sign symmetry" (Guo, Toulis & Wang, Section 3.3):
 ## (eps_ij) =d (s_i t_j eps_ij) given X and D. That covers errors that are
 ## independent across cells and symmetric, whatever their variances, but NOT
 ## additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het). Every
@@ -487,8 +487,9 @@ f_inc_dis <- mwperm(y = "log_trade", d = "log_dist",
 stopifnot(isTRUE(same_fit(f_inc, f_inc_dis, skip = c("call", "auto"))))
 
 ## ---- 11. the paper's full enumeration ----------------------------------------
-## The revised paper's sign-flipping set construction lists ALL 2^c sign
-## vectors (K = 2^c - 1). s and -s flip the same cells, and the all -1 vector
+## The revised paper's sign-flipping set construction (Supplementary
+## Material, Section S1.1, Algorithm 1) lists ALL 2^c sign vectors
+## (K = 2^c - 1). s and -s flip the same cells, and the all -1 vector
 ## is the identity on the cells, so read literally Procedure 1 puts the
 ## unflipped statistic into min_j a_j. The package keeps one element per pair
 ## and excludes both identity copies. Guard: on the SAME partition the
