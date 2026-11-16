@@ -7,7 +7,7 @@
 ##   2. reconstruction of the permutation group each front end draws in
 ##      repetition r, rebuilt from the seed exactly the way the package does
 ##      (the front ends keep their builders in closures, so there is no seam
-##      to read them from -- see follow-up F-1 in TESTING_PLAN.md);
+##      to read them from);
 ##   3. small data-generating processes used across files;
 ##   4. the Monte Carlo helpers and the MWPERM_SLOW_TESTS gate.
 ##
@@ -322,13 +322,13 @@ expect_valid_ecdf <- function(p, K) {
 
 ## ---- 5. Logged discrepancies ---------------------------------------------------
 ## A test whose assertion follows the paper (or the draft) but which the code
-## does not satisfy is kept, and skipped with a pointer to the discrepancy log
-## in TESTING_PLAN.md, so the suite stays green without editing the assertion.
+## does not satisfy is kept, and skipped with a message that says what
+## differs and why, so the suite stays green without editing the assertion.
 ## Set MWPERM_SHOW_DISCREPANCIES=true to run the skipped bodies and see each
 ## one fail.
 skip_discrepancy <- function(id, why) {
   if (!identical(tolower(Sys.getenv("MWPERM_SHOW_DISCREPANCIES")), "true"))
-    skip(paste0("Discrepancy ", id, ": ", why, "; see TESTING_PLAN.md"))
+    skip(paste0("Discrepancy ", id, ": ", why))
 }
 
 ## Optional record of the Monte Carlo tables: when MWPERM_MC_OUT names a

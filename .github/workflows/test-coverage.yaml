@@ -1,4 +1,4 @@
-# Test coverage of R/ by the shipped tests/ suite (audit F7.5 gate: >= 90%).
+# Test coverage of R/ by the shipped tests/ suite (target: >= 90%).
 # Workflow derived from r-lib/actions examples (test-coverage).
 on:
   push:

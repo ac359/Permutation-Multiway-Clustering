@@ -62,8 +62,7 @@ Two environment variables widen the testthat suite:
 * `MWPERM_SHOW_DISCREPANCIES=true` runs the tests skipped with
   `Discrepancy D<n>`. Each asserts what the paper or the JSS draft says where
   the code deliberately does something else; setting the variable shows each
-  one failing. The entries are explained in the discrepancy log of
-  `TESTING_PLAN.md` at the repository root.
+  one failing; each skip message says what differs and why.
 
 ## Where does a new test go?
 
@@ -73,7 +72,7 @@ Two environment variables widen the testthat suite:
 | a contract **shared by every front end**: scalar-argument validation, output labels, equivariance, parallel identity | base-R `test-validation.R`, `test-methods.R` or `test-equivariance.R` |
 | an **internal building block** (a group, the projector, the p-value, an inversion routine) against its own invariants | base-R `lower-level-tests/`, one file per object |
 | that the code **matches a paper object** (against the naive reference, the paper's algebra, or a printed draft output) | the testthat file named after that paper object |
-| a place where the code **deliberately differs** from the paper or the draft | a testthat test asserting the paper's version, skipped with `skip_discrepancy("D<n>", ...)`, plus an entry in the discrepancy log of `TESTING_PLAN.md` |
+| a place where the code **deliberately differs** from the paper or the draft | a testthat test asserting the paper's version, skipped with `skip_discrepancy("D<n>", ...)`, whose message says what differs and why |
 | **size or power** by simulation | quick checks: `testthat/test-montecarlo.R` (gated by `MWPERM_SLOW_TESTS`); publication-scale tables: `inst/replication/`, which no check runs |
 
 **A new design** needs all of these:
@@ -81,8 +80,7 @@ Two environment variables widen the testthat suite:
 - an entry in `golden/make_baseline.R`, then a regenerated baseline;
 - a reference check in `testthat/test-designs.R`, comparing its p-values with
   the naive Procedure 1 on the group rebuilt from the seed;
-- a size check in `testthat/test-montecarlo.R`;
-- a row in the traceability table of `TESTING_PLAN.md`.
+- a size check in `testthat/test-montecarlo.R`.
 
 ## Where each topic is tested
 
@@ -148,7 +146,7 @@ and opens with a header saying what it pins and why.
 | `test-signflip.R` | `mwperm_dyadic_het()` and `build_flip_set()`: agreement with a corrected port of the authors' `RPT_signflip()` (`helpers/signflip-reference.R`), the group's order `2^(n_flip-1)`, the `.apply_op()` contract, size under heteroskedasticity, incomplete arrays |
 | `test-methods.R` | `print`, `summary`, `confint`, `coef`, `nobs`, `plot`, `mwperm_save`: the **output-label contract** and every figure path |
 | `test-validation.R` | scalar-argument validation shared by all front ends: bad input fails early and names the argument; degenerate input gets the exact answer; no confidence set the design cannot support |
-| `test-equivariance.R` | row order, nuisance (FWL), null shift, scale and sign equivariance, and **parallel equals serial**, bit for bit |
+| `test-equivariance.R` | row order, nuisance (FWL), null shift, scale and sign equivariance, and **parallel equals serial**, bit for bit; the units and origin of a nuisance column (the conditioning guard); no core-count lookup on a serial fit; the origin of the covariate of interest |
 | `test-readme.R` | the transcripts `README.md` shows are what the package prints |
 | `test-golden.R` | the seeded snapshot gate: 30 entries across all eight designs, compared field by field with `golden/baseline.rds` |
 | `test-lower-level.R` | the runner for `lower-level-tests/` |
@@ -169,10 +167,10 @@ of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
 | `test-permset.R` | `build_perm_set()`, GTW Algorithm 1: a cyclic group of order `K+1`, identity first, closed under composition, RNG-hygienic |
 | `test-obsperms.R` | the observation-level gather vectors for every design; the one-sided block subgroups; unobserved-cell detection; the `.cell_code()` exactness guard |
 | `test-bijection.R` | every gather vector is a bijection; a duplicated cell would silently make it many-to-one |
-| `test-projection.R` | the partialling step (GTW Eq. 3) against an independent projector that shares no code with `R/` |
+| `test-projection.R` | the partialling step (GTW Eq. 3) against an independent projector that shares no code with `R/`; the Gram and QR routes of `.ipt_prepare()` against each other; an element that fixes `d` and `x` keeping the exact tie on either route |
 | `test-pvalue.R` | the minorized p-value (GTW Eq. 10): its grid, conservative ties, the `1/(K+1)` floor |
 | `test-aggregate.R` | the cross-repetition rule (GTW Remark 1): one aggregation for the p-value *and* the confidence set |
-| `test-exact-ci.R` | the closed-form confidence set: breakpoints, disconnected components, what the reported end points mean |
+| `test-exact-ci.R` | the closed-form confidence set: breakpoints, disconnected components, what the reported end points mean; the set inverted at `alpha` itself; the note on a joint region of a few grid points |
 | `test-invert-ci-grid.R` | the fallbacks: explicit-`grid` inversion, region budget guards, the island guard |
 
 ## testthat suite: `tests/testthat/`, one file per paper object
@@ -183,14 +181,14 @@ of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
 | `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
 | `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
 | `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), `median2`, ties counted (`<=`), a `D` the group cannot move, `D` in `col(X)` |
-| `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, testing `b` versus `y - D b`, a common trend under `time_fe`; CI equivariance |
-| `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region |
+| `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, testing `b` versus `y - D b`, a common trend under `time_fe`; CI equivariance; the units and origin of a nuisance column; p = 1 when no element moves `d` or `x`, on the QR route; the origin of the covariate of interest |
+| `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region; the test and the set agreeing at `alpha` = 0.075, 0.10 and 0.20 |
 | `test-designs.R` | each design's group structure (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) and its p-values against the reference |
 | `test-bicliques.R` | fully observed, disjoint, `min_block`; the exact search against brute force; the diagonal-deleted 40 x 40 array |
 | `test-dispatch.R` | every row of the draft's Table 1; `mwperm()` identical to its worker; `mwperm_check()` snapshots |
 | `test-s3-methods.R` | the draft's Sec. 3.5 slots, `summary()`, `confint()`, `coef()`, `nobs()`, `print()` snapshots, `plot()` |
 | `test-data-validation.R` | lengths, missing and non-finite values, `N > 2p`, duplicate cells, the vector, column-name and formula interfaces, cluster-id types |
-| `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state |
+| `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state; no core-count lookup on a serial fit |
 | `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the draft's negative control, and power |
 | `test-draft-replication.R` | every seeded output the JSS draft prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
 

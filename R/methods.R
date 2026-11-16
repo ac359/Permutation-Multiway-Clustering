@@ -168,11 +168,12 @@ print.mwperm <- function(x, digits = 4L, ...) {
   ## natural mistake, and it understates how much the coefficients trade off.
   if (has_box)
     wrap(sprintf(paste0("Joint %.0f%% confidence region over %d coefficients ",
-                        "(%d grid points retained). The brackets above are ",
+                        "(%d grid point%s retained). The brackets above are ",
                         "that single region's marginal extent, not separate ",
                         "per-coefficient intervals; `conf_region` holds the ",
                         "retained vectors."),
-                 100 * x$conf_level, length(est), nrow(x$conf_region)),
+                 100 * x$conf_level, length(est), nrow(x$conf_region),
+                 if (nrow(x$conf_region) == 1L) "" else "s"),
          initial = "  ", prefix = "  ")
 
   cat("\n")

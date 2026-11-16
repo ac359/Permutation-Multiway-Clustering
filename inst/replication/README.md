@@ -25,7 +25,7 @@ and run the scripts from a writable copy of that directory (they read
 | `04_negative_control.R` | On a *trending* panel the three-way test (which permutes time) over-rejects badly while the panel test (which holds time fixed) stays valid — the reason `mwperm()` defaults to panel for 3-index arrays. |
 | `05_permute.R` | The one-sided `permute = "rows"` option is valid and powerful on a design (a single fully observed column) the two-sided test cannot handle at all. |
 | `06_size_by_design.R` | Type-I error for the four designs `01_size.R` omits — replicated layouts, irregular layouts, incomplete arrays and incomplete panels — at `n_reps = 1`, with `K` printed beside every rate and a check that rejection at `alpha` is attainable before a rate is quoted. The irregular design runs with a cell-constant covariate under its random per-cell trim (Section 6.4 as printed; `n_reps = 1` here, where the front end's default is 500), and is followed by the case it does not cover -- a covariate that varies within cells under a common period effect -- run as `mwperm_panel_missing(L0 = 2)`, the same two periods held fixed in every cell (0.4.2; until 0.4.1 that arm was `mwperm_irregular(trim = "levels")`): under the random trim it rejects a true null essentially always. |
-| `07_size_signflip.R` | The sign-flip test (`mwperm_dyadic_het()`, IPT-Het) against the permutation test on the same heteroskedastic gravity draws (0.4.0): the permutation test's size rises with the strength of the heteroskedasticity while the sign-flip test's stays at or below nominal, and under homoskedastic errors the sign-flip test is the *less* powerful of the two -- the trade-off the man page states. |
+| `07_size_signflip.R` | The sign-flip test (`mwperm_dyadic_het()`, IPT-Het) against the permutation test on the same heteroskedastic gravity draws (0.4.0) -- the paper authors' gravity design, errors independent across cells with a variance that grows with the gravity mean and the distance covariate and symmetric N(0, 1) innovations, as the double sign symmetry assumption (Assumption 2 of the revised paper) requires (until 0.4.3 the script drew centred lognormal innovations, which violate it, and its reference output was made with them): the permutation test's size rises with the strength of the heteroskedasticity while the sign-flip test's stays at or below nominal, and under homoskedastic errors the sign-flip test is the *less* powerful of the two -- the trade-off the man page states. |
 
 ## Running
 
@@ -53,9 +53,15 @@ different parameters.
 > bracketing and bisection, and the cross-repetition aggregation used to invert
 > it was corrected (see `NEWS.md`). Intervals are therefore slightly **wider**
 > than at 0.2.0, so `expected/03_ci_coverage.txt` was re-derived at 0.3.0 and
-> reports marginally higher coverage and mean width. The other four scripts test
-> p-values only (`conf_int = FALSE`) and are unaffected; their reference outputs
-> are unchanged from 0.2.0.
+> reports marginally higher coverage and mean width. The other scripts test
+> p-values only (`conf_int = FALSE`) and are unaffected: 01, 02, 04 and 05 are
+> unchanged from 0.2.0, 06 dates from 0.4.2, and 07 was regenerated at 0.4.4
+> when its innovations were corrected to N(0, 1), as in the authors'
+> corrected simulation code.
+>
+> Timestamps, the package version in each header, and lines of the form
+> `[cell] batch i/n (k sims) in t s` (printed only when a batch is computed
+> rather than read from the cache) are not part of the comparison.
 
 `expected/` holds the tables this suite produces at the default sim counts
 (2000 per size/permute cell, 1500 per power cell, 600 per coverage cell, 1000

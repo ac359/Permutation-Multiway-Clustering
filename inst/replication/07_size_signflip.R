@@ -7,9 +7,15 @@
 ## same draws of the paper authors' heteroskedastic gravity design (n = 25
 ## clusters per side; log GDP node effects; a two-way random-feature log
 ## distance; error sd = 0.35 * exp(rho1 * standardised gravity mean + rho2 *
-## standardised distance); centred lognormal innovations, i.e. ASYMMETRIC) at
-## three strengths of heteroskedasticity under the null, and at beta = 0.15
-## under homoskedasticity for the power comparison.
+## standardised distance); N(0, 1) innovations, i.e. errors independent across
+## cells and SYMMETRIC, as the double sign symmetry assumption (Assumption 2
+## of the revised paper) requires and as the authors' corrected simulation
+## code draws them) at three strengths of
+## heteroskedasticity under the null, and at beta = 0.15 under
+## homoskedasticity for the power comparison. Until 0.4.3 this script drew
+## centred lognormal (asymmetric) innovations, a draw the authors later
+## corrected and under which the assumption fails; the cache cells were
+## renamed (_v2) so no result of that version is reused.
 ##
 ## What it shows: the permutation test's rejection rate rises with the
 ## heteroskedasticity while the sign-flip test's stays at or below nominal,
@@ -26,7 +32,7 @@
 ##
 ## Usage:  Rscript 07_size_signflip.R          # 500 sims/cell (default)
 ## Output: out/07_size_signflip.txt (+ _summary.rds); cache under ./cache.
-## Runtime ~7 min at the default N (two fits per sim).
+## Runtime: well under a minute at the default N (two fits per sim).
 
 source("mc_lib.R")
 suppressMessages(library(mwperm))
@@ -41,7 +47,8 @@ cat(sprintf(paste0("mwperm %s | %d sims/cell | n = 25 | perm K = 24, flip ",
             as.character(packageVersion("mwperm")), N, ALPHA,
             format(Sys.time())))
 
-## The authors' simulate_gravity_model() in long format (i varies fastest).
+## The authors' simulate_gravity_model() in long format (i varies fastest),
+## with the N(0, 1) error draw of their corrected version.
 dgp_gravity_het <- function(n, b, rho1, rho2, phi1 = 0.4, phi2 = 0.4) {
   m <- n
   log_gdp <- rnorm(n, mean = log(500), sd = 1.2)
@@ -55,8 +62,7 @@ dgp_gravity_het <- function(n, b, rho1, rho2, phi1 = 0.4, phi2 = 0.4) {
   X <- cbind(log_gdp[g$i], log_gdp[g$j])
   mu <- 4 + 0.8 * X[, 1L] + 0.8 * X[, 2L] + b * D
   sigma <- 0.35 * exp(rho1 * as.numeric(scale(mu)) + rho2 * as.numeric(scale(D)))
-  u <- rlnorm(m * n, meanlog = 0, sdlog = 1)
-  eta <- (u - exp(0.5)) / sqrt((exp(1) - 1) * exp(1))
+  eta <- rnorm(m * n)                  # symmetric innovations (N(0, 1))
   list(y = mu + sigma * eta, d = D, x = X, row = g$i, col = g$j)
 }
 
@@ -79,9 +85,10 @@ for (ci in seq_along(cells)) {
                             seed = fit_seed, conf_int = FALSE)
     c(p_perm = fp$pvalue, K_perm = fp$K, p_flip = ff$pvalue, K_flip = ff$K)
   }
-  m <- mc_cell(sprintf("size07_signflip_cell%d_v1", ci), N, sim,
+  m <- mc_cell(sprintf("size07_signflip_cell%d_v2", ci), N, sim,
                params = list(rho1 = cl$rho1, rho2 = cl$rho2, b = cl$b,
-                             n = 25L, n_flip = 6L), batch = BATCH)
+                             n = 25L, n_flip = 6L, innovations = "N(0, 1)"),
+               batch = BATCH)
   st_p <- size_table(m[, "p_perm"], alphas = ALPHA)
   st_f <- size_table(m[, "p_flip"], alphas = ALPHA)
   stopifnot((min(m[, "K_perm"]) + 1L) * ALPHA >= 1,     # floors attainable

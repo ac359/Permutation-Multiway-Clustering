@@ -228,4 +228,83 @@ cat(sprintf(paste0("test-exact-ci.R: %d of %d reported end points are ",
                    "rejected on this platform\n"),
             n_rejected_end, n_end_examined))
 
+## ---- 7. inverted at alpha itself, not at 1 - conf_level -------------------
+## conf_level is 1 - alpha, and 1 - (1 - alpha) is not alpha in floating
+## point: at alpha = 0.10, 0.20 or 0.075 it falls just BELOW alpha. Until the
+## engine passed alpha itself to the inversion, a value whose p-value is
+## exactly alpha -- which the test rejects, since it rejects when p <= alpha --
+## was accepted into the set. That needs an alpha on the p-value grid, so this
+## section uses the shipped trade_dyadic (K = 39: the grid is k/40, which
+## holds 0.075, 0.10 and 0.20). Every open cell of the step function inside
+## a reported component is probed, as in section 6, and the reported test of
+## the innermost cell next to each end point is run through the front end.
+data(trade_dyadic, package = "mwperm")
+td <- trade_dyadic
+ri <- as.integer(factor(td$importer))
+ci <- as.integer(factor(td$exporter))
+xt <- cbind(td$log_gdp_i, td$log_gdp_j)
+td_preps <- function(D, nr, K) lapply(seq_len(nr), function(r) {
+  rs <- 1L + r - 1L                  # the fits below use seed = 1
+  op <- mwperm:::.build_obs_perms(cbind(ri, ci), list(
+    build_perm_set(40L, K, seed = mwperm:::.sub_seed(rs, 1L)),
+    build_perm_set(40L, K, seed = mwperm:::.sub_seed(rs, 2L))))
+  mwperm:::.ipt_prepare(td$log_trade, as.matrix(D), cbind(1, xt), op,
+                        need_perm_D = TRUE)
+})
+for (cfg in list(c(0.075, 1), c(0.10, 1), c(0.20, 1), c(0.10, 3))) {
+  a <- cfg[1L]
+  nr <- as.integer(cfg[2L])
+  stopifnot(1 - (1 - a) != a)        # the round trip this section is about
+  fit <- mwperm_dyadic(td$log_trade, td$log_dist, x = xt, row = td$importer,
+                       col = td$exporter, alpha = a, n_reps = nr, seed = 1)
+  pl <- td_preps(td$log_dist, nr, fit$K)
+  pv <- function(b) apply(mwperm:::.pval_matrix(pl, b), 1L, stats::median)
+  stopifnot(identical(pv(fit$beta_null), fit$pvalue))   # the fit's own groups
+  roots <- mwperm:::.ci_breakpoints(pl)
+  m <- length(roots)
+  mids <- (roots[-m] + roots[-1L]) / 2
+  cs <- fit$conf_set
+  inside <- vapply(mids, function(b) any(b > cs[, 1L] & b < cs[, 2L]),
+                   logical(1))
+  stopifnot(sum(inside) > 100L, all(pv(mids[inside]) > a))
+  ## the front end's own test, next to each end of the hull
+  for (b in range(mids[inside])) {
+    f <- mwperm_dyadic(td$log_trade, td$log_dist, x = xt, row = td$importer,
+                       col = td$exporter, alpha = a, n_reps = nr, seed = 1,
+                       beta_null = b, conf_int = FALSE)
+    stopifnot(f$pvalue > a)
+  }
+}
+## the joint region (d = 2) is inverted by the same rule: every retained point
+## is accepted by the joint test
+D2 <- cbind(log_dist = td$log_dist, border = td$border)
+for (a in c(0.10, 0.20)) {
+  fit <- mwperm_dyadic(td$log_trade, D2, x = xt, row = td$importer,
+                       col = td$exporter, alpha = a, seed = 1)
+  pl <- td_preps(D2, 1L, fit$K)
+  p_ret <- apply(fit$conf_region, 1L,
+                 function(b) mwperm:::.ipt_eval(pl[[1L]], b)$pvalue)
+  stopifnot(nrow(fit$conf_region) > 20L, all(p_ret > a))
+}
+
+## ---- 8. a joint region of a few grid points says so ----------------------
+## Membership is known only at the grid points, so a region of a handful of
+## them is resolved only to the grid step; the fit must say so. A 3 x 3
+## grid around the estimate with steps of about ten standard errors keeps
+## the centre alone.
+data(trade_dyadic, package = "mwperm")
+fit8 <- function(...)
+  with(trade_dyadic, mwperm_dyadic(log_trade, cbind(log_dist, border),
+                                   x = cbind(log_gdp_i, log_gdp_j),
+                                   row = importer, col = exporter,
+                                   seed = 1, ...))
+e8 <- fit8(conf_int = FALSE)$estimate
+f8 <- fit8(grid = list(e8[1] + c(-1, 0, 1), e8[2] + c(-2, 0, 2)))
+stopifnot(nrow(f8$conf_region) >= 1L, nrow(f8$conf_region) < 10L,
+          any(grepl("holds only", f8$note, fixed = TRUE)))
+## and a well-resolved region does not
+f8b <- fit8()
+stopifnot(nrow(f8b$conf_region) >= 10L,
+          !any(grepl("holds only", f8b$note, fixed = TRUE)))
+
 passed("test-exact-ci.R")

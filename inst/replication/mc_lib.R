@@ -27,7 +27,12 @@
 ##     bump the cell_id's version tag or delete the cache directory.
 
 MC_CACHE_ROOT <- Sys.getenv("MWPERM_REPL_CACHE", "cache")
-MC_CORES <- max(1L, min(8L, parallel::detectCores() - 1L))
+## detectCores() is NA where the count cannot be determined (some containers
+## and sandboxes): run on one core there. No output depends on the count.
+MC_CORES <- local({
+  nc <- parallel::detectCores()
+  if (is.na(nc)) 1L else max(1L, min(8L, nc - 1L))
+})
 
 ## ---- Eq. (13): random-feature array ----------------------------------------
 ## variable_ij = sigma1 * v_{1,i} + sigma2 * v_{2,j} + v_{3,ij}, with

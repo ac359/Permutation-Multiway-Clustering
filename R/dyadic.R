@@ -78,9 +78,17 @@
 #' *nearly* collinear column of `x` (relative tolerance about `1e-7` on the
 #' singular values) is dropped from the projection -- the fit then behaves as
 #' if that column had been deleted, which changes what is partialled out;
-#' prefer non-redundant nuisance covariates. If `d` is annihilated entirely by
-#' some permutation's projection, the fit stops rather than returning a
-#' statistic decided by rounding noise.
+#' prefer non-redundant nuisance covariates. The projection is computed from
+#' the Gram matrix of `[X | X_k]` when that matrix is well conditioned, and
+#' otherwise by a QR of the stack, whose tolerance is relative to each column
+#' as in `lm()` -- for example when a nuisance column is in large units (GDP
+#' in levels) or has a large mean and a small spread. The result therefore
+#' does not depend on the units of a nuisance column (before 0.4.4 it could,
+#' and rescaling such a column (`scale()`) was the workaround), except for
+#' nuisance columns nearly collinear at about that tolerance, where the two
+#' routes can disagree on the rank. If `d` is
+#' annihilated entirely by some permutation's projection, the fit stops
+#' rather than returning a statistic decided by rounding noise.
 #'
 #' Seeded results are reproducible only under the same `RNGkind()` (generator
 #' and sample kind) and, when cluster ids are character strings, the same

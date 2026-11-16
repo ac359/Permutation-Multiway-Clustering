@@ -11,7 +11,9 @@
 ##     D -> c D, so their comparison in Eq. (10) is unchanged;
 ##   * the test of beta = b IS the test of beta = 0 on y - D b (step 3);
 ##   * with period dummies in X (time_fe = TRUE), a common trend zeta_t lies in
-##     col(X): condition InvB of GTW Section 6.2.
+##     col(X): condition InvB of GTW Section 6.2;
+##   * the projector depends on col([X | X_k]) alone, so the units and the
+##     origin of a nuisance column cannot move a statistic either.
 ## Complements tests/test-equivariance.R, which checks row order and small
 ## nuisance shifts on a different fixture.
 
@@ -87,4 +89,86 @@ test_that("panel, time_fe = TRUE: an arbitrary common trend zeta_t is invisible"
   n0 <- pfit(pn$y, time_fe = FALSE)
   n1 <- pfit(pn$y + zeta[pn$t], time_fe = FALSE)
   expect_false(isTRUE(all.equal(n0$conf_int, n1$conf_int)))
+})
+
+test_that("units and origin of a nuisance column: p-values and set unchanged", {
+  ## col([X | X_k]) does not change when a column of x is rescaled, or
+  ## shifted (the intercept is in X). The p-values are compared EXACTLY (each
+  ## is a count of comparisons) and the set to a tolerance. The second
+  ## nuisance column w carries signal, so a w that is silently not
+  ## partialled out shows: on the dyadic fixture, whose p-value sits at its
+  ## floor 1/(K+1), in conf_int; in the sign-flip and panel fits below
+  ## also in pvalues_rep.
+  w <- with_seed(37, exp(stats::rnorm(nrow(fx))))
+  y <- fx$y + 0.5 * w
+  x0 <- cbind(fx$x, w)
+  b0 <- fit_of(y, x = x0)
+  for (x1 in list(cbind(fx$x, w * 1e9), cbind(fx$x, w * 1e-9),
+                  cbind(fx$x, w + 1e6), cbind(fx$x * 1e7, w))) {
+    f <- fit_of(y, x = x1)
+    expect_identical(f$pvalues_rep, b0$pvalues_rep)
+    expect_equal(f$conf_int, b0$conf_int, tolerance = 1e-6)
+  }
+  ## the sign-flip group takes the same projection
+  het <- function(x) mwperm_dyadic_het(y, fx$d, x = x, row = fx$i,
+                                       col = fx$j, n_reps = 3, seed = 41)
+  h0 <- het(x0)
+  h1 <- het(cbind(fx$x, w * 1e9))
+  expect_identical(h1$pvalues_rep, h0$pvalues_rep)
+  expect_equal(h1$conf_int, h0$conf_int, tolerance = 1e-6)
+  ## and the panel design with period dummies (time_fe = TRUE)
+  pn <- make_panel(20, 20, T = 3, beta = 0.2, seed = 32)
+  pw <- with_seed(38, exp(stats::rnorm(nrow(pn))))
+  pfit <- function(x) mwperm_panel(pn$y + pw, pn$d, x = x, row = pn$i,
+                                   col = pn$j, time = pn$t, n_reps = 3,
+                                   seed = 42)
+  p0 <- pfit(cbind(pn$x, pw))
+  p1 <- pfit(cbind(pn$x, pw * 1e9))
+  expect_identical(p1$pvalues_rep, p0$pvalues_rep)
+  expect_equal(p1$conf_int, p0$conf_int, tolerance = 1e-6)
+})
+
+test_that("an element that fixes d and x keeps p = 1 on the QR route", {
+  ## A layout whose d and x are constant within cells: every element fixes
+  ## D and X, so a_k == b_k exactly and p = 1 whichever route the
+  ## projection takes (the x below is in large units, which can send it to
+  ## the QR, whose rows for identical inputs may differ in the last bit).
+  dat <- with_seed(101, {
+    n <- 6L
+    L <- 21L
+    row <- rep(rep(seq_len(n), each = n), each = L)
+    col <- rep(rep(seq_len(n), times = n), each = L)
+    cid <- (row - 1L) * n + col
+    dc <- stats::rnorm(n * n)
+    xc <- stats::rnorm(n * n)
+    list(y = 0.3 * dc[cid] + 0.5 * xc[cid] + stats::rnorm(length(cid)),
+         d = dc[cid], x = xc[cid] * 1e5, row = row, col = col)
+  })
+  f <- suppressWarnings(mwperm_layout(dat$y, dat$d, dat$x, row = dat$row,
+                                      col = dat$col, seed = 1))
+  expect_identical(f$pvalue, 1)
+  expect_identical(f$conf_int, c(-Inf, Inf))
+})
+
+test_that("the origin of the covariate of interest changes nothing", {
+  ## The intercept is in X, so the test of d + c is the test of d; the
+  ## engine centres a d far from zero, where its origin would otherwise
+  ## cost accuracy (and, from about 1e8 sd, called it constant).
+  for (k in c(1e5, 1e8)) {
+    f <- fit_of(fx$y, d = fx$d + k * stats::sd(fx$d))
+    expect_identical(f$pvalues_rep, base$pvalues_rep)
+    expect_equal(f$conf_int, base$conf_int, tolerance = 1e-6)
+  }
+  ## a d whose only variation beyond x is the rounding of its own origin
+  ## still has none: a warning and p = 1
+  x1 <- as.matrix(fx$x)[, 1]
+  w <- character(0)
+  f0 <- withCallingHandlers(
+    fit_of(fx$y, d = x1 + 1e9 * stats::sd(x1), conf_int = FALSE),
+    warning = function(c) {
+      w <<- c(w, conditionMessage(c))
+      invokeRestart("muffleWarning")
+    })
+  expect_true(any(grepl("no variation", w, fixed = TRUE)))
+  expect_identical(f0$pvalue, 1)
 })

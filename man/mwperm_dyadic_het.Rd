@@ -127,7 +127,7 @@ but \strong{not additive cluster effects}: the error array must be
 
 This is the invariant test of Guo, Toulis and Wang (2026) run with a
 \emph{sign-flip} group in place of the permutation group: the \emph{double
-sign symmetry} assumption (Assumption 2 of the revised paper), under which
+sign symmetry} assumption (Assumption 2, Section 3.3 of the revised paper), under which
 Procedure 1 is unchanged except that Step 1 applies random sign flips. It
 is the test the authors call IPT-Het. Same model, same null, same
 statistic, same confidence set by test inversion; only the group changes,
@@ -176,10 +176,12 @@ covariates, as a model that satisfies the assumption; the assumption itself
 is weaker. The paper's own simulation for this test draws errors independent
 across cells, \code{eps_ij = sigma_ij eta_ij} with
 \code{eta_ij ~ N(0, 1)} and \code{sigma_ij} increasing in the gravity mean
-and in distance; that is the setting the test is meant for. On the paper's
-own 1000 simulated datasets (25 clusters per side, \code{n_flip = 6}) this
-function rejected a true null in 1.7\% of them at the default single run
-and 0.7\% with ten; the paper reports 1.1\% for its own single draw.
+and in distance; that is the setting the test is meant for. On 10,000
+datasets of that design (25 clusters per side, \code{n_flip = 6}) this
+function rejected a true null in 1.36\% of them at the default single run,
+and the method authors' own research code in 1.41\%. (On the first 1000 of
+those datasets: 1.7\% at a single run, 0.7\% with ten, and 1.1\% for the
+authors' code.)
 
 Under covariate-dependent heteroskedasticity (the paper's gravity design:
 25 clusters per side, symmetric errors independent across cells, their
@@ -200,8 +202,9 @@ automatically: request it with \code{design = "dyadic_het"}.
 
 \strong{Incomplete arrays.} No fully observed block is needed: every
 observed cell is used and nothing is discarded (the fit says so in a note).
-What is needed is the analogue of Assumption 4: which cells are observed
-must be independent of the errors given X and D. Dropping zero trade flows
+What is needed is the analogue of Assumption 4 of arXiv v1 (Assumption 5 of
+the revision): which cells are observed must be independent of the errors
+given X and D. Dropping zero trade flows
 because log(0) is undefined violates it, since whether a flow is zero
 depends on its error. Running on an incomplete array is this package's
 extension, which the method's authors have agreed to; the paper states
@@ -216,7 +219,7 @@ cluster is assigned at random to one of \code{n_flip} flip groups, and a
 sign vector in \code{{-1, +1}^n_flip} multiplies observation \code{(i, j)}
 by the product of its row group's sign and its column group's sign (see
 \code{\link{build_flip_set}}: this is the revised paper's sign-flipping set
-construction, Appendix E, with \code{n_flip} as its \code{c}, and its
+construction, Section S1.1 of its Supplementary Material, with \code{n_flip} as its \code{c}, and its
 \code{K = 2^c - 1} counts each distinct flip twice). A sign vector and its negative induce the
 same transformation, so the group has \code{2^(n_flip - 1)} distinct
 elements, not \code{2^n_flip}; the package enumerates each exactly once.
@@ -256,7 +259,7 @@ the place of the permuted copy in the stacked design \code{[X | S_k X]}.
 
 Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
 sign flips in Step 1 in place of the permutation group, under the revised
-paper's Assumption 2 (double sign symmetry).
+paper's Assumption 2 (double sign symmetry, Section 3.3).
 }
 \examples{
 data(trade_dyadic)

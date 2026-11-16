@@ -74,7 +74,11 @@
 #'
 #' together with Assumption 4 on the mask: which cells clear L0 is
 #' independent of the errors given the covariates. Under those two conditions
-#' the p-value is exact in finite samples by the argument of Theorem 4. The
+#' the p-value of each repetition is exact in finite samples by the argument
+#' of Theorem 4. The default reports the median over 500 repetitions, which
+#' no finite-sample theorem covers (see the `aggregate` argument);
+#' `aggregate = "median2"` (twice the median) is guaranteed valid at level
+#' `alpha`, conservatively. The
 #' position l of a retained observation is its rank among the survivors of a
 #' random draw, so the condition holds when the observations inside a cell
 #' are **exchangeable replicates** -- individuals sampled within a cell, as
@@ -164,6 +168,31 @@
 #'   covers; this one keeps 500 because only here is the data itself
 #'   redrawn in every repetition, so a single run would rest on one random
 #'   subsample.
+#' @param aggregate How the `n_reps` per-repetition p-values are combined into
+#'   the reported p-value, and into the confidence set that inverts it, when
+#'   `n_reps > 1`. `"median"` (the default) is the median, as recommended in
+#'   Remark 1 of Guo, Toulis and Wang (2026); `"median2"` is
+#'   `min(1, 2 * median)`.
+#'
+#' The choice decides what "exact" covers. Under the conditions in Details
+#' the p-value of each repetition is exact (the argument of Theorem 4), so
+#' with `n_reps = 1` the reported p-value is exact as stated; this
+#' function's default is `n_reps = 500`. The median of several dependent
+#' randomised p-values is a de-randomisation heuristic: endorsed by Remark 1
+#' and well behaved in practice, but not itself guaranteed valid at level
+#' `alpha`. Twice the median is guaranteed, under arbitrary dependence
+#' across repetitions (Ruschendorf 1982; Vovk and Wang 2020).
+#'
+#' So with `n_reps > 1`, use `"median2"` when the guarantee must hold as
+#' stated. It is conservative: it never rejects where `"median"` would not,
+#' and its confidence set is never narrower.
+#'
+#' The cost is resolution. `"median2"` reports `min(1, 2 * median)`, so its
+#' smallest attainable p-value is `2/(K+1)`, not `1/(K+1)`, and rejecting at
+#' level `alpha` needs `K + 1 >= 2/alpha` -- at `alpha = 0.05` that is 40
+#' levels in the smallest permuted dimension, twice what `"median"` needs.
+#' Below that the p-value is still valid but cannot reach `alpha`, and the
+#' fit says so in a note.
 #'
 #' @return An object of class `"mwperm"`, with the extra fields `n_blocks`,
 #'   `cells_used`, `cells_total` and `L0`. `n_obs` is the number of

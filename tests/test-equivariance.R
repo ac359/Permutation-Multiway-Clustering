@@ -7,7 +7,10 @@
 ## BIT-IDENTICAL under every transformation below, so it is asserted with
 ## identical(); estimates and interval end points agree only to machine
 ## epsilon, because rescaling or reordering changes the summation order inside
-## the QR. A failure at 1e-10 is a real bug, not drift.
+## the QR. A failure at 1e-10 is a real bug, not drift. (Section 7 is the
+## exception: a badly scaled nuisance column goes through a QR of an
+## ill-conditioned stack, and its end points are held to 1e-6 of the
+## interval's width.)
 ##
 ## Dispatch identity -- mwperm() reproducing the direct front-end call -- is in
 ## test-main.R, where the dispatcher lives. See tests/README.md.
@@ -200,5 +203,149 @@ k_axis <- sched[sched[, "len"] == f0$K, , drop = FALSE]      # the K loops
 stopifnot(nrow(rep_axis) >= 1L, all(rep_axis[, "n_cores"] == 1L),
           nrow(k_axis) >= 3L, all(k_axis[, "n_cores"] == 2L),
           length(fit_null$pvalues_rep) == 3L)
+
+## ---- 7. the units and the origin of a nuisance column change nothing -----
+## The projector of Procedure 1 depends on col([X | X_k]) only, so rescaling
+## a column of `x`, or shifting it (the intercept is in X), cannot move a
+## statistic. The cheap Gram route of .ipt_prepare() squares the condition
+## number of the stack and cuts its spectrum relative to the LARGEST column,
+## so without a guard a column in large units (or on a large origin) is
+## silently not partialled out and the p-value moves. A conditioning guard
+## now sends such a stack to a QR of the stack itself (.residualize()). The
+## p-value is asserted with identical(); the end points to 1e-6 of the
+## interval's width, the precision a badly scaled design can still deliver.
+## The fixture has a nuisance column `uw` that is correlated with nothing
+## but y, so dropping it from the projection moves the interval (and, for
+## some of the transformations below, the p-value).
+set.seed(1)
+nu <- 20L
+gu <- expand.grid(i = seq_len(nu), j = seq_len(nu))
+Nu <- nrow(gu)
+uz <- runif(nu, 0, 2)[gu$i]
+uw <- exp(rnorm(Nu))
+ud <- 0.8 * uz + rnorm(Nu)
+uy <- 1 + 2 * uz + 0.5 * uw + rnorm(nu)[gu$i] + rnorm(Nu)
+## count the calls of the QR route, to show which branch each fit took
+ns <- asNamespace("mwperm")
+orig_resid <- get(".residualize", envir = ns)
+n_qr <- 0L
+unlockBinding(".residualize", ns)
+assign(".residualize", function(M, V) {
+  n_qr <<- n_qr + 1L
+  orig_resid(M, V)
+}, envir = ns)
+lockBinding(".residualize", ns)
+qr_calls <- function(expr) {
+  n_qr <<- 0L
+  force(expr)
+  n_qr
+}
+same_test <- function(f, f_ref)
+  identical(f$pvalue, f_ref$pvalue) &&
+    identical(f$pvalues_rep, f_ref$pvalues_rep) &&
+    max(abs(f$conf_int - f_ref$conf_int)) < 1e-6 * diff(f_ref$conf_int)
+
+## dyadic: units 1e9 and 1e-9 and an origin of 1e6 take the QR route; a
+## well-scaled design does not, so its arithmetic is the historical one
+nq_ref <- qr_calls(fu0 <- mwperm_dyadic(uy, ud, cbind(uz, uw), gu$i, gu$j,
+                                        seed = 1))
+stopifnot(nq_ref == 0L)
+for (xu in list(cbind(uz, uw * 1e9), cbind(uz, uw * 1e-9),
+                cbind(uz, uw + 1e6), cbind(uz * 1e7, uw))) {
+  nq <- qr_calls(fu <- mwperm_dyadic(uy, ud, xu, gu$i, gu$j, seed = 1))
+  stopifnot(same_test(fu, fu0), nq > 0L)
+}
+## sign-flip elements take the same guard
+hu0 <- mwperm_dyadic_het(uy, ud, cbind(uz, uw), gu$i, gu$j, seed = 1)
+nq <- qr_calls(hu <- mwperm_dyadic_het(uy, ud, cbind(uz, uw * 1e9), gu$i,
+                                       gu$j, seed = 1))
+stopifnot(same_test(hu, hu0), nq > 0L)
+## panel with period dummies in X (time_fe = TRUE): every element fixes the
+## period, so the dummies repeat in the stack, which is rank-deficient AND
+## badly scaled
+set.seed(2)
+gp <- expand.grid(i = 1:20, j = 1:20, t = 1:3)
+pz <- runif(20)[gp$i]
+pw <- exp(rnorm(nrow(gp)))
+pd <- pz + rnorm(nrow(gp))
+py <- 1 + 2 * pz + pw + 0.3 * gp$t + rnorm(20)[gp$i] + rnorm(nrow(gp))
+pu0 <- mwperm_panel(py, pd, cbind(pz, pw), gp$i, gp$j, gp$t, seed = 1)
+nq <- qr_calls(pu <- mwperm_panel(py, pd, cbind(pz, pw * 1e9), gp$i, gp$j,
+                                  gp$t, seed = 1))
+stopifnot(pu0$K == 19L, same_test(pu, pu0), nq > 0L)
+## two coefficients of interest: the joint region is searched on a grid
+## whose step is the naive OLS standard error. solve() refuses the badly
+## scaled W'W that standard error used to come from, the step then fell
+## back to 1 and the region came back as one or a handful of points, with
+## no note. It now comes from the QR that lm.fit() holds whenever solve()
+## fails.
+ud2 <- 0.5 * uz + rnorm(Nu)
+ru0 <- mwperm_dyadic(uy, cbind(ud, ud2), cbind(uz, uw), gu$i, gu$j, seed = 1)
+ru <- mwperm_dyadic(uy, cbind(ud, ud2), cbind(uz, uw * 1e9), gu$i, gu$j,
+                    seed = 1)
+stopifnot(all(is.finite(ru0$se_naive)), all(is.finite(ru$se_naive)),
+          max(abs(ru$se_naive / ru0$se_naive - 1)) < 1e-6,
+          identical(ru$pvalue, ru0$pvalue),
+          nrow(ru0$conf_region) > 10L,
+          nrow(ru$conf_region) == nrow(ru0$conf_region),
+          max(abs(ru$conf_box - ru0$conf_box)) <
+            1e-6 * max(abs(ru0$conf_box)))
+unlockBinding(".residualize", ns)
+assign(".residualize", orig_resid, envir = ns)
+lockBinding(".residualize", ns)
+
+## ---- 8. a serial fit never looks up the core count ------------------------
+## parallel::detectCores() shells out on macOS (several ms a call) and used to
+## run 2 + n_reps times per fit, also when n_cores = 1, where the count is not
+## needed: a default mwperm_irregular() fit (500 repetitions) spent most of
+## its wall clock there. Instrument .n_cores_max() to count its calls.
+orig_ncm <- get(".n_cores_max", envir = ns)
+n_ncm <- 0L
+unlockBinding(".n_cores_max", ns)
+assign(".n_cores_max", function() {
+  n_ncm <<- n_ncm + 1L
+  orig_ncm()
+}, envir = ns)
+lockBinding(".n_cores_max", ns)
+f_ser3 <- mwperm_dyadic(y, d, x = x, row = g$i, col = g$j, seed = 5,
+                        n_reps = 3L)
+r_ser <- internal(".plapply")(as.list(1:4), function(i) i + 1L, n_cores = 1L)
+n_serial <- n_ncm
+## a parallel request still consults it, to clamp n_cores
+f_par3 <- mwperm_dyadic(y, d, x = x, row = g$i, col = g$j, seed = 5,
+                        n_reps = 3L, n_cores = 2L)
+n_parallel <- n_ncm - n_serial
+unlockBinding(".n_cores_max", ns)
+assign(".n_cores_max", orig_ncm, envir = ns)
+lockBinding(".n_cores_max", ns)
+stopifnot(n_serial == 0L, n_parallel > 0L,
+          identical(r_ser, lapply(as.list(1:4), function(i) i + 1L)),
+          isTRUE(same_fit(f_ser3, f_par3)))
+
+## ---- 9. the origin of the covariate of interest changes nothing ----------
+## Every design includes the intercept, so the test of d + c is the test of
+## d. Far from zero the residualized d is orthogonal to the intercept only
+## to rounding, which the origin then multiplies (1e7 sd moved the interval
+## by 0.02; from 1e8 sd the fit called d constant and returned p = 1), so
+## the engine centres a d whose mean exceeds 1e3 of its standard deviations.
+f9 <- mwperm_dyadic(y, d, x = x, row = g$i, col = g$j, seed = 9)
+for (k9 in c(1e5, 1e8)) {
+  f9k <- mwperm_dyadic(y, d + k9 * sd(d), x = x, row = g$i, col = g$j,
+                       seed = 9)
+  stopifnot(identical(f9k$pvalue, f9$pvalue),
+            max(abs(f9k$conf_int - f9$conf_int)) <
+              1e-6 * max(abs(f9$conf_int)))
+}
+## ... and a d whose only variation beyond x is the rounding of its own
+## origin (d = x + 1e9 sd) still has no variation: a warning and p = 1.
+w9 <- character(0)
+f9u <- withCallingHandlers(
+  mwperm_dyadic(y, x[, 1] + 1e9 * sd(x[, 1]), x = x, row = g$i, col = g$j,
+                seed = 9, conf_int = FALSE),
+  warning = function(w) {
+    w9 <<- c(w9, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+stopifnot(f9u$pvalue == 1, any(grepl("no variation", w9, fixed = TRUE)))
 
 passed("test-equivariance.R")

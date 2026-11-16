@@ -27,33 +27,45 @@
 ##   permutation maps the intercept (and panel period dummies) to itself.
 ##   The code projects with the numerical rank of the stack (eigenvalue cut
 ##   1e-14 of the Gram matrix = 1e-7 on singular values), which satisfies
-##   the paper's defining conditions V_k' X = V_k' X_k = 0 exactly.
+##   the paper's defining conditions V_k' X = V_k' X_k = 0 exactly. In exact
+##   arithmetic it is I - M (M'M)^+ M' with M = [X | X_k], so the departure
+##   is from the N - 2p column count only, not from the projection. A stack
+##   too badly conditioned for the Gram matrix (a nuisance column in large
+##   units, or with a large mean and a small spread) is residualized by a QR
+##   of the stack instead; see the guard in .ipt_prepare().
 ## Pipeline. mwperm() -> dispatch -> design worker -> [permutation
 ##   construction: .build_obs_perms] -> [projection engine: .ipt_prepare,
 ##   .ipt_eval] -> median aggregation -> test inversion -> S3 methods.
 ##   Called from .ipt_engine() in engine.R, once per repetition.
 ## ============================================================================
 
-#' Residual maker via QR (rank robust) -- REFERENCE IMPLEMENTATION
+#' Residual maker via QR (rank robust) -- reference implementation and fallback
 #'
 #' Returns the residuals of `V` after projecting onto the column space of `M`,
 #' i.e. (I - P_M) V where P_M is the orthogonal projector onto col(M). Uses a
 #' pivoted QR so that rank-deficient `M` (e.g. a duplicated intercept after
 #' stacking X with a permuted copy of X) is handled correctly.
 #'
-#' **Not on the fit path.** Nothing in R/ calls this. `.ipt_prepare()`
-#' computes the same residuals through an eigendecomposition pseudo-inverse of
-#' the 2p x 2p Gram matrix: that never materializes the N x 2p stack, and it
-#' replaces a QR of that stack (O(N (2p)^2)) with one O(N p^2) cross product
-#' plus an O(p^3) eigendecomposition that does not grow with N. This function
-#' survives as the obvious, obviously correct formulation that
-#' `tests/lower-level-tests/test-projection.R` pins against an independent SVD
-#' projector; keep the two in agreement, and do not delete this without
-#' relocating that test.
+#' **The fallback of the fit path.** `.ipt_prepare()` normally computes the
+#' same residuals through an eigendecomposition pseudo-inverse of the 2p x 2p
+#' Gram matrix: that never materializes the N x 2p stack, and it replaces a
+#' QR of that stack (O(N (2p)^2)) with one O(N p^2) cross product plus an
+#' O(p^3) eigendecomposition that does not grow with N. The Gram matrix
+#' squares the condition number of the stack, though, and its rank cut is
+#' relative to the largest column, so `.ipt_prepare()` calls this function
+#' instead whenever its conditioning guard fails. The QR tolerance here is
+#' relative to each column, as in `lm()`, so the result does not depend on
+#' the units of a nuisance column, nor on its origin up to about a million
+#' standard deviations (from about ten million the column is collinear with
+#' the intercept at the QR's relative tolerance of 1e-7 and is dropped, as
+#' `lm()` drops it).
+#' `tests/lower-level-tests/test-projection.R` pins this function against an
+#' independent SVD projector; keep the two in agreement.
 #'
 #' @details Procedure 1, step 1 of GTW (2026): the residual maker I - P_[X |
-#'   X_k] = V_k V_k', written the obvious way. Reference only; the fit path
-#'   computes the same residuals in `.ipt_prepare()`.
+#'   X_k] = V_k V_k', written the obvious way. The fit path computes the same
+#'   residuals in `.ipt_prepare()` and falls back to this function when the
+#'   stack is badly conditioned.
 #' @param M numeric matrix, N x q.
 #' @param V numeric vector or N x d matrix.
 #' @return residuals, same shape as `V`.
@@ -259,6 +271,8 @@
 #'   non-identity element k, cached as the four d-dimensional cross products
 #'   from which a_k(b) and b_k(b) follow for any null b. The paper gives V_k N
 #'   - 2p columns (the full-rank case); the rank of the stack is used instead.
+#'   The residuals come from the Gram-matrix pseudo-inverse, or from
+#'   `.residualize()` (a QR of the stack) when the conditioning guard fails.
 #' @param y numeric outcome, length N (the *unshifted* outcome).
 #' @param D numeric N x d matrix of covariate(s) of interest.
 #' @param X numeric N x p nuisance design (intercept already included).
@@ -332,7 +346,8 @@
   ## upper-left, for every k. Only the cross block depends on the element.
   ## That is the whole optimization: X'X is formed once below, and the per-
   ## element cost drops to one crossprod (level-3 BLAS) in place of a QR
-  ## of the N x 2p stack.
+  ## of the N x 2p stack. (That QR is still taken, by .residualize(), for an
+  ## element whose Gram matrix fails the conditioning guard in one_k().)
   p <- ncol(X)                         # nuisance columns (incl. intercept)
   A <- crossprod(X)                    # shared by every permutation
   XtD <- crossprod(X, D)               # likewise
@@ -350,6 +365,12 @@
   ## verified on the reference BLAS at 67 of 67 permutations, max |diff|
   ## 0.000e+00.
   tX <- t(X)
+  ## Column norms of the stack [X | X_k], as an outer product. A permutation
+  ## or a sign flip leaves a column's norm unchanged, so they are those of X,
+  ## twice. Used only by the conditioning guard in one_k().
+  sc <- sqrt(rep(diag(A), 2L))
+  sc[sc == 0] <- 1
+  sc2 <- tcrossprod(sc)
 
   ## One slice of cached cross products per non-identity element k.
   ## Naming: Dr = D residualized on M_k = [X | X_k]; a trailing `g` is the
@@ -372,18 +393,41 @@
       ## duplicates the original, and panel time dummies are permuted among
       ## themselves -- so the projector goes through a pseudo-inverse. The
       ## eigenvalues of the Gram matrix are the SQUARED singular values of
-      ## M_k, so the cut below at 1e-14 is the same relative tolerance on
-      ## singular values (1e-7) that .lm.fit applies, squared.
-      e <- eigen(rbind(cbind(A, B), cbind(t(B), A)), symmetric = TRUE)
+      ## M_k, so the cut below at 1e-14 is a relative tolerance of 1e-7 on
+      ## singular values. It is relative to the largest singular value of the
+      ## whole stack, where .lm.fit's 1e-7 is relative to each column; the
+      ## guard below covers the difference.
+      G <- rbind(cbind(A, B), cbind(t(B), A))  # the Gram matrix M_k' M_k
+      e <- eigen(G, symmetric = TRUE)
       pos <- e$values > 1e-14 * e$values[1L]   # numerical rank of [X | X_k]
-      V <- e$vectors[, pos, drop = FALSE]      # (not 2p: see the file header)
-      ## cf = (M_k' M_k)^+ M_k' D, the least-squares coefficients of D on
-      ## M_k = [X | X_k] through the pseudo-inverse; D - M_k cf is then the
-      ## residual (I - P_{M_k}) D = V_k V_k' D.
-      cf <- V %*% ((1 / e$values[pos]) *
-                     crossprod(V, rbind(XtD, crossprod(Xg, D))))
-      D - X %*% cf[seq_len(p), , drop = FALSE] -
-          Xg %*% cf[p + seq_len(p), , drop = FALSE]   # (I - P_{M_k}) D
+      ## Guard. The Gram route squares the condition number of M_k, and its
+      ## cut is relative to the LARGEST column of the stack: a nuisance
+      ## column in large units (or with a large mean and a small spread) can
+      ## push the intercept and the other columns under the cut, and they are
+      ## then silently not partialled out. So the route is trusted only when
+      ##   (a) it kept as many directions as the column-equilibrated Gram
+      ##       matrix keeps (given (b), equal counts mean the same
+      ##       directions, so none was lost to scale), and
+      ##   (b) the kept spectrum spans less than 1e8 (cond(M_k) < 1e4, so
+      ##       the solve is accurate to about 1e-8).
+      ## Otherwise D is residualized by a QR of the stack itself, whose
+      ## tolerance is relative to each column -- the route lm() takes.
+      ## Well-conditioned designs never reach it, and their arithmetic below
+      ## is unchanged.
+      es <- eigen(G / sc2, symmetric = TRUE, only.values = TRUE)$values
+      if (sum(pos) != sum(es > 1e-14 * es[1L]) ||
+          min(e$values[pos]) < 1e-8 * e$values[1L]) {
+        .residualize(cbind(X, Xg), D)          # (I - P_{M_k}) D, by QR
+      } else {
+        V <- e$vectors[, pos, drop = FALSE]    # (not 2p: see the file header)
+        ## cf = (M_k' M_k)^+ M_k' D, the least-squares coefficients of D on
+        ## M_k = [X | X_k] through the pseudo-inverse; D - M_k cf is then the
+        ## residual (I - P_{M_k}) D = V_k V_k' D.
+        cf <- V %*% ((1 / e$values[pos]) *
+                       crossprod(V, rbind(XtD, crossprod(Xg, D))))
+        D - X %*% cf[seq_len(p), , drop = FALSE] -
+            Xg %*% cf[p + seq_len(p), , drop = FALSE]   # (I - P_{M_k}) D
+      }
     }
     if (sum(Dr * Dr) <= degen_tol2) {  # degenerate slice
       if (degenerate == "stop")
@@ -416,9 +460,17 @@
     ## the identity rather than recompute it, so the answer is the same on
     ## every platform's BLAS. Non-degenerate slices never take this branch,
     ## and a non-identity sign flip cannot (it negates some row of Dr).
+    ## The inputs are tested as well as Dr: an element that fixes the values
+    ## of D and X commutes with the projector onto col(X), so it fixes Dr
+    ## in exact arithmetic, but the QR route (.residualize()) does not return
+    ## identical rows for identical inputs -- its pivot rows differ in the
+    ## last bit -- so Dr alone would miss the tie there and let rounding
+    ## decide the test. Values, not attributes, are compared, so row names
+    ## on d or x cannot hide the tie either.
     uu <- crossprod(Dr, y)       # = Dr' y = D' V_k V_k' y  (a_k at b = 0)
     MM <- crossprod(Dr)          # = D' V_k V_k' D          (a_k's slope in b)
-    if (identical(.apply_op(op, Dr), Dr))
+    if (identical(.apply_op(op, Dr), Dr) ||
+        (all(.apply_op(op, D) == D) && (p == 0L || all(Xg == X))))
       return(list(u = uu, v = uu, M = MM,
                   W = if (need_perm_D) MM))
     list(u = uu,

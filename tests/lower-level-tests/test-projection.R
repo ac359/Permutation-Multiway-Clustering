@@ -53,9 +53,9 @@ dyadic_perms <- function(n, K, s) mwperm:::.build_obs_perms(
   list(build_perm_set(n, K, seed = s), build_perm_set(n, K, seed = s + 100L)))
 
 ## ---- 1. Eq. (3): V_k' X = 0 and V_k' X_k = 0 (FWL orthogonality) ----------
-## The package residualizes via qr.resid(qr([X|X_g]), .); the residuals must be
-## orthogonal to BOTH X and the permuted X_g, for y, permuted y, D and permuted
-## D.
+## .residualize() (qr.resid of the stack [X|X_g]: the fallback of the fit path,
+## see section 5) must return residuals orthogonal to BOTH X and the permuted
+## X_g, for y, permuted y, D and permuted D.
 set.seed(1)
 n <- 8L
 K <- 5L
@@ -130,5 +130,100 @@ for (t in 1:20) {
   }
 }
 stopifnot(ncheck == 40L)
+
+## ---- 5. the two routes of .ipt_prepare(): Gram pseudo-inverse and QR ------
+## .ipt_prepare() normally residualizes D through an eigendecomposition of the
+## 2p x 2p Gram matrix of [X | X_k]; when that matrix is too badly conditioned
+## (a nuisance column in large units, or with a large mean and a small spread)
+## a guard sends the element to .residualize(), a QR of the stack. Pinned here:
+##  (a) on a well-conditioned design the result agrees with the QR route to
+##      rounding (that the Gram route is the one taken there is pinned by
+##      test-equivariance.R section 7);
+##  (b) on the same design with one column in units of 1e9 every element
+##      takes the QR route -- its cached cross products are EXACTLY those of
+##      .residualize() -- and they agree with (a)'s, so rescaling a column
+##      moved nothing. Permutations and sign flips alike.
+set.seed(5)
+n5 <- 10L
+g5 <- expand.grid(i = seq_len(n5), j = seq_len(n5))
+N5 <- nrow(g5)
+z5 <- rnorm(n5)[g5$i]
+w5 <- exp(rnorm(N5))
+X5 <- cbind(1, z5, w5)
+D5 <- cbind(0.5 * z5 + rnorm(N5), rnorm(N5))         # d = 2
+y5 <- 1 + z5 + w5 + rnorm(N5)
+fl <- build_flip_set(n5, n5, 4L, seed = 3)
+ops5 <- c(dyadic_perms(n5, 4L, 9L),
+          lapply(fl[-1L], function(f) list(g = NULL, s = f$row[g5$i] *
+                                                         f$col[g5$j])))
+## by hand, through the QR route, for every non-identity element
+by_qr <- function(X) {
+  sl <- lapply(ops5[-1L], function(op) {
+    Xg <- mwperm:::.apply_op(op, X)
+    Dr <- mwperm:::.residualize(cbind(X, Xg), D5)
+    list(u = crossprod(Dr, y5), v = crossprod(Dr, mwperm:::.apply_op(op, y5)),
+         M = crossprod(Dr), W = crossprod(Dr, mwperm:::.apply_op(op, D5)))
+  })
+  list(u = sapply(sl, `[[`, "u"), v = sapply(sl, `[[`, "v"),
+       M = simplify2array(lapply(sl, `[[`, "M")),
+       W = simplify2array(lapply(sl, `[[`, "W")))
+}
+rel <- function(a, b) max(abs(a - b)) / max(abs(b))
+X5s <- X5
+X5s[, 3L] <- X5s[, 3L] * 1e9
+pg <- mwperm:::.ipt_prepare(y5, D5, X5, ops5, need_perm_D = TRUE)
+ps <- mwperm:::.ipt_prepare(y5, D5, X5s, ops5, need_perm_D = TRUE)
+q0 <- by_qr(X5)
+qs <- by_qr(X5s)
+for (f in c("u", "v", "M", "W")) {
+  stopifnot(rel(pg[[f]], q0[[f]]) < 1e-10,                 # (a)
+            identical(unname(ps[[f]]), unname(qs[[f]])),     # (b) QR route
+            rel(ps[[f]], pg[[f]]) < 1e-8)                    # (b) invariance
+}
+## the p-value at several nulls is the same object on both designs
+for (b in list(c(0, 0), c(0.5, -0.2), c(2, 1)))
+  stopifnot(identical(mwperm:::.ipt_eval(ps, b)$pvalue,
+                      mwperm:::.ipt_eval(pg, b)$pvalue))
+
+## ---- 6. an element that fixes d and x keeps a_k == b_k on either route ----
+## An element that leaves the values of D and X unchanged commutes with the
+## projector, so a_k == b_k for every b and p = 1 exactly: the no-power case
+## of a layout whose d is constant within cells, or of a panel whose d and x
+## vary by period only. .ipt_prepare() asserts that tie rather than
+## recomputing it. The cell-level x below is in large units, which can send
+## the projection to the QR route, whose rows for identical inputs may
+## differ in the last bit; the tie must hold whichever route is taken, and
+## row names on d and x must not hide it. (Without the check on the inputs
+## the layout fit below gave p = 0.57 and a finite interval.)
+set.seed(101)
+n6 <- 6L; L6 <- 21L
+row6 <- rep(rep(seq_len(n6), each = n6), each = L6)
+col6 <- rep(rep(seq_len(n6), times = n6), each = L6)
+cid6 <- (row6 - 1L) * n6 + col6
+dc6 <- rnorm(n6 * n6); xc6 <- rnorm(n6 * n6)
+y6 <- 0.3 * dc6[cid6] + 0.5 * xc6[cid6] + rnorm(length(cid6))
+## one element by hand: reverse the replicates of every cell
+idx6 <- split(seq_along(cid6), cid6)
+g6 <- integer(length(cid6))
+g6[unlist(idx6)] <- unlist(lapply(idx6, rev))
+D6 <- matrix(dc6[cid6]); X6 <- cbind(1, xc6[cid6] * 1e5)
+for (rn in list(NULL, paste0("r", seq_along(cid6)))) {
+  rownames(D6) <- rn; rownames(X6) <- rn
+  p6 <- mwperm:::.ipt_prepare(y6, D6, X6, list(seq_along(g6), g6))
+  stopifnot(identical(p6$v, p6$u), identical(p6$W, p6$M))
+}
+## through the front ends: a layout, and a panel with a calendar-year column
+f6 <- suppressWarnings(mwperm_layout(y6, dc6[cid6], xc6[cid6] * 1e5,
+                                     row = row6, col = col6, seed = 1))
+stopifnot(f6$pvalue == 1, identical(f6$conf_int, c(-Inf, Inf)))
+set.seed(9001)
+pd6 <- expand.grid(row = 1:21, col = 1:21, time = 1:8)
+dt6 <- rnorm(8)
+pd6$y <- 0.3 * dt6[pd6$time] + 0.05 * pd6$time + rnorm(nrow(pd6))
+f6p <- suppressWarnings(mwperm_panel(pd6$y, dt6[pd6$time],
+                                     x = 2000 + pd6$time, row = pd6$row,
+                                     col = pd6$col, time = pd6$time,
+                                     time_fe = FALSE, seed = 1))
+stopifnot(f6p$pvalue == 1, identical(f6p$conf_int, c(-Inf, Inf)))
 
 passed("test-projection.R")

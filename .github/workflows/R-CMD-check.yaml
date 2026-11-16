@@ -1,6 +1,5 @@
-# R CMD check across platforms and R versions (audit F7.4; closes the
-# audit's U1/U3/U22/U23 platform gaps: vignette building with pandoc,
-# R-devel, true-Windows PSOCK behaviour, non-reference BLAS).
+# R CMD check across platforms and R versions, covering vignette building
+# with pandoc, R-devel, Windows PSOCK behaviour and non-reference BLAS.
 # Workflow derived from r-lib/actions examples (check-standard).
 on:
   push:
