@@ -308,4 +308,33 @@ fi <- suppressWarnings(mwperm_irregular(ph$y, ph$d, row = ph$i, col = ph$j,
 stopifnot(fi$K == 9L, any(grepl("held fixed (5x5, 3x3", fi$note,
                                 fixed = TRUE)))
 
+## ---- a block below the floor does not end the biclique search -----------------
+## Both searches maximise area, and a long thin strip has more area than a
+## large square block: until 0.4.4 the peel stopped at the first block below
+## min_block, so the strip hid the block (and mwperm_missing() could stop with
+## "no fully observed block" on data that had one).
+local({
+  cells_of <- function(M) { i <- which(M, arr.ind = TRUE); list(r = i[, 1], c = i[, 2]) }
+  sz <- function(bl) vapply(bl, function(b) paste0(length(b$rows), "x", length(b$cols)), "")
+  M <- matrix(FALSE, 22, 320); M[1:2, 21:320] <- TRUE; M[3:22, 1:20] <- TRUE
+  m <- cells_of(M)
+  for (meth in c("greedy", "exact"))
+    stopifnot(identical(sz(find_bicliques(m$r, m$c, min_block = 3L, method = meth)),
+                        "20x20"))
+  M2 <- matrix(FALSE, 43, 483)
+  for (r in 1:40) M2[r, (r - 1) * 12 + 1:12] <- TRUE
+  M2[41:43, 481:483] <- TRUE
+  m2 <- cells_of(M2)
+  for (meth in c("greedy", "exact"))
+    stopifnot(identical(sz(find_bicliques(m2$r, m2$c, min_block = 3L, method = meth)),
+                        "3x3"))
+  set.seed(5)
+  f <- mwperm_missing(rnorm(length(m2$r)), rnorm(length(m2$r)), row = m2$r,
+                      col = m2$c, min_block = 3L, seed = 1, conf_int = FALSE)
+  stopifnot(f$n_blocks == 1L, f$n_obs == 9L)
+  ## retry_peels = 0 keeps the documented old stop under the greedy search
+  stopifnot(length(find_bicliques(m2$r, m2$c, min_block = 3L, method = "greedy",
+                                  retry_peels = 0L)) == 0L)
+})
+
 passed("test-missing.R")

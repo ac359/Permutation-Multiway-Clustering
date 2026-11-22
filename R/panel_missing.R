@@ -8,9 +8,10 @@
 ##   blocks in it, and returns a block-diagonal group that holds the period
 ##   fixed.
 ## Paper. Guo, Toulis & Wang (2026): Section 6.2 (condition InvB) combined
-##   with Section 5 (Assumption 4, Procedure 2, Algorithm 2) -- the extension
-##   their Section 9 leaves open. On a complete array the construction is
-##   exactly mwperm_panel()'s group (the gather vectors are identical).
+##   with Section 5 (Assumption 4, Procedure 2, Algorithm 2) -- this
+##   package's extension; the paper does not state the combination. On a
+##   complete array the construction is exactly mwperm_panel()'s group (the
+##   gather vectors are identical).
 ## Pipeline. mwperm() -> dispatch -> [design worker] -> [permutation
 ##   construction, via .build_obs_perms_blocks() in missing.R] -> projection
 ##   engine -> median aggregation -> test inversion -> S3 methods.
@@ -25,7 +26,9 @@
 #' observed, or are observed in only some periods -- so [mwperm_panel()], which
 #' requires a complete balanced array, cannot run. This combines condition
 #' InvB of Guo, Toulis and Wang (2026), Section 6.2 with the missing-data
-#' machinery of Section 5, which is the extension their Section 9 leaves open.
+#' machinery of Section 5. The paper does not state that combination; it is
+#' this package's extension (the paper's concluding section lists panel data
+#' among its open directions, without mentioning incomplete panels).
 #'
 #' The construction is:
 #' 1. form the mask `M_ij = 1` if pair (i, j) is observed in EVERY period, and
@@ -43,9 +46,9 @@
 #' what keeps the test valid when the errors are autocorrelated over time.
 #'
 #' @details Combines Section 6.2 (condition InvB) with Procedure 2 of Guo,
-#'   Toulis and Wang (2026) for incomplete panels, the case their Section 9
-#'   leaves open: fully observed blocks of the every-period mask, Algorithm 1
-#'   on each block, and the period held fixed.
+#'   Toulis and Wang (2026) for incomplete panels, a combination the paper
+#'   does not state (this package's extension): fully observed blocks of the
+#'   every-period mask, Algorithm 1 on each block, and the period held fixed.
 #' @section Keeping L0 periods (`L0`): A pair that misses even one period
 #'   fails the every-period mask. When many pairs miss a few periods it is
 #'   often the better trade to keep fewer periods and more pairs: with an
@@ -129,9 +132,10 @@
 #' @param beta_null Null value(s); length 1 or `ncol(d)`.
 #' @param conf_int Logical; compute the confidence set by test inversion.
 #' @param n_reps Number of independent permutation groups. Defaults to 1,
-#'   the procedure Theorem 1 covers; with more, the reported p-value is
-#'   aggregated over them by `aggregate` (see *Aggregation over repetitions*
-#'   in [mwperm_dyadic()]). The default was 10 from 0.4.0 to 0.4.2.
+#'   the procedure the argument of Theorem 4 covers; with more, the reported
+#'   p-value is aggregated over them by `aggregate` (see *Aggregation over
+#'   repetitions* in [mwperm_dyadic()]). The default was 10 from 0.4.0 to
+#'   0.4.2.
 #' @param seed Integer seed. Required for reproducibility, and for the
 #'   rep-parallel path.
 #' @param grid Optional explicit grid of null values for the inversion.

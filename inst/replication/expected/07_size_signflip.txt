@@ -1,4 +1,4 @@
-==== 07 Sign-flip test (IPT-Het) vs permutation test under heteroskedasticity ====
+==== 07 Sign-flip test vs permutation test under heteroskedasticity ====
 mwperm 0.4.4 | 500 sims/cell | n = 25 | perm K = 24, flip n_flip = 6 | n_reps = 1 | rejection rule p <= 0.05 | 2026-11-13 19:27:49
 
   [size07_signflip_cell1_v2] batch 1/2 (250 sims) in 1.1s

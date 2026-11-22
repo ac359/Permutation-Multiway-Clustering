@@ -119,12 +119,17 @@ that remains valid under the widest set of error processes:
     time role is assigned by, in order: an explicit \code{time =} tag; a
     time-like \emph{name} (case-insensitive vocabulary: year, yr, time, t,
     date, period, wave, month, quarter, day, decade, week, season, annum,
-    and their plurals); time-like \emph{values} (temporal class, or
-    regularly spaced numeric). A name-based assignment that the values do
+    and their plurals); \emph{dates or calendar years} (a temporal class,
+    or whole numbers between 1800 and 2200, evenly spaced or not); evenly
+    spaced numeric \emph{values}. A name-based assignment that the values do
     not corroborate (temporal class, or regularly spaced with strictly
     fewer levels than every other dimension) carries a \strong{warning} --
     a column merely \emph{named} like time may be a cluster, and permuting
-    the true time dimension over-rejects badly. An ambiguous case defaults
+    the true time dimension over-rejects badly. So does an assignment that
+    rests on even spacing alone: consecutive cluster ids 1, 2, 3, ... are
+    evenly spaced too, so the index singled out may be a cluster while the
+    true time index (irregular periods, character labels) is permuted. An
+    ambiguous case defaults
     to holding the third index fixed, with a warning. Forcing
     \code{design = "threeway"} when an index looks time-like also warns;
     force it only when all three dimensions are genuinely exchangeable.
@@ -141,9 +146,10 @@ every permutation design needs the errors exchangeable \emph{given} the
 covariates, which an error variance that depends on the covariates
 violates. Nothing in the clustering structure shows this, so the diagnosis
 never selects the sign-flip test (\code{\link{mwperm_dyadic_het}}, valid
-under arbitrary heteroskedasticity for errors that are independent across
-cells and symmetric, but not under additive cluster effects); on a dyadic
-array, complete or not, it prints one line offering \code{design =
+under arbitrary heteroskedasticity for errors whose joint law is unchanged
+by row and column sign changes -- independent symmetric errors, or
+multiplicative cluster factors -- but not under additive cluster effects); on
+a dyadic array, complete or not, it prints one line offering \code{design =
 "dyadic_het"}, and the choice is yours.
 
 Maps each data signature to the procedure of Guo, Toulis and

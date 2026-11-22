@@ -20,14 +20,16 @@ over-rejects, so you find effects that are not there.
 the guarantee holds at any number of clusters, and comes from the proof of
 Theorem 1 in Guo et al. (2026) rather than from a limit. By default each
 test runs once (`n_reps = 1`), which is exactly what Theorem 1 covers; several
-repetitions combined with `aggregate = "median2"` are covered too. The median
+repetitions combined with `aggregate = "median2"` are valid too, because each
+repetition is valid by Theorem 1 and twice the median of valid p-values is
+valid under any dependence (Rüschendorf 1982; Vovk and Wang 2020). The median
 over repetitions (`n_reps > 1`, the paper's Remark 1) sits at or below nominal
 in simulations, but Theorem 1 does not cover it — and `mwperm_irregular()`,
 which redraws its subsample in every repetition, defaults to the median of
 500.
 
-The price is resolution, not validity: with `K + 1` permutations the p-value
-can only take values `1/(K+1), 2/(K+1), …, 1`. See
+The price is resolution and some conservatism, not validity: with `K + 1`
+permutations the p-value can only take values `1/(K+1), 2/(K+1), …, 1`. See
 [Resolution](#resolution-how-many-clusters-do-you-need).
 
 In this package's own Monte Carlo at α = 0.05, with a single permutation group
@@ -45,7 +47,8 @@ K = 21), 0.045 irregular layout (with a cell-constant covariate, K = 24),
 under a common period effect, K = 21), 0.048 incomplete array (40 × 40
 minus its diagonal, K = 19) and 0.009 incomplete panel (26 × 26 × 4, K = 22).
 Other simulations quoted for this package (the rest of `inst/replication/`,
-the software paper) use different sizes, error laws and `n_reps`, and report
+the package's software paper, in preparation) use different sizes, error laws
+and `n_reps`, and report
 different numbers for the same designs; each states its own `n`, `K` and
 `n_reps`.
 
@@ -136,7 +139,7 @@ data(trade_dyadic)        # synthetic 40 x 40 gravity cross-section
 fit <- mwperm(y = "log_trade", d = "log_dist",
               x = c("log_gdp_i", "log_gdp_j"),
               index = c("importer", "exporter"),
-              data = trade_dyadic, n_reps = 15, seed = 1)
+              data = trade_dyadic, seed = 1)
 ```
 ```
 Detected design: dyadic (2 indices, one observation per cell, complete array)
@@ -151,28 +154,31 @@ Invariant permutation test (mwperm)
 Design       : dyadic
 Auto-detected: dyadic (2 indices, one observation per cell, complete array)
 Clusters     : row=40, col=40 (1600 observations)
-Permutations : K = 39  (group order 40, 15 reps)
+Permutations : K = 39  (group order 40, 1 rep)
 Resolution   : p-values are multiples of 1/40 = 0.025 per rep; reported floor 0.025
 
-  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.246, -0.5485]
+  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.275, -0.5131]
 
 H0: beta = 0    p-value = 0.025
 Decision     : reject at alpha = 0.05
 ```
 
 The true coefficient in this synthetic data is −1.0, which the interval covers.
+The call runs the test once, the configuration Theorem 1 covers; see
+[Reproducibility](#reproducibility) for combining several runs.
 
 ```r
-summary(fit)     # tidy data frame, one row per coefficient
-confint(fit)     # inverted-test interval, with a "method" attribute
-coef(fit)        # OLS point estimate
-nobs(fit)        # observations used
-plot(fit)        # OLS estimate against the inverted IPT interval
+tab <- summary(fit)   # prints the fit; returns a tidy data frame invisibly
+tab                   # one row per coefficient
+confint(fit)          # inverted-test interval, with a "method" attribute
+coef(fit)             # OLS point estimate
+nobs(fit)             # observations used
+plot(fit)             # OLS estimate against the inverted IPT interval
 ```
 
 ```
       term ols_estimate ols_se_naive ipt_ci_low ipt_ci_high p_value
-1 log_dist   -0.8985026   0.08728893  -1.246471  -0.5484962   0.025
+1 log_dist   -0.8985026   0.08728893  -1.275367  -0.5130891   0.025
 ```
 
 To see what *would* run — design, index roles, balance, attainable resolution —
@@ -192,9 +198,10 @@ Resolution      : default K = 39, so p-values are multiples of 1/40 = 0.025
                   -> fine enough for a 95% confidence set at alpha = 0.05
 Would run       : mwperm_dyadic(y, d, x, row = importer, col = exporter)
   ? design = "dyadic_het" runs the sign-flip test instead: valid under
-    arbitrary heteroskedasticity for errors that are independent across
-    cells and symmetric about zero, but NOT under additive cluster
-    effects eta_i + xi_j (see ?mwperm_dyadic_het)
+    arbitrary heteroskedasticity for errors whose joint law is
+    unchanged by row and column sign changes (independent symmetric
+    errors, or multiplicative cluster factors), but NOT under additive
+    cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)
 ```
 
 There is also a formula interface, and the design-specific functions are fully
@@ -203,13 +210,13 @@ supported for direct use:
 ```r
 mwperm_formula(log_trade ~ log_dist | log_gdp_i + log_gdp_j,
                data = trade_dyadic, index = c("importer", "exporter"),
-               n_reps = 15, seed = 1)
+               seed = 1)
 
 with(trade_dyadic,
      mwperm_dyadic(y = log_trade, d = log_dist,
                    x   = cbind(log_gdp_i, log_gdp_j),
                    row = importer, col = exporter,
-                   n_reps = 15, seed = 1))
+                   seed = 1))
 ```
 
 Dispatching through `mwperm()` and calling the design function directly with
@@ -235,7 +242,7 @@ in the third is one you are willing to assume.
 | Repeated observations per cell with **unequal cell sizes**: exchangeable replicates (not periods), typically with `d` constant within a cell | `mwperm_irregular()` | $\varepsilon_{ijl} = \eta_i + \xi_j + u_{ijl}$ with exchangeable replicates $l$ — no effect attached to $l$ itself; which cells clear $L_0$ not depending on $y$ | whole cells, across rows and columns; the within-cell position $l$ is never moved |
 | Two dimensions over time, but the array has **holes** (pairs missing periods: `L0 =` keeps the same $L_0$ periods in every cell) | `mwperm_panel_missing()` | $\varepsilon_{ijt} = \eta_i + \xi_j + \zeta_t + u_{ijt}$, with $\zeta_t$ **arbitrary**, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns within each fully observed block, the same relabelling in every period; $t$ is never moved |
 | Two dimensions with **missing cells** | `mwperm_missing()` | $\varepsilon_{ij} = \eta_i + \xi_j + u_{ij}$, and the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | rows and columns *within* each fully observed block |
-| Two crossed dimensions, at most one observation per cell (complete or not), **heteroskedastic** errors that are **independent across cells** | `mwperm_dyadic_het()` | $\varepsilon_{ij} = \sigma_{ij}\, u_{ij}$ with $\sigma_{ij}$ **arbitrary** (it may depend on $i$, $j$ and the covariates) and $u_{ij}$ independent and **symmetric** about zero — **no** additive $\eta_i + \xi_j$; on an incomplete array, the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | the signs of row groups and column groups, jointly; nothing is relabelled |
+| Two crossed dimensions, at most one observation per cell (complete or not), **heteroskedastic** errors with **no additive cluster effects** | `mwperm_dyadic_het()` | $\varepsilon_{ij} = \sigma_{ij}\, u_{ij}$ with $\sigma_{ij}$ **arbitrary** (it may depend on $i$, $j$ and the covariates) and $u_{ij}$ independent and **symmetric** about zero, or such errors multiplied by symmetric row and column factors $a_i b_j$ — **no** additive $\eta_i + \xi_j$; on an incomplete array, the mask $M \perp\mkern-10mu\perp \varepsilon \mid \mathbf{X}, \mathbf{D}$ | the signs of row groups and column groups, jointly; nothing is relabelled |
 | Not sure | `mwperm()` or `mwperm_check()` | — | detects the structure and tells you |
 
 In every permutation row the $u$ terms are i.i.d. given the covariates — for
@@ -244,9 +251,9 @@ another — and each named family of random effects is i.i.d. within itself;
 nothing requires normality, and cluster-level variance heterogeneity that is
 itself exchangeable (i.i.d. random scales, independent of the covariates) is
 fine, but a variance tied to the covariates is not — that is the
-`mwperm_dyadic_het()` row's job, and its price is independence across cells:
-the additive $\eta_i + \xi_j$ of every other row is exactly what it cannot
-have. A term marked **arbitrary** is completely unrestricted — no distribution, no
+`mwperm_dyadic_het()` row's job, and its price is that the error array must
+keep its joint law when whole rows and columns change sign: the additive
+$\eta_i + \xi_j$ of every other row is exactly what it cannot have. A term marked **arbitrary** is completely unrestricted — no distribution, no
 independence, not even randomness — and that freedom is the reason the row
 exists. These are *sufficient* models, given as the easiest way to recognise
 your setting; the actual requirement is the invariance below, which each of
@@ -266,7 +273,7 @@ $\ell_{ij} \equiv 1$ this is the dyadic model of
 constant, $l$ is simply a third cluster dimension. What changes from design to
 design is only the group of relabellings the test is invariant to.
 
-**`mwperm_dyadic()` — two-way, condition InvA.** For all permutations $\pi$ on
+**`mwperm_dyadic()` — two-way, Assumption 1.** For all permutations $\pi$ on
 $[m]$ and $\sigma$ on $[n]$,
 
 $$(\varepsilon_{ij}) \overset{d}{=} (\varepsilon_{\pi(i)\sigma(j)})
@@ -303,7 +310,11 @@ $$(\varepsilon_{ijl})_{l \in [\ell_{ij}]} \overset{d}{=}
 
 The cell effects $\eta_{ij}$ are unrestricted, so the clusters themselves need
 no exchangeability at all — only the replicates inside a cell. The price is
-resolution: $K + 1 \le \min_{ij} \ell_{ij}$ unless `L0 =` balances the array.
+resolution: by default $K + 1 = \min_{ij} \ell_{ij}$, so one thin cell caps the
+group for all. Pass a larger `K` (up to the largest cell minus 1) and the cells
+with fewer than $K + 1$ replicates are kept and held fixed — the construction
+§6.3 itself prescribes, which discards nothing — or let `L0 =` balance the
+array, which drops the thin cells and subsamples the rest.
 Note that $l$ must be an *independent replication*. If the $l$-th observation
 means the same thing in every cell — a period, a survey wave — then errors are
 usually not exchangeable across $l$ at all, and even a benign shared replicate
@@ -312,8 +323,12 @@ permutations change its alignment across cells. That is not a technicality:
 with a shared $\zeta_l$ and a `d` that follows the same pattern over $l$ in
 every cell, the layout test rejected a true null 63–74% of the time at
 α = 0.05 (10 × 10 cells of 22, 1000 simulations each), against about 5% when
-`d` had no such pattern. Treat $l$ as time instead: `mwperm_panel()`, or
-`mwperm_panel_missing(time = , L0 = )` when cells observe different periods.
+`d` had no such pattern. (The paper's §6.3 lists such a shared, i.i.d.
+$\zeta_l$ among the cases its condition covers; with the permutations drawn
+independently per cell, as its step (i) prescribes, it is not invariant, and
+this package does not rely on that example.) Treat $l$ as time instead:
+`mwperm_panel()`, or `mwperm_panel_missing(time = , L0 = )` when cells observe
+different periods.
 `mwperm_layout()` warns when `rep` looks like time.
 
 **`mwperm_irregular()` — §6.4.** Procedure 2 combined with the panel
@@ -393,7 +408,8 @@ on $j$ and on the covariates in any way. What is assumed instead is *joint*
 symmetry of the whole array under independent row and column sign changes —
 not merely symmetry of each error about zero. It holds for errors independent
 across cells (and for multiplicative cluster factors $a_i b_j u_{ij}$ with
-symmetric $a_i, b_j$); it **fails** for the additive cluster effects of InvA,
+symmetric $a_i, b_j$); it **fails** for the additive cluster effects of the
+permutation designs,
 $\eta_i + \xi_j + u_{ij}$, because flipping one row turns
 $\mathrm{Cov}(\varepsilon_{ij}, \varepsilon_{kj}) = \mathrm{Var}(\xi_j)$
 into its negative. Under that structure the sign-flip test over-rejects
@@ -421,10 +437,11 @@ less power than `mwperm_dyadic()`. It is a different bet, not a safer one.
    different, valid procedures that trade discarded cells for exactness.
 4. **Otherwise:** `mwperm_dyadic()` for two indices, `mwperm_threeway()` for
    three genuinely exchangeable ones. If the error *variance* plausibly
-   depends on the covariates and the errors are plausibly independent across
-   cells and symmetric (no additive cluster effects), `mwperm_dyadic_het()`
-   instead — nothing in the data can make that call for you, so `mwperm()`
-   never does.
+   depends on the covariates and the error array plausibly keeps its law
+   when whole rows and columns change sign (independent symmetric errors, or
+   multiplicative cluster factors; no additive cluster effects),
+   `mwperm_dyadic_het()` instead — nothing in the data can make that call for
+   you, so `mwperm()` never does.
 
 `mwperm_check(index = ...)` answers all four from the data, prints the
 diagnosis and the attainable resolution, and computes nothing.
@@ -450,7 +467,7 @@ diagnosis and the attainable resolution, and computes nothing.
 | Replicated two-way layout (`L0=` to balance) | `mwperm_layout()` |
 | Irregular layout (unequal numbers of exchangeable replicates per cell, not periods), typically with a cell-level `d` | `mwperm_irregular()` |
 | Incomplete array (missing cells) | `mwperm_missing()` |
-| Dyadic design with **heteroskedastic**, cross-cell independent errors (sign-flip test, IPT-Het; complete or incomplete array) | `mwperm_dyadic_het()` |
+| Dyadic design with **heteroskedastic** errors and no additive cluster effects (sign-flip test; complete or incomplete array) | `mwperm_dyadic_het()` |
 | Permutation-group construction (Algorithm 1) | `build_perm_set()` |
 | Sign-flip-group construction (order $2^{n_{\mathrm{flip}}-1}$) | `build_flip_set()` |
 | Fully observed biclique finder (greedy/exact) | `find_bicliques()` |
@@ -507,9 +524,13 @@ of error processes, **warns**, and tells you how to override:
   (**layout**). If the repeats are time periods, pass `time =` instead.
 
 The time role is assigned from an explicit `time =` tag, then a time-like
-column *name*, then time-like *values*. A name-only match that the values do
-not corroborate raises a warning, because permuting a true time dimension
-over-rejects badly.
+column *name*, then *dates or calendar years* (whole numbers between 1800 and
+2200, evenly spaced or not), then evenly spaced values. A name-only match that
+the values do not corroborate raises a warning, and so does a time role that
+rests on even spacing alone: cluster ids coded 1, 2, 3, … are evenly spaced
+too, and if one of them is held fixed as "time" the true time index is
+permuted and the test over-rejects badly. Tagging `time =` yourself is the
+safe habit.
 
 ## Reading the output
 
@@ -542,6 +563,16 @@ Two consequences:
 
 `K` defaults to `min(permuted dimensions) − 1`, capped at 199. `mwperm_check()`
 reports the attainable resolution before you run anything.
+
+The finest grid is not always the most powerful choice. The test rejects when
+`p ≤ α`, so the level it actually uses is `floor(α(K + 1))/(K + 1)`, short of
+α unless `α(K + 1)` is a whole number. At α = 0.05 a group of order 20 uses
+the whole level: with 21 to 39 clusters per side, passing `K = 19` is slightly
+more powerful than the default (about 1.5 to 3 points of power in this
+package's simulations with 25 to 45 clusters per side, size still below
+0.05). The layout and block designs also accept a `K` larger than their
+smallest cell or block: the smaller ones are then held fixed rather than
+capping `K` for all.
 
 `aggregate = "median2"` reports `min(1, 2 × median)`, so its smallest
 attainable p-value is `2/(K+1)`: it needs `K + 1 ≥ 2/α`, i.e. **40 levels at
@@ -625,10 +656,15 @@ interest, the absolute value).
 $$\mathrm{pval} = \frac{1}{K+1}\left(1 + \sum_{k=1}^{K}
 \mathbb{1}\left\lbrace \min_{1\le j\le K} a_j \le b_k \right\rbrace\right).$$
 
-Because $\mathcal{G}$ is closed, the identity statistic is exchangeable with the
-permuted ones under $H_0$, which makes this exact. The minimum over $j$
-(*minorization*) is what keeps it valid under heavy tails, at the cost of some
-conservatism.
+Because $\mathcal{G}$ is closed, the errors are exchangeable with their
+permuted copies under $H_0$. The projection $V_k$ changes with $k$, though, so
+the $a_k$ are not themselves exchangeable with the $b_k$; taking the minimum
+over $j$ (*minorization*) makes the reference distribution dominate the
+idealized one, which is what makes the p-value valid in finite samples, and
+also why the test tends to be conservative. A tie in the comparison counts
+toward the p-value, and the package counts it with a tolerance far below any
+real difference, so that rounding cannot drop a tie that exact arithmetic
+would count.
 
 The permutation group is random. By default it is drawn once
 (`n_reps = 1`), the procedure Theorem 1 covers; pass a `seed` to make the draw
@@ -660,25 +696,23 @@ component. `fit$ci_method` records which route produced the set (`"exact"`,
 `"grid"`, or the `"bisection"` fallback used when the exact candidate count
 would be prohibitive).
 
-**What the end points mean.** `conf_set` and `conf_int` are the *closure* of
-$\lbrace b : \mathrm{pval}(b) > \alpha \rbrace$. Because the p-value is a
-step function, an acceptance region usually begins and ends strictly between
-two of its jumps, and there is no attained value at the boundary to report; the
-exact route reports the bounding jump. **A reported end point may therefore be
-a value the test rejects, while every point strictly inside the interval is
-accepted.** The convention is conservative — it never omits an accepted value —
-and it means a `b` sitting exactly on an end point should not be read as "just
-inside". (The `"grid"` route reports attained accepted points instead, to
-the grid spacing; the `"bisection"` route rounds each end point outward, by
-less than its tolerance, so its interval also contains the exact set.)
+**What the end points mean.** `conf_set` and `conf_int` are the set
+$\lbrace b : \mathrm{pval}(b) > \alpha \rbrace$ itself, end points included:
+the exact route places each end point on the last value the test accepts, so
+**every reported end point is accepted, and every value outside the set is
+rejected**, to floating-point resolution. (Until 0.4.4 the end points were the
+jumps themselves, the *closure* of the set, and about a quarter of them were
+values the test rejected; the change moved end points by about 1e-9 relative.
+The `"grid"` route reports attained accepted points, to the grid spacing; the
+`"bisection"` route rounds each end point outward, by less than its tolerance,
+so its interval contains the exact set.)
 
 With `n_reps > 1` there is one p-value per repetition, and one rule is used
 everywhere: the reported p-value is $\mathrm{median}_r \mathrm{pval}_r(b)$ and
 the confidence set is
 $\lbrace b : \mathrm{median}_r\, \mathrm{pval}_r(b) > \alpha \rbrace$. The
 test and the interval therefore cannot disagree in the direction that matters:
-no value the test accepts falls outside the reported set (the end points
-themselves are the closure, above). Setting
+no value the test accepts falls outside the reported set. Setting
 `aggregate = "median2"` replaces the median with $\min(1, 2\times$ median$)$ in
 both places, which restores the level-$\alpha$ guarantee for `n_reps > 1` at
 the cost of a wider set.
@@ -779,11 +813,11 @@ every cell observed the same periods. For any period index use
 every cell and holds the period fixed (until 0.4.1 that cut was
 `mwperm_irregular(trim = "levels")`; the panel call reproduces it exactly).
 
-**Heteroskedasticity: the sign-flip test** (`mwperm_dyadic_het()`, IPT-Het).
+**Heteroskedasticity: the sign-flip test** (`mwperm_dyadic_het()`).
 The revised paper states a second invariance assumption, *double sign
-symmetry* (its Assumption 2, §3.3), under which Procedure 1 is unchanged except
-that Step 1 applies random sign flips: the partialling-out and minorization
-argument is not specific to permutations. This test keeps everything — the
+symmetry* (its Assumption 2, §3.3), and a sign-flip version of the test: the
+partialling-out and minorization argument is not specific to permutations.
+This test keeps everything — the
 model, the null, the statistic
 $a_k(b) = \lVert D^\top V_k V_k^\top (y - Db) \rVert$ against
 $b_k(b) = \lVert D^\top V_k V_k^\top S_k (y - Db) \rVert$, the minorized
@@ -798,34 +832,31 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   \mid \mathbf{X}, \mathbf{D}$: *joint* symmetry of the error array under
   row-and-column sign changes. A sign flip changes no variance, so **arbitrary
   heteroskedasticity** — in $i$, in $j$, in the covariates — is permitted for
-  errors **independent across cells**; skewed errors are not, and neither are
-  **additive cluster effects** $\eta_i + \xi_j$, which change the joint law
-  under a sign flip (size 0.12–0.15 at nominal 0.05 in this package's checks
-  when $d$ has a row-level component). The paper gives
-  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ ($u_i, v_j$ i.i.d. symmetric, $h$
-  unknown) as a model that satisfies the assumption, which is weaker; its own
-  simulation for the test has independent heteroskedastic errors. On 10,000
-  datasets of that design (25 clusters per side, `n_flip = 6`) this package
-  rejected a true null in 1.36% of them at the default single run, and the
-  method authors' own research code in 1.41%.
-  Exchangeability is
-  *not* required,
-  and this assumption does not imply it, nor the reverse. The array need not
+  errors **independent across cells**, and for such errors multiplied by
+  symmetric row and column factors $a_i b_j$; skewed errors are not, and
+  neither are **additive cluster effects** $\eta_i + \xi_j$, which change the
+  joint law under a sign flip (size 0.12–0.15 at nominal 0.05 in this
+  package's checks when $d$ has a row-level component). On the package's own
+  heteroskedastic design (`inst/replication/07_size_signflip.R`: 25 clusters
+  per side, errors independent across cells with a variance that grows with
+  the fitted mean and with distance) the test rejected a true null in 1.6%
+  and 1.2% of 500 datasets under strong and mild heteroskedasticity, at the
+  default single run.
+  Exchangeability is *not* required, and this assumption does not imply it,
+  nor the reverse. The array need not
   be complete: every observed cell is used and nothing is discarded, but
   which cells are observed must then be independent of the errors given
   $\mathbf{X}, \mathbf{D}$ (the analogue of Assumption 4) — dropping zero
   trade flows because $\log 0$ is undefined violates it. Running on an
   incomplete array is this package's extension, which the method's authors
-  have agreed to: the paper states Assumption 2 for a complete array.
+  have agreed to: the revised paper states its Assumption 2 for a complete
+  array.
 - **Group order and resolution.** Because the sign enters as a *product*,
   $s$ and $-s$ induce the same transformation: the $2^{n_{\mathrm{flip}}}$ sign
   vectors give only $2^{n_{\mathrm{flip}}-1}$ distinct elements, and
-  `build_flip_set()` enumerates each exactly once. (`n_flip` is the $c$ of the
-  revised paper's sign-flipping set construction, §S1.1 of its supplement,
-  whose $K = 2^c - 1$ counts each distinct flip twice: the paper's default
-  $K = 2^5 - 1$ is `n_flip = 5`, 16 distinct flips, so its smallest p-value
-  is 1/16 and it cannot reject at 0.05; its simulation's $K = 2^6 - 1$ is
-  `n_flip = 6`, this package's default at $\alpha = 0.05$.) The
+  `build_flip_set()` enumerates each exactly once. (The sign-flipping set of
+  the revised paper is in Section S1.1 of its supplement; `n_flip` is the
+  number of groups the clusters are partitioned into.) The
   p-value therefore lives
   on multiples of $1/2^{n_{\mathrm{flip}}-1}$, and a 95% confidence set needs
   $2^{n_{\mathrm{flip}}-1} \ge 20$, i.e. **`n_flip ≥ 6`**. The cost is one
@@ -842,21 +873,20 @@ $[X \mid S_k X]$ instead of $[X \mid X_{\pi_k\sigma_k}]$.
   buys resolution, not power: at 25 × 25 with independent heteroskedastic
   symmetric errors and `n_reps = 10`, power at $\beta = 0.10$ was 0.27, 0.34
   and 0.37 for `n_flip` = 6, 7 and 8 (300 simulations each), at 1, 2 and 4
-  times the projections. Under the model
-  $\varepsilon_{ij} = h(X_{ij})\, u_i v_j$ the size was 0.014 at the default
-  `n_reps = 1` and 0.002 with `n_reps = 10` — conservative, not
-  over-rejecting.
+  times the projections. With errors multiplied by symmetric row and column
+  factors the size was 0.014 at the default `n_reps = 1` and 0.002 with
+  `n_reps = 10` — conservative, not over-rejecting.
 - **The trade-off.** This is **not a strict upgrade** over `mwperm_dyadic()`.
-  On the authors' heteroskedastic gravity design (25 clusters per side,
+  On the heteroskedastic gravity design above (25 clusters per side,
   symmetric errors independent across cells, their sd increasing in the
   gravity mean and in distance) the permutation test's size rose with the
   heteroskedasticity, to 0.076 at nominal 0.05 in this package's check (500
   simulations per setting), while the sign-flip test stayed at 0.016 or
   below. Under homoskedastic errors, at $\beta = 0.15$, the permutation
   test's power was 0.98 against the sign-flip test's 0.85: a smaller, coarser
-  group buys robustness with power. Use it when the errors are plausibly
-  independent across cells with a covariate-driven variance; when additive
-  cluster effects are the concern, stay with `mwperm_dyadic()`.
+  group buys robustness with power. Use it when the variance is plausibly
+  covariate-driven and the errors carry no additive cluster effects; when
+  additive cluster effects are the concern, stay with `mwperm_dyadic()`.
 
 ```r
 with(trade_dyadic,
@@ -918,8 +948,13 @@ default `K = 5` could not reject at all.
 
 Maximum-biclique search is NP-hard, so the default is a greedy heuristic
 (`block_method = "exact"` runs branch-and-bound with a node budget, falling
-back to greedy). **A sub-maximal block costs power, never validity.** Power
-exhibits phase transitions in the missingness rate (Guo et al., 2026, §5).
+back to greedy). **A sub-maximal block costs power, never validity.** Both
+searches maximise area, so a long thin strip of observed cells can out-area a
+large square block: when the first candidate falls below `min_block`, the
+search looks for a conforming block before giving up (the exact search solves
+the floor-constrained problem), so a usable block is not lost behind a strip.
+Power exhibits phase transitions in the missingness rate (Guo et al., 2026,
+§5).
 
 ## Reproducibility
 
@@ -932,8 +967,11 @@ call never disturbs your global RNG stream**.
 With `seed = NULL` the permutations come from the ambient RNG and results vary
 between runs. Because the p-value depends on a random group, reporting a seed
 alongside a p-value is good practice. `n_reps > 1` reduces the dependence on
-any one draw: the median aggregation (Remark 1) is not covered by Theorem 1,
-while `aggregate = "median2"` is.
+any one draw: the median aggregation (Remark 1) is not covered by Theorem 1;
+with `aggregate = "median2"` the reported value is valid again, because each
+repetition is valid by Theorem 1 and twice the median of valid p-values is
+valid under any dependence between them (Rüschendorf 1982; Vovk and Wang
+2020).
 
 ## Performance and parallelism
 
@@ -962,14 +1000,17 @@ search reuses cached factorizations and adds only a few percent.
 - **Resolution, not validity, is the binding constraint** with few clusters.
   Below 20 levels in the smallest permuted dimension you get a valid p-value
   but no 95% interval.
-- **The test is conservative under heavy tails.** The minorized statistic
-  under-rejects rather than over-rejects. This is deliberate and is the safe
+- **The test is conservative.** The minorization that makes the p-value
+  valid also makes it under-reject rather than over-reject, more so under
+  heavy-tailed errors in this package's simulations. This is the safe
   direction, but it costs power.
 - **Heteroskedasticity is a choice you make, not one the package detects.**
   The permutation tests need exchangeability *given the covariates*;
-  `mwperm_dyadic_het()` needs errors independent across cells (no additive
-  cluster effects) and symmetric. Nothing in the data settles which holds,
-  and the sign-flip test is less powerful when both do.
+  `mwperm_dyadic_het()` needs an error array whose joint law is unchanged by
+  row and column sign changes (independent symmetric errors, or
+  multiplicative cluster factors; no additive cluster effects). Nothing in
+  the data settles which holds, and the sign-flip test is less powerful when
+  both do.
 - **Incomplete panels pay in cells.** `mwperm_panel_missing()` keeps only
   the pairs observed in *every* period, and only those inside fully observed
   blocks, so a few thinly observed pairs can cost a large share of the array;
@@ -1005,6 +1046,13 @@ If you use this package, please cite the method paper:
 - Wen, K., Wang, T. & Wang, Y. (2025). *Residual permutation test for
   regression coefficient testing.* Annals of Statistics 53(2), 724–748.
   <doi:10.1214/24-AOS2479>
+
+On combining several runs with `aggregate = "median2"`:
+
+- Rüschendorf, L. (1982). Random variables with maximum sums. *Advances in
+  Applied Probability* 14(3), 623–632.
+- Vovk, V. & Wang, R. (2020). Combining p-values via averaging.
+  *Biometrika* 107(4), 791–808.
 
 ## Working on the package
 

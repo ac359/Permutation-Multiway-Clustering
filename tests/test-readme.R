@@ -29,7 +29,7 @@ data(trade_panel)
 ## package's numbers move, BOTH have to be updated, and section 2 says so.
 readme_lines <- c(
   quick_start_est =
-    "  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.246, -0.5485]",
+    "  log_dist     OLS estimate = -0.8985   95% IPT CI [-1.275, -0.5131]",
   quick_start_p =
     "H0: beta = 0    p-value = 0.025",
   panel_est =
@@ -47,7 +47,7 @@ readme_lines <- c(
   panel_group =
     "Permutations : K = 21  (group order 22, 1 rep)",
   quick_start_summary =
-    "1 log_dist   -0.8985026   0.08728893  -1.246471  -0.5484962   0.025",
+    "1 log_dist   -0.8985026   0.08728893  -1.275367  -0.5130891   0.025",
   het_group =
     "Sign flips   : n_flip = 6 flip groups  (group order 2^5 = 32, 3 reps)",
   het_est =
@@ -57,7 +57,7 @@ readme_lines <- c(
   check_alternative =
     "  ? design = \"dyadic_het\" runs the sign-flip test instead: valid under",
   check_alternative_2 =
-    "    cells and symmetric about zero, but NOT under additive cluster"
+    "    unchanged by row and column sign changes (independent symmetric"
 )
 
 ## ---- 1. the package still prints what the README claims -------------------
@@ -66,7 +66,7 @@ readme_lines <- c(
 fit_qs <- mwperm(y = "log_trade", d = "log_dist",
                  x = c("log_gdp_i", "log_gdp_j"),
                  index = c("importer", "exporter"), data = trade_dyadic,
-                 n_reps = 15, seed = 1, verbose = FALSE)
+                 seed = 1, verbose = FALSE)
 out_qs <- capture.output(print(fit_qs))
 stopifnot(readme_lines[["quick_start_est"]] %in% out_qs,
           readme_lines[["quick_start_p"]] %in% out_qs,

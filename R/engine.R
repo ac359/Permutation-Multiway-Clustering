@@ -20,13 +20,12 @@
 ##   default K (Algorithm 1 needs K + 1 <= n), the per-repetition seed
 ##   stream, the OLS reference estimate and the parallel map.
 ## Paper. Guo, Toulis & Wang (2026): Procedure 1 (steps 2-3), Eq. (10),
-##   Theorem 1 (p < N/2), Remark 1 (median of repetitions). The JSS draft:
-##   Section 2.3 (one aggregation rule), 2.4 (the closed-form set and its
-##   closure convention), 2.5 (resolution) and 3.7-3.8 (budget, seeds).
-## Deviation from the printed text. The paper's set is {b : pval(b) > alpha};
-##   the exact route reports each connected component CLOSED, so an end
-##   point can be a rejected jump while every interior point is accepted
-##   (outward, i.e. conservative).
+##   Theorem 1 (p < N/2), Remark 1 (median of repetitions).
+## Deviation from the printed text. None in the set itself: the exact route
+##   reports {b : pval(b) > alpha}, end points included (each is the last
+##   value the test accepts). Eq. (10) is evaluated with a tie tolerance,
+##   .tie_tau() in core.R, so that a tie exact arithmetic would count is not
+##   lost to rounding.
 ## Pipeline. mwperm() -> dispatch -> design worker -> permutation
 ##   construction -> [projection engine] -> [median aggregation] -> [test
 ##   inversion] -> S3 methods. Called by every mwperm_* front end.
@@ -173,9 +172,9 @@
 #' \preformatted{  confidence set = { b : agg_r p_r(b) > alpha }
 #'   p-value        = agg_r p_r(beta_null)}
 #'
-#' What is REPORTED for d = 1 is the closure of that set (.exact_ci_set()), so
-#' an end point may itself be rejected while every interior point is accepted;
-#' the direction is outward, and nothing the test accepts is ever left out.
+#' What is REPORTED for d = 1 is that set, end points included
+#' (.exact_ci_set()): every reported end point is accepted, and nothing the
+#' test accepts is left out, to floating-point resolution.
 #'
 #' @details Procedure 1 of Guo, Toulis and Wang (2026) run n_reps times, each
 #'   repetition on a fresh random group (Algorithm 1, or the sign-flip group),
@@ -308,6 +307,18 @@
   far <- has_one & sD > 0 & abs(mD) > 1e3 * sD
   D_given <- D
   if (any(far)) D[, far] <- sweep(D[, far, drop = FALSE], 2L, mD[far])
+  ## The outcome gets the same treatment, for the same reason: with a `y` far
+  ## from zero in units of its own spread, Dr'y multiplies the rounding left
+  ## in Dr by that origin (y + 1e9 moved the interval by 8e-5 relative, with
+  ## no warning). The constant vector is in col(X), and for a sign flip the
+  ## flipped intercept is in col(X_k), so subtracting the mean changes no
+  ## statistic in exact arithmetic. Only an outcome whose mean exceeds 1e3 of
+  ## its standard deviations is centred; every other fit keeps its arithmetic
+  ## bit for bit. (What the user's own arithmetic already rounded away --
+  ## y + 1e9 keeps about seven digits of the variation -- cannot come back.)
+  my <- mean(y)
+  s_y <- sqrt(sum((y - my)^2) / max(1L, N - 1L))
+  if (has_one && s_y > 0 && abs(my) > 1e3 * s_y) y <- y - my
 
   ## A `d` with no variation after partialling out X (constant, or collinear
   ## with a nuisance column) leaves beta unidentified: every residualized
@@ -365,6 +376,23 @@
   ## either way; only the vocabulary changes.
   voc <- .group_vocab(group, agg_mult, need_lvl)
   floor_lab <- voc$floor
+  ## What the two resolution notes may say about the reported p-value. With
+  ## one repetition it is the p-value Theorem 1 covers, and the historical
+  ## sentences stand. A median of several is not covered by the theorem (each
+  ## repetition is), so the notes must not call it exact; twice the median is
+  ## valid under any dependence across repetitions.
+  p_ok <- if (n_reps == 1L)
+    c("The p-value reported above is unaffected and remains exact.",
+      "The p-value itself is still exact and valid.")
+  else if (agg_mult == 2L)
+    rep(paste0("The reported p-value is unaffected and remains valid: each ",
+               "repetition's p-value is exact, and twice their median is ",
+               "valid under any dependence between repetitions."), 2L)
+  else
+    rep(paste0("Each repetition's p-value is unaffected and remains exact; ",
+               "the reported value is their median over ", n_reps,
+               " repetitions, which the theorem does not cover (aggregate = ",
+               "\"median2\" does)."), 2L)
   agg_why   <- if (agg_mult == 2L)
     paste0(" The floor is twice the p-value grid step ", voc$step, " = ",
            sprintf("%.3g", res_min), " because aggregate = \"median2\" ",
@@ -427,8 +455,8 @@
   prep_list <- lapply(reps, `[[`, "prep")   # cached cross products, one per rep
   pv <- vapply(reps, `[[`, numeric(1), "pv")  # per-rep p-value at the null
   ## Reported p-value: the SAME aggregation the confidence set inverts, so no
-  ## value the test accepts can fall outside the reported set (the set's end
-  ## points are its closure -- see .exact_ci_set()). With ci_agg = "median" (the
+  ## value the test accepts can fall outside the reported set (its end points
+  ## are the last accepted values -- see .exact_ci_set()). With ci_agg = "median" (the
   ## default) and any n_reps this is exactly stats::median(pv), bit for bit.
   ## Remark 1 of GTW: the reported p-value is the median of the n_reps
   ## per-repetition p-values (min(1, 2 x median) under "median2").
@@ -452,11 +480,10 @@
         paste0("No %.0f%% confidence %s: the smallest attainable p-value is ",
                "%s = %.3g, which is above alpha = %.3g, so no value ",
                "could be excluded and the set would be the whole line. A ",
-               "%.0f%% set needs %s >= %d -- that is, %s. The p-value ",
-               "reported above is unaffected and remains exact.%s"),
+               "%.0f%% set needs %s >= %d -- that is, %s. %s%s"),
         100 * conf_level, if (d == 1L) "interval" else "region",
         floor_lab, p_floor, alpha, 100 * conf_level,
-        voc$order, need_lvl, voc$need, agg_why))
+        voc$order, need_lvl, voc$need, p_ok[1L], agg_why))
       warned_res <- TRUE
     } else if (d == 1L) {
       ## alpha itself, never 1 - conf_level: that round trip is not exact
@@ -543,10 +570,9 @@
       paste0("The smallest attainable p-value is %s = %.3g, which is ",
              "above alpha = %.3g, so this test cannot reject at that level ",
              "however strong the effect. Rejecting at alpha = %.3g needs ",
-             "%s >= %d -- %s. The p-value itself is still exact and ",
-             "valid.%s"),
+             "%s >= %d -- %s. %s%s"),
       floor_lab, p_floor, alpha, alpha, voc$order, need_lvl, voc$need,
-      agg_why))
+      p_ok[2L], agg_why))
   }
 
   ## Assemble the returned "mwperm" object. Field meanings (read by the S3
@@ -739,10 +765,12 @@
       ## never allocates them (measured 1.4-1.9x on this block).
       amin <- abs(u[1L] - M[1L] * bb)
       if (K > 1L) for (j in 2L:K) amin <- pmin(amin, abs(u[j] - M[j] * bb))
-      ## same comparison and tie direction as .ipt_eval(): b_k >= min_j a_j,
-      ## i.e. Eq. (10)'s indicator 1{min_j a_j <= b_k}
+      ## same comparison, tie direction and tie tolerance as .ipt_eval():
+      ## b_k >= min_j a_j - tau, i.e. Eq. (10)'s indicator 1{min_j a_j <= b_k}
+      ## with a near-tie counted as a tie (.tie_tau(), one value per candidate)
+      tau <- .tie_tau(pr, bb)
       cnt <- integer(length(bb))
-      for (k in seq_len(K)) cnt <- cnt + (abs(v[k] - W[k] * bb) >= amin)
+      for (k in seq_len(K)) cnt <- cnt + (abs(v[k] - W[k] * bb) >= amin - tau)
       P[ii, r] <- (1 + cnt) / pr$Kp1
     }
   }
@@ -801,22 +829,20 @@
 #' no bisection tolerance, and disconnected sets are returned as they are
 #' instead of being replaced by their hull.
 #'
-#' The components are reported CLOSED. A maximal run of accepted atoms that
-#' begins or ends inside an open cell is reported with the bounding breakpoint
-#' as its end point, and that breakpoint is a value the run excluded -- so a
-#' returned component is the topological CLOSURE of { b : agg_r p_r(b) > alpha
-#' } and not the set itself. An end point may therefore be rejected by the
-#' very test this inverts, while every point strictly inside the component is
-#' accepted. This is the usual convention for a discrete p-value: the
-#' acceptance set is a finite union of pieces whose exact end points are
-#' generally not attained, so there is no attained value to report there, and
-#' closing the component errs OUTWARD -- the reported set never omits an
-#' accepted value. Reporting the attained side instead is a different object
-#' and would move published end points; see the 0.3.0 section of NEWS.md.
+#' End points (since 0.4.5). Eq. (10) counts a tie, and the comparison is made
+#' with the tie tolerance of `.tie_tau()`, so at a breakpoint the pair that
+#' crosses there is counted, and it stays counted for a short distance past
+#' the crossing. Each finite end point is placed on the last value the test
+#' accepts, found by `.ci_end_point()` between the first (last) accepted atom
+#' of a run and the rejected atom next to it. So every reported end point is
+#' accepted, and every value outside the components is rejected, to
+#' floating-point resolution: the components are the set itself. (Until
+#' 0.4.4 the end points were the breakpoints, the CLOSURE of the set: about a
+#' quarter of them were rejected by the test, because the tie at the
+#' breakpoint was decided by rounding. The move is of order 1e-10 relative.)
 #'
 #' @details Procedure 1, step 3 of GTW (2026): CI = {b : pval(b) > alpha},
-#'   exactly. Each component is reported closed, so an end point may itself be
-#'   rejected (see Details), i.e. need not belong to the paper's set.
+#'   exactly, end points included.
 #' @param prep_list list of per-rep prep objects (`d == 1`, `has_perm_D`).
 #' @param alpha test level.
 #' @param agg cross-rep aggregation rule; see .agg_pvals().
@@ -825,9 +851,8 @@
 #'   the caller then falls back to bracketing.
 #' @return `NULL` when the budget is exceeded (the caller must fall back);
 #'   otherwise a two-column matrix of interval end points, one row per
-#'   connected component, ordered and disjoint, each component CLOSED (see
-#'   Details: an end point need not itself be accepted). A zero-row matrix
-#'   means the set is empty.
+#'   connected component, ordered and disjoint; each end point is accepted
+#'   (see Details). A zero-row matrix means the set is empty.
 #' @keywords internal
 #' @noRd
 .exact_ci_set <- function(prep_list, alpha, agg = "median", budget = 2e5) {
@@ -869,15 +894,68 @@
 
   ## Maximal runs of adjacent accepted atoms are the connected components; an
   ## accepted breakpoint next to an accepted cell is absorbed into it.
+  ##
+  ## Each finite end point is then placed on the last value the test accepts.
+  ## The breakpoints are the exact crossings |v_k - W_k b| = |u_j - M_j b|,
+  ## but Eq. (10) is evaluated with the tie tolerance of .tie_tau(), which
+  ## keeps a pair counted for a short distance past its crossing (about
+  ## tau / |M_j -/+ W_k|, of order 1e-10 relative, more for an element close
+  ## to the identity). The true end of the acceptance set therefore lies
+  ## between the first accepted atom of a run and the rejected atom before it
+  ## (or the last accepted atom and the rejected one after it), and
+  ## .ci_end_point() finds it with the same aggregated p-value the test
+  ## reports. The reported set is then the acceptance set itself, end points
+  ## included, to floating-point resolution: every reported end point is
+  ## accepted and nothing outside the set is.
   cuts <- c(0L, which(diff(idx) > 1L), length(idx))
   n_comp <- length(cuts) - 1L
   comp <- matrix(0, n_comp, 2L)
   for (i in seq_len(n_comp)) {
     a <- idx[cuts[i] + 1L]
     z <- idx[cuts[i + 1L]]
-    comp[i, ] <- c(lower[a], upper[z])
+    lo <- if (a == 1L) -Inf
+          else .ci_end_point(prep_list, alpha, agg, cand[a], cand[a - 1L])
+    hi <- if (z == length(cand)) Inf
+          else .ci_end_point(prep_list, alpha, agg, cand[z], cand[z + 1L])
+    comp[i, ] <- c(lo, hi)
   }
   comp
+}
+
+#' The last accepted value between an accepted and a rejected candidate.
+#'
+#' `inner` is a candidate the aggregated test accepts and `outer` one it
+#' rejects, adjacent atoms of `.exact_ci_set()`. The acceptance set changes
+#' between them exactly once, within a tiny distance of the breakpoint that
+#' separates them (the tie tolerance of `.tie_tau()` is what moves it off the
+#' breakpoint). Each round evaluates 63 evenly spaced points of the current
+#' bracket in one vectorised call and keeps the transition next to the
+#' outermost accepted point, so the bracket shrinks 64-fold per round; it
+#' stops when no double lies strictly inside. The value returned is accepted,
+#' and no evaluated point beyond it is. Were the acceptance pattern inside the
+#' bracket not a single step, the outermost accepted point is still the one
+#' kept, so the reported set errs toward containing every accepted value.
+#'
+#' @details Procedure 1, step 3 of GTW (2026): the boundary of {b : pval(b) >
+#'   alpha}, located with the p-value the test reports.
+#' @param prep_list,alpha,agg as in `.exact_ci_set()`.
+#' @param inner,outer an accepted and a rejected candidate value of `b`.
+#' @return the outermost accepted value found between them.
+#' @keywords internal
+#' @noRd
+.ci_end_point <- function(prep_list, alpha, agg, inner, outer) {
+  dir <- sign(outer - inner)
+  for (round in seq_len(16L)) {
+    t <- inner + (outer - inner) * seq_len(63L) / 64
+    t <- t[(t - inner) * dir > 0 & (outer - t) * dir > 0]   # strictly inside
+    if (!length(t)) break
+    acc <- .agg_pvals(.pval_matrix(prep_list, t), agg) > alpha
+    acc[is.na(acc)] <- FALSE
+    j <- if (any(acc)) max(which(acc)) else 0L   # outermost accepted point
+    if (j > 0L) inner <- t[j]
+    if (j < length(t)) outer <- t[j + 1L]
+  }
+  inner
 }
 
 #' Test-inversion confidence set for a single coefficient.
@@ -894,9 +972,10 @@
 #' in the `"conf_set"` attribute with their hull as the returned interval:
 #' - `exact (default)`: .exact_ci_set() evaluates the step function at every
 #'   breakpoint and every cell between breakpoints, giving the set with no
-#'   tolerance and no connectedness assumption. Components are reported
-#'   closed, so an end point can be a rejected breakpoint bounding an accepted
-#'   open cell; the interior is always accepted (see .exact_ci_set()).
+#'   connectedness assumption, and places each end point on the last value
+#'   the test accepts (.ci_end_point()). So every reported end point is
+#'   accepted and every value outside the components is rejected, to
+#'   floating-point resolution (see .exact_ci_set()).
 #' - `explicit `grid``: the retained grid points, hulled; end points are
 #'   accurate to the grid spacing and a set reaching a grid edge is reported
 #'   as infinite there.
@@ -926,10 +1005,10 @@
 #' @return numeric length-2 interval (the hull of the set), carrying
 #'   attributes `"conf_set"` (components), `"ci_method"`, `"disconnected"`,
 #'   and, in grid mode, `"truncated"` / `"grid_step"` / `"grid_limit"`. On the
-#'   exact path the components, and hence the interval, are the CLOSURE of the
-#'   acceptance set; the grid path reports attained, accepted points
-#'   (accurate to the grid spacing), and the bracketing path rejected points
-#'   just outside the set (within the bisection tolerance).
+#'   exact path the components, and hence the interval, are the acceptance
+#'   set itself, end points included; the grid path reports attained,
+#'   accepted points (accurate to the grid spacing), and the bracketing path
+#'   rejected points just outside the set (within the bisection tolerance).
 #' @keywords internal
 #' @noRd
 .invert_ci <- function(prep_list, alpha, centre, scale, y, D, grid = NULL,
@@ -1053,7 +1132,7 @@
     }
     ## The boundary lies in (lo, hi]. Report the REJECTED side, so the end
     ## point is rounded outward by less than `tol`: the interval then contains
-    ## the exact component, as the exact path's closure does. Until 0.4.3 this
+    ## the exact component. Until 0.4.3 this
     ## returned `lo`, which sat up to `tol` (~2e-5 on the trade data) inside
     ## the exact set (authors' decision, 2026-09-30).
     hi
@@ -1259,6 +1338,15 @@
                 "not coerced to their level codes -- if the labels are ",
                 "numbers, convert explicitly with ",
                 "as.numeric(as.character(y))."), call. = FALSE)
+  ## Anything else that is not numeric or logical is refused by name as well:
+  ## as.numeric() would turn a character vector of digits into numbers without
+  ## a word, fail on other text with base R's "NAs introduced by coercion",
+  ## and turn a Date into a day count.
+  if (!(is.numeric(y) || is.logical(y)))
+    stop(sprintf(paste0("`y` must be numeric (or logical), but it is of ",
+                        "class '%s'. Convert it explicitly once you have ",
+                        "checked the values, e.g. as.numeric(y)."),
+                 class(y)[1L]), call. = FALSE)
   as.numeric(y)
 }
 

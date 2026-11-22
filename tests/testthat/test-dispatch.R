@@ -179,3 +179,61 @@ test_that("mwperm() prints the call it runs, with the arguments it passes", {
     dy$y, dy$d, x = dy$x, index = dy[c("i", "j")], design = "dyadic_het",
     n_flip = 6, n_reps = 1, seed = 1, conf_int = FALSE)))
 })
+
+## ---- the time role with three untagged indices -------------------------------
+## Even spacing is weak evidence of time: consecutive cluster ids 1, 2, 3, ...
+## are evenly spaced too. Dates and calendar years outrank it, and a time role
+## that rests on spacing alone is announced. (Before this, an importer id coded
+## 1..n beside irregular survey years was held fixed as "time" in silence, the
+## years were permuted, and the test rejected a true null almost surely.)
+untagged_panel <- function(time_vals, n = 6L, seed = 1L) {
+  with_seed(seed, {
+    g <- expand.grid(imp = seq_len(n), ex = seq_len(n),
+                     tt = seq_along(time_vals))
+    data.frame(imp = g$imp, exp = sprintf("c%02d", g$ex),
+               round = time_vals[g$tt], y = rnorm(nrow(g)),
+               d = rnorm(nrow(g)), stringsAsFactors = FALSE)
+  })
+}
+
+test_that("irregular calendar years outrank an evenly spaced cluster id", {
+  g <- untagged_panel(c(1990, 1993, 1997, 1998, 2004, 2011))
+  chk <- mwperm_check(index = c("imp", "exp", "round"), data = g)
+  expect_identical(chk$design, "panel")
+  expect_identical(chk$roles$time, "round")
+  expect_length(chk$warnings, 0L)
+})
+
+test_that("a time role that rests on even spacing alone is announced", {
+  g <- untagged_panel(paste0("w", 1:6))
+  chk <- mwperm_check(index = c("imp", "exp", "round"), data = g)
+  expect_identical(chk$roles$time, "imp")      # the assignment itself is as before
+  expect_true(any(grepl("evenly spaced", chk$warnings)))
+  w <- testthat::capture_warnings(
+    mwperm(y = "y", d = "d", index = c("imp", "exp", "round"), data = g,
+           seed = 1, verbose = FALSE))
+  expect_true(any(grepl("evenly spaced", w)))
+})
+
+test_that("a Date index and the bundled panel stay silent", {
+  g <- untagged_panel(as.Date("2020-01-01") + c(0, 31, 59, 90, 120, 151))
+  chk <- mwperm_check(index = c("imp", "exp", "round"), data = g)
+  expect_identical(chk$roles$time, "round")
+  expect_length(chk$warnings, 0L)
+  expect_length(mwperm_check(index = c("importer", "exporter", "year"),
+                             data = trade_panel)$warnings, 0L)
+})
+
+test_that("two integer ids and a character third index warn through mwperm()", {
+  ## the third index is named with a word that is not in the time vocabulary,
+  ## so nothing is matched by name and the ambiguous fork decides
+  df <- with_seed(2, {
+    g <- expand.grid(a = 1:6, b = 1:6, tt = 1:6)
+    data.frame(a = g$a, b = g$b, grp = paste0("w", g$tt), y = rnorm(216),
+               d = rnorm(216), stringsAsFactors = FALSE)
+  })
+  w <- testthat::capture_warnings(
+    mwperm(y = "y", d = "d", index = c("a", "b", "grp"), data = df, seed = 1,
+           verbose = FALSE))
+  expect_true(any(grepl("No index is clearly the time dimension", w)))
+})

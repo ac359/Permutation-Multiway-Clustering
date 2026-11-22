@@ -300,3 +300,125 @@ test_that("irregular (Section 6.4): each repetition cuts cells to L0 at random",
   }
   expect_identical(fit$n_obs, as.integer(fit$cells_used * L0))
 })
+
+## ---- layout: K above the smallest cell (Section 6.3 with Algorithm 1) --------
+## One K for all cells; a cell with fewer than K + 1 replicates is left
+## unpermuted and stays in the regression. Before 0.4.5 the smallest cell
+## capped K, so one cell of two replicates made the smallest p-value 1/2 and a
+## singleton cell was an error.
+held_layout <- function(sizes = c(2L, 25L, 30L, 22L, 1L, 40L, 20L, 21L, 26L),
+                        seed = 31) {
+  with_seed(seed, {
+    cells <- expand.grid(i = 1:3, j = 1:3)
+    g <- data.frame(i = rep(cells$i, sizes), j = rep(cells$j, sizes),
+                    l = unlist(lapply(sizes, seq_len)))
+    cid <- rep(seq_len(nrow(cells)), sizes)
+    g$d <- stats::rnorm(nrow(g))
+    g$x <- stats::rnorm(nrow(g))
+    g$y <- 0.5 * g$x + stats::rnorm(nrow(cells))[cid] + stats::rnorm(nrow(g))
+    g
+  })
+}
+
+test_that("layout: an explicit K above the smallest cell holds small cells fixed", {
+  ly <- held_layout()
+  fit <- mwperm_layout(ly$y, ly$d, x = ly$x, row = ly$i, col = ly$j,
+                       rep = ly$l, K = 19, seed = 1, conf_int = FALSE)
+  expect_identical(fit$K, 19L)
+  expect_equal(fit$p_floor, 0.05)
+  expect_identical(fit$n_obs, nrow(ly))                  # nothing is dropped
+  expect_true(any(grepl("2 cells with fewer than K + 1 = 20 replicates",
+                        fit$note, fixed = TRUE)))
+  ## the groups: the identity for the cells of 2 and 1, Algorithm 1 elsewhere
+  cell <- dense_id(interaction(dense_id(ly$i), dense_id(ly$j), drop = TRUE))
+  ell <- tabulate(cell, max(cell))
+  G <- mwperm:::.layout_groups(ell, 19L, rep_seed(1, 1), 1000)
+  for (c in seq_along(ell)) {
+    if (ell[c] < 20L)
+      expect_true(all(vapply(G[[c]], identical, NA, seq_len(ell[c]))))
+    else
+      expect_identical(G[[c]], build_perm_set(ell[c], 19L,
+                                              seed = sub_seed(rep_seed(1, 1), c)))
+  }
+  ## the p-value is the naive Procedure 1 on the literal construction
+  ref <- ref_procedure1(ly$y, ly$d, ref_X(ly$x, nrow(ly)),
+                        ref_groups_layout(ly$i, ly$j, ly$l, 19L, 1, 1))
+  expect_equal(fit$pvalue, ref$pvalue, tolerance = 1e-12)
+  ## seeded: the same call gives the same object
+  fit2 <- mwperm_layout(ly$y, ly$d, x = ly$x, row = ly$i, col = ly$j,
+                        rep = ly$l, K = 19, seed = 1, conf_int = FALSE)
+  expect_identical(fit$pvalues_rep, fit2$pvalues_rep)
+})
+
+test_that("layout: the default K permutes every cell with two or more replicates", {
+  ly <- held_layout()
+  expect_no_error(
+    fit <- mwperm_layout(ly$y, ly$d, x = ly$x, row = ly$i, col = ly$j,
+                         rep = ly$l, seed = 1, conf_int = FALSE))
+  expect_identical(fit$K, 1L)             # the smallest cell with >= 2 replicates
+  expect_true(any(grepl("1 cell with fewer than K + 1 = 2 replicates",
+                        fit$note, fixed = TRUE)))
+  expect_true(any(grepl("A larger `K` is available", fit$note, fixed = TRUE)))
+  ## without a singleton nothing changes: the default is the smallest cell - 1
+  l2 <- make_layout(4, 4, sizes = 6:8, seed = 57)
+  f2 <- mwperm_layout(l2$y, l2$d, x = l2$x, row = l2$i, col = l2$j,
+                      rep = l2$l, seed = 2, conf_int = FALSE)
+  expect_identical(f2$K, 5L)
+  expect_false(any(grepl("with fewer than K + 1 =", f2$note, fixed = TRUE)))
+})
+
+test_that("layout: a K no cell can carry, and a layout with no replication, stop", {
+  ly <- held_layout()
+  expect_error(
+    mwperm_layout(ly$y, ly$d, row = ly$i, col = ly$j, rep = ly$l, K = 60),
+    "largest cell holds only 40 replicates")
+  one <- expand.grid(i = 1:4, j = 1:4)
+  expect_error(
+    mwperm_layout(seq_len(16) + 0, rev(seq_len(16)) + 0, row = one$i,
+                  col = one$j),
+    "No cell holds two or more observations")
+})
+
+test_that("three-way: one small dimension draws the note that names the panel route", {
+  ## Algorithm 1 with a common K leaves a dimension with fewer than K + 1
+  ## levels fixed; that test is the panel design with that dimension as time,
+  ## valid under three-way exchangeability. A 25 x 22 x 6 array caps K at 5.
+  g <- with_seed(41, {
+    g <- expand.grid(a = 1:25, b = 1:22, c = 1:6)
+    g$d <- stats::rnorm(nrow(g)); g$y <- stats::rnorm(nrow(g)); g
+  })
+  f <- mwperm_threeway(g$y, g$d, id1 = g$a, id2 = g$b, id3 = g$c, seed = 3,
+                       conf_int = FALSE)
+  expect_identical(f$K, 5L)
+  expect_true(any(grepl("Only `id3` is too small", f$note, fixed = TRUE)))
+  expect_true(any(grepl("mwperm_panel() with `time = ` that index reaches K = 21",
+                        f$note, fixed = TRUE)))
+  ## and that route is the literal construction: Algorithm 1 three times with
+  ## K = 21, the third dimension (6 levels) left fixed
+  p <- mwperm_panel(g$y, g$d, row = g$a, col = g$b, time = g$c,
+                    time_fe = FALSE, K = 21, seed = 3, conf_int = FALSE)
+  expect_identical(p$K, 21L)
+  ## no such note when every dimension is large enough, or when two are small
+  g2 <- with_seed(42, {
+    g <- expand.grid(a = 1:6, b = 1:7, c = 1:5)
+    g$d <- stats::rnorm(nrow(g)); g$y <- stats::rnorm(nrow(g)); g
+  })
+  f2 <- mwperm_threeway(g2$y, g2$d, id1 = g2$a, id2 = g2$b, id3 = g2$c,
+                        seed = 3, conf_int = FALSE)
+  expect_false(any(grepl("is too small here", f2$note, fixed = TRUE)))
+})
+
+test_that("a coarse fit with several repetitions does not call the median exact", {
+  dy <- make_dyadic(6, 6, seed = 71)
+  f1 <- mwperm_dyadic(dy$y, dy$d, x = dy$x, row = dy$i, col = dy$j, seed = 1)
+  expect_true(any(grepl("remains exact", f1$note, fixed = TRUE)))   # one run
+  f5 <- mwperm_dyadic(dy$y, dy$d, x = dy$x, row = dy$i, col = dy$j, seed = 1,
+                      n_reps = 5)
+  expect_false(any(grepl("reported above is unaffected and remains exact",
+                         f5$note, fixed = TRUE)))
+  expect_true(any(grepl("their median over 5 repetitions, which the theorem does not cover",
+                        f5$note, fixed = TRUE)))
+  f5b <- mwperm_dyadic(dy$y, dy$d, x = dy$x, row = dy$i, col = dy$j, seed = 1,
+                       n_reps = 5, aggregate = "median2")
+  expect_true(any(grepl("twice their median is valid", f5b$note, fixed = TRUE)))
+})

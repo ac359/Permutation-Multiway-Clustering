@@ -46,8 +46,9 @@ two group constructions with two different assumptions:
   joint row-and-column sign changes, order \code{2^(n_flip - 1)}): the
   error array must be \emph{jointly symmetric} under those sign changes.
   Used by \code{\link{mwperm_dyadic_het}}. Tolerates arbitrary
-  heteroskedasticity for errors independent across cells; does not
-  tolerate skewness, and does \strong{not} tolerate additive cluster
+  heteroskedasticity for independent symmetric errors, and errors
+  multiplied by symmetric row and column factors; does not tolerate
+  skewness, and does \strong{not} tolerate additive cluster
   effects \code{eta_i + xi_j}, which change the joint law under a sign
   flip (the test then over-rejects).
 }

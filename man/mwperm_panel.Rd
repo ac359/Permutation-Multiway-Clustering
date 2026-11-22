@@ -39,7 +39,10 @@ observations).}
 \item{time}{Time-period identifiers (length = number of observations).}
 
 \item{K}{Number of non-identity permutations; defaults to
-\code{min(n_row, n_col) - 1} capped at 199.}
+\code{min(n_row, n_col) - 1} capped at 199, and \code{K + 1} may not exceed
+the smaller cross-sectional dimension. (Time is never permuted, so the number
+of periods does not limit \code{K}; that is also why a three-way array with
+one short dimension can be tested here, with that dimension as \code{time}.)}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}

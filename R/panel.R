@@ -70,7 +70,10 @@
 #'   reported point estimate and sharpens the test when treatment timing is
 #'   correlated with the period.
 #' @param K Number of non-identity permutations; defaults to `min(n_row,
-#'   n_col) - 1` capped at 199.
+#'   n_col) - 1` capped at 199, and `K + 1` may not exceed the smaller
+#'   cross-sectional dimension. (Time is never permuted, so the number of
+#'   periods does not limit `K`; that is also why a three-way array with one
+#'   short dimension can be tested here, with that dimension as `time`.)
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
 #'   the reported p-value, and into the confidence set that inverts it.

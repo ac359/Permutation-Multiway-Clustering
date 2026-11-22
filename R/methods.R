@@ -300,18 +300,18 @@ summary.mwperm <- function(object, ...) {
 #' set: `"exact"`, `"grid"`, or `"bisection"` (the fallback used when the
 #' exact candidate count would exceed its budget).
 #'
-#' **The reported components are the *closure* of `{b : pval(b) > alpha}`, not
-#' the set itself.** The p-value is a step function, so an acceptance region
-#' often begins and ends strictly between two of its jumps; there is then no
-#' attained value at the boundary to report, and the exact path reports the
-#' bounding jump. A printed or returned end point may therefore be a value the
-#' test itself *rejects*, while every point strictly inside the interval is
-#' accepted. The convention errs outward -- the interval is conservative and
-#' never omits an accepted value -- and it is the reason a value exactly equal
-#' to an end point should not be read as "just inside". (The `"grid"` path
-#' reports attained accepted points instead, to the grid spacing; the
-#' `"bisection"` path rounds each end point outward, by less than its
-#' tolerance, so its interval also contains the exact set.)
+#' **The reported components are the set `{b : pval(b) > alpha}` itself, end
+#' points included.** The p-value is a step function of `b`, and the exact
+#' path places each end point on the last value the test accepts: every
+#' printed or returned end point is accepted, and every value outside the
+#' components is rejected, to floating-point resolution. A tie in the
+#' p-value's comparison is counted with a small tolerance, so this holds on
+#' every platform. (Until 0.4.4 the end points were the jumps of the step
+#' function themselves, the *closure* of the set, and about a quarter of them
+#' were values the test rejected; the change moved end points by about 1e-9
+#' relative.) The `"grid"` path reports attained accepted points, to the grid
+#' spacing; the `"bisection"` path rounds each end point outward, by less than
+#' its tolerance, so its interval contains the exact set.
 #'
 #' @param object An object of class `"mwperm"`.
 #' @param parm Optional subset of coefficients: names (matching the rows of

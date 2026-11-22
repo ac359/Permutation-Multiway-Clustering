@@ -138,8 +138,12 @@ ref_groups_layout <- function(row, col, rep, K, seed, r) {
   ell <- tabulate(cell, ncell)
   stride <- max(1000, ncell + 1)
   slot <- ref_slot(cell, rep)
+  ## Algorithm 1 leaves an index set smaller than K + 1 fixed (its case
+  ## i > (K+1) floor(n/(K+1)) then covers every index): such a cell gets the
+  ## identity in all K + 1 elements and stays in the regression.
   G <- lapply(seq_len(ncell), function(c)
-    build_perm_set(ell[c], K, seed = sub_seed(rs, c, stride)))
+    if (ell[c] < K + 1L) rep(list(seq_len(ell[c])), K + 1L)
+    else build_perm_set(ell[c], K, seed = sub_seed(rs, c, stride)))
   from <- paste(cell, slot)
   lapply(seq_len(K + 1L), function(k) {
     img <- vapply(seq_along(cell), function(o) G[[cell[o]]][[k]][slot[o]],

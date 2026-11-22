@@ -224,4 +224,41 @@ for (nc in list(0L, -1L, 1.5, c(1L, 2L), "2", Inf))
 stopifnot(inherits(mwperm_dyadic(y6, d6, row = g6$i, col = g6$j, n_cores = 1,
                                  conf_int = FALSE, seed = 1), "mwperm"))
 
+## ---- a non-numeric outcome is refused by name ----------------------------------
+## as.numeric() would turn a character vector of digits into numbers without a
+## word, and fail on other text with base R's "NAs introduced by coercion".
+local({
+  g <- expand.grid(i = 1:6, j = 1:6)
+  set.seed(1); y <- rnorm(36); d <- rnorm(36)
+  expect_err(mwperm_dyadic(as.character(y), d, row = g$i, col = g$j),
+             "`y` must be numeric")
+  expect_err(mwperm_dyadic(Sys.Date() + 1:36, d, row = g$i, col = g$j),
+             "`y` must be numeric")
+  expect_err(mwperm_panel(as.character(y), d, row = g$i, col = g$j,
+                          time = rep(1, 36)), "`y` must be numeric")
+  ## a logical outcome is fine (documented: numeric or logical)
+  stopifnot(is.numeric(mwperm_dyadic(y > 0, d, row = g$i, col = g$j,
+                                     seed = 1, conf_int = FALSE)$pvalue))
+})
+
+## ---- an outcome far from zero: adding a constant to y changes nothing ----------
+## The intercept absorbs it in exact arithmetic; the engine centres an outcome
+## whose mean exceeds 1e3 standard deviations so that it does in floating point
+## too (y + 1e9 used to move the interval by 8e-5 relative, silently).
+local({
+  data(trade_dyadic)
+  td <- trade_dyadic
+  f <- function(y) mwperm_dyadic(y, td$log_dist,
+                                 cbind(td$log_gdp_i, td$log_gdp_j),
+                                 row = td$importer, col = td$exporter, seed = 1)
+  b <- f(td$log_trade)
+  for (h in c(1e6, 1e9)) {
+    g <- f(td$log_trade + h)
+    stopifnot(identical(g$pvalue, b$pvalue),
+              max(abs(g$conf_int - b$conf_int) / abs(b$conf_int)) < 1e-7,
+              isTRUE(all.equal(unname(g$estimate), unname(b$estimate),
+                               tolerance = 1e-6)))
+  }
+})
+
 passed("test-validation.R")

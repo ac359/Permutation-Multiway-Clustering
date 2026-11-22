@@ -98,4 +98,69 @@ expect_err(mwperm:::.ipt_prepare(y, 1e-6 * D2, X2, op, degenerate = "stop"),
 ## and a slice with real identifying variation never trips it
 stopifnot(all(mwperm:::.ipt_prepare(y, D, X, op, degenerate = "stop")$M > 0))
 
+## ---- exact ties with discrete data -------------------------------------------
+## Integer y and d with an intercept only: N * (d - mean d) is an integer
+## vector, so every a_k and b_k is an exact integer up to the common factor N
+## and Eq. (10) can be evaluated in exact integer arithmetic. The package must
+## return that p-value. Before the tie tolerance (.tie_tau() in R/core.R) a tie
+## that exact arithmetic counts was lost to rounding in about a third of such
+## fits, always toward a smaller p-value, and the p-value changed with the row
+## order of the data.
+local({
+  exact_p_int <- function(y, d, ops) {
+    w <- length(y) * d - sum(d)          # N * (d - mean d), exact integers
+    a <- abs(sum(w * y))                 # the same for every k when X = 1
+    b <- vapply(ops[-1L], function(g) abs(sum(w * y[g])), numeric(1))
+    (1 + sum(a <= b)) / length(ops)
+  }
+  set.seed(202)
+  n_fit <- 0L
+  for (it in 1:120) {
+    n <- sample(8:20, 1)
+    m <- sample(8:20, 1)
+    K <- min(n, m) - 1L
+    g <- expand.grid(i = seq_len(n), j = seq_len(m))
+    N <- nrow(g)
+    d <- rbinom(N, 1, 0.15)
+    y <- rbinom(N, 1, 0.5)
+    if (length(unique(d)) < 2L) next
+    s <- sample(1e5, 1)
+    fit <- mwperm_dyadic(y, d, row = g$i, col = g$j, seed = s, conf_int = FALSE)
+    pr <- build_perm_set(n, K, seed = mwperm:::.sub_seed(s, 1L))
+    pc <- build_perm_set(m, K, seed = mwperm:::.sub_seed(s, 2L))
+    key <- g$i + (g$j - 1L) * n
+    ops <- lapply(seq_len(K + 1L), function(k)
+      match(pr[[k]][g$i] + (pc[[k]][g$j] - 1L) * n, key))
+    stopifnot(isTRUE(all.equal(fit$pvalue, exact_p_int(y, d, ops),
+                               tolerance = 1e-12)))
+    n_fit <- n_fit + 1L
+  }
+  stopifnot(n_fit >= 100L)
+
+  ## the same data in another row order is the same data: identical p-value
+  set.seed(78)
+  for (s in 1:40) {
+    n <- 15L
+    g <- expand.grid(i = seq_len(n), j = seq_len(n))
+    N <- nrow(g)
+    d <- rbinom(N, 1, 0.3)
+    y <- rbinom(N, 1, 0.5)
+    o <- sample(N)
+    p1 <- mwperm_dyadic(y, d, row = g$i, col = g$j, seed = s,
+                        conf_int = FALSE)$pvalue
+    p2 <- mwperm_dyadic(y[o], d[o], row = g$i[o], col = g$j[o], seed = s,
+                        conf_int = FALSE)$pvalue
+    stopifnot(identical(p1, p2))
+  }
+
+  ## a prep object without the scale fields keeps the plain comparison, and a
+  ## non-finite cross product still gives NA rather than a number
+  stopifnot(identical(mwperm:::.tie_tau(list(d = 1L), 0), 0))
+  pr0 <- mwperm:::.ipt_prepare(y, matrix(d), matrix(1, N, 1),
+                               list(seq_len(N), rev(seq_len(N))))
+  stopifnot(mwperm:::.tie_tau(pr0, 0) > 0,
+            mwperm:::.tie_tau(pr0, 2) > mwperm:::.tie_tau(pr0, 0),
+            length(mwperm:::.tie_tau(pr0, c(-1, 0, 3))) == 3L)
+})
+
 passed("test-pvalue.R")

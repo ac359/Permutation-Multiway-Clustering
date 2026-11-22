@@ -74,18 +74,19 @@ there is more than one component. \code{object$ci_method} records which path
 produced the set: \code{"exact"}, \code{"grid"}, or \code{"bisection"} (the
 fallback used when the exact candidate count would exceed its budget).
 
-\strong{The reported components are the \emph{closure} of
-\{b : pval(b) > alpha\}, not the set itself.} The p-value
-is a step function, so an acceptance region often begins and ends strictly
-between two of its jumps; there is then no attained value at the boundary to
-report, and the exact path reports the bounding jump. A printed or returned
-end point may therefore be a value the test itself \emph{rejects}, while
-every point strictly inside the interval is accepted. The convention errs
-outward -- the interval is conservative and never omits an accepted value --
-and it is the reason a value exactly equal to an end point should not be read as "just inside". (The \code{"grid"} path
-reports attained accepted points instead, to the grid spacing; the
-\code{"bisection"} path rounds each end point outward, by less than its
-tolerance, so its interval also contains the exact set.)
+\strong{The reported components are the set
+\code{\{b : pval(b) > alpha\}} itself, end points included.} The p-value is a
+step function of \code{b}, and the exact path places each end point on the
+last value the test accepts: every printed or returned end point is accepted,
+and every value outside the components is rejected, to floating-point
+resolution. A tie in the p-value's comparison is counted with a small
+tolerance, so this holds on every platform. (Until 0.4.4 the end points were
+the jumps of the step function themselves, the \emph{closure} of the set, and
+about a quarter of them were values the test rejected; the change moved end
+points by about 1e-9 relative.) The \code{"grid"} path reports attained
+accepted points, to the grid spacing; the \code{"bisection"} path rounds each
+end point outward, by less than its tolerance, so its interval contains the
+exact set.
 }
 
 \examples{

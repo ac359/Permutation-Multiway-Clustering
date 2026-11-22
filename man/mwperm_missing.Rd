@@ -56,15 +56,16 @@ inversion: an interval for a single covariate, or a joint (grid-based)
 confidence region for several.}
 
 \item{n_reps}{Number of independent runs of the test, each with its own
-random relabelling. Defaults to 1, the procedure Theorem 1 covers: the
+random relabelling. Defaults to 1, the procedure Theorem 4 covers: the
 p-value is exact at any sample size. A single run's p-value depends on
 the random relabelling (a seed lottery), so pass a \code{seed} to make it
 reproducible. With \code{n_reps > 1} the runs' p-values are combined by
 \code{aggregate} (the median by default, Remark 1) and the confidence set
 inverts the same combined p-value; that steadies the result at roughly
-\code{n_reps} times the cost, but it is not covered by Theorem 1 -- see
-\emph{Aggregation over repetitions} in Details. The default was 10 from 0.2.0
-to 0.4.2; pass \code{n_reps = 10} to reproduce results from those versions.}
+\code{n_reps} times the cost, but it is not covered by the theorem -- see
+\emph{Aggregation over repetitions} in the Details of
+\code{\link{mwperm_dyadic}}. The default was 10 from 0.2.0 to 0.4.2; pass
+\code{n_reps = 10} to reproduce results from those versions.}
 
 \item{seed}{Optional integer; if supplied, run \code{r} uses seed
 \code{seed + r - 1} for reproducibility.}
@@ -199,8 +200,27 @@ Implements Procedure 2 of Guo, Toulis and Wang (2026): fully
 observed, disjoint blocks (Definition 1; Algorithm 2, via
 find_bicliques()), Algorithm 1 on each block's rows and columns with a
 common K, and Procedure 1 on the stacked retained data with the
-concatenated group. Validity is their Theorem 4 under Assumption 4.
+concatenated group. Validity is their Theorem 4 under Assumptions 1 and
+4 (arXiv v1 numbering).
 }
+\section{Assumptions}{
+Two conditions, both about the errors, and neither can be checked from the
+data. The first is the exchangeability condition of
+\code{\link{mwperm_dyadic}} (Assumption 1 of Guo, Toulis and Wang 2026),
+applied within each retained block: relabelling the rows and the columns of
+a fully observed block leaves the distribution of its errors unchanged, given
+the covariates. The second is a condition on the missingness (Assumption 4 of
+arXiv:2601.08610v1): which cells are observed must be independent of the
+errors given the covariates. The pattern may depend on \code{x} and \code{d}
+in any way -- cells observed more often for richer pairs are fine -- but not
+on the outcome. Dropping zero trade flows because \code{log(0)} is undefined
+violates it, and so does attrition driven by the outcome: in a simulation
+where the observed cells depended on \code{y}, the test rejected a true null
+in 66\% of data sets at the 5\% level, against 3\% when cells were missing at
+random. Under both conditions the p-value of a single run is exact in finite
+samples (their Theorem 4).
+}
+
 \examples{
 data(trade_dyadic)
 ## drop self-trade and a few random links to create missingness

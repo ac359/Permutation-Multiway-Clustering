@@ -121,3 +121,85 @@ test_that("the exact search falls back to greedy, with a warning, on budget", {
                  "node budget")
   check_blocks(bl, cells, c(3L, 3L))
 })
+
+## ---- a block below the floor does not end the search --------------------------
+## Both searches maximise AREA, and a long thin strip has more area than a
+## large square block. Until 0.4.4 the peel stopped at the first block below
+## min_block, so the strip hid the block: every later block was lost, and
+## mwperm_missing() could stop with "no fully observed block" on data that
+## had one. Algorithm 2 itself never stops on a small block.
+mask_cells <- function(M) {
+  idx <- which(M, arr.ind = TRUE)
+  list(row = idx[, 1], col = idx[, 2])
+}
+strip_mask <- function() {              # 2 x 300 strip + a disjoint 20 x 20
+  M <- matrix(FALSE, 22, 320)
+  M[1:2, 21:320] <- TRUE
+  M[3:22, 1:20] <- TRUE
+  mask_cells(M)
+}
+private_rows_mask <- function() {       # 40 rows of 12 private columns + a 3 x 3
+  M <- matrix(FALSE, 43, 40 * 12 + 3)
+  for (r in 1:40) M[r, (r - 1) * 12 + 1:12] <- TRUE
+  M[41:43, 481:483] <- TRUE
+  mask_cells(M)
+}
+sizes_of <- function(bl) vapply(bl, function(b)
+  paste0(length(b$rows), "x", length(b$cols)), "")
+
+test_that("a thin strip does not hide a conforming block (both methods)", {
+  m <- strip_mask()
+  for (meth in c("greedy", "exact")) {
+    bl <- find_bicliques(m$row, m$col, min_block = 3L, method = meth)
+    expect_identical(sizes_of(bl), "20x20")
+    expect_identical(sort(bl[[1]]$rows), as.numeric(3:22))
+    expect_identical(sort(bl[[1]]$cols), as.numeric(1:20))
+  }
+})
+
+test_that("many small private rows do not hide a conforming block", {
+  m <- private_rows_mask()
+  for (meth in c("greedy", "exact"))
+    expect_identical(sizes_of(find_bicliques(m$row, m$col, min_block = 3L,
+                                             method = meth)), "3x3")
+  N <- length(m$row)
+  fit <- with_seed(5, mwperm_missing(stats::rnorm(N), stats::rnorm(N),
+                                     row = m$row, col = m$col, min_block = 3L,
+                                     seed = 1, conf_int = FALSE))
+  expect_identical(fit$n_blocks, 1L)
+  expect_identical(fit$n_obs, 9L)
+})
+
+test_that("a tie in area between a conforming and a thin block keeps the conforming one", {
+  M <- matrix(FALSE, 7, 7)
+  M[1:2, 1:2] <- TRUE          # 2 x 2, area 4
+  M[3, 3:6] <- TRUE            # 1 x 4, area 4
+  M[4:7, 7] <- TRUE            # 4 x 1, area 4
+  m <- mask_cells(M)
+  for (meth in c("greedy", "exact"))
+    expect_true("2x2" %in% sizes_of(find_bicliques(m$row, m$col,
+                                                   min_block = 2L,
+                                                   method = meth)))
+})
+
+test_that("the floor survives a node-budget fallback, and retry_peels = 0 keeps the old stop", {
+  m <- strip_mask()
+  expect_warning(
+    bl <- find_bicliques(m$row, m$col, min_block = 3L, method = "exact",
+                         node_budget = 10L),
+    "node budget")
+  expect_identical(sizes_of(bl), "20x20")
+  p <- private_rows_mask()
+  expect_length(find_bicliques(p$row, p$col, min_block = 3L,
+                               method = "greedy", retry_peels = 0L), 0L)
+})
+
+test_that("the floor-constrained exact search is the plain search at the default floor", {
+  A <- with_seed(9, matrix(stats::runif(8 * 9) < 0.7, 8, 9))
+  expect_identical(mwperm:::.max_biclique_exact(A),
+                   mwperm:::.max_biclique_exact(A, mb_r = 1L, mb_c = 1L))
+  ## and under a floor it returns a conforming block, or none
+  b <- mwperm:::.max_biclique_exact(A, mb_r = 3L, mb_c = 3L)
+  expect_true(!length(b$rows) || (length(b$rows) >= 3L && length(b$cols) >= 3L))
+  expect_true(all(A[b$rows, b$cols]))
+})

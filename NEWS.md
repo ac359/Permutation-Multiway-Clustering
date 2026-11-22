@@ -1,3 +1,123 @@
+# mwperm 0.4.5
+
+Fixes from an independent audit of 0.4.4 against the revised method paper.
+The statistics were found faithful; the defects were in what surrounds them.
+One could make the automatic entry point run an invalid test, one let
+rounding decide ties on discrete data, and two made a design less capable
+than the paper's own construction. The rest is documentation. No reported
+p-value, estimate or `K` of the 30 golden fits moved; their interval end
+points moved by at most 2.4e-9 relative (see "Confidence sets" below), and
+seven notes were reworded.
+
+## `mwperm()` no longer holds a cluster id fixed as "time" in silence
+
+* With three untagged indices, the time role went to the one index whose
+  values were evenly spaced. Cluster ids coded 1, 2, 3, ... are evenly
+  spaced too. With an importer id coded 1..20, exporters by name and survey
+  years irregularly spaced under a name that is not a time word, the
+  importer was held fixed as "time" and the years were permuted: the test
+  rejected a true null in 120 of 120 simulated panels at the 5% level,
+  against 0.05 with `time =` tagged. Dates and calendar years (whole numbers
+  between 1800 and 2200, evenly spaced or not) now outrank even spacing, and
+  a time role that rests on even spacing alone raises a warning naming the
+  index and asking for `time =`. On the same panels the automatic route now
+  rejects 0.045. Routes decided by a time-word name, by `time =`, or by the
+  ambiguous fork are unchanged.
+
+## Ties in Eq. (10) are counted on every platform
+
+* Eq. (10) counts a tie (`min_j a_j <= b_k`), and validity rests on it. With
+  discrete data such ties are exact in exact arithmetic, but `a_j` and `b_k`
+  are sums of the same terms in different orders, so rounding decided each
+  one. With a binary outcome and a binary covariate the reported p-value
+  was below its exact value in 148 of 400 fits (never above, by up to
+  0.56), and reordering the rows of the data changed it in 36 of 100. Size
+  stayed at nominal (0.0495 at 0.05 over 80,000 fits in the least favourable
+  design tried), so this was not a size failure, but a p-value that moves
+  with the row order is not one Theorem 1 describes. A difference below the
+  rounding scale of the statistics -- 1e-10 times a bound on their size,
+  measured on `y` and `d` with `x` projected out, so that it has the
+  statistics' own invariances -- now counts as a tie. The discrete fits
+  match the exact p-value in 400 of 400; continuous data are unaffected.
+
+## Confidence sets: the reported set is the acceptance set
+
+* Each end point of the exact confidence set is now the last value the test
+  accepts. Until 0.4.4 the end points were the jumps of the p-value's step
+  function, the *closure* of `{b : p(b) > alpha}`, and about a quarter of
+  them were values the test rejected (which ones depended on the BLAS). With
+  ties counted, the test accepts a hair past each jump, so the end points
+  move outward by about 1e-9 relative: every reported end point is accepted
+  and every value outside the set is rejected, to floating-point
+  resolution. Checked on 720 fits of four designs at three levels and both
+  aggregation rules: no disagreement in either direction. Coverage is
+  unchanged. The golden interval end points moved by at most 2.4e-9
+  relative; nothing printed to four significant digits changes.
+
+## `mwperm_layout()` accepts a `K` above its smallest cell
+
+* Section 6.3 applies Algorithm 1 to every cell with one `K`, and Algorithm
+  1 leaves an index set smaller than `K + 1` unpermuted. The package capped
+  `K` at the smallest cell instead: one cell of two replicates made the
+  smallest p-value 1/2, and a cell with a single observation stopped the
+  call. An explicit `K` may now go up to the largest cell minus 1; cells
+  with fewer than `K + 1` replicates are kept and held fixed, with a note,
+  and a single-observation cell is always held fixed. On a 6 x 6 layout with
+  cells of 2 to 40 replicates, `K = 19` held size (0.055) and had power
+  0.54 at a small effect, against 0.33 for `L0 = 20`, which discards data.
+  The default `K` is unchanged, so no seeded result moves; a fit that cannot
+  reject although a larger `K` is available says so.
+
+## The biclique search no longer gives up behind a thin strip
+
+* Both searches maximise area, and a long thin strip of observed cells can
+  out-area a large square block. When the first candidate was below
+  `min_block` the peel stopped: `method = "exact"` returned no block on 27
+  to 45 of 345 test masks that had one, and `mwperm_missing()` could stop
+  with "no fully observed block" on data that had one. When the first
+  candidate is below the floor, the exact search now solves the
+  floor-constrained problem, and the greedy search grows a block under the
+  floor or sets the small block aside and keeps looking. Neither method now
+  returns nothing when a conforming block exists. A search that found a
+  block before returns the same blocks, so no seeded result moves.
+
+## Smaller changes
+
+* A `y` that is not numeric or logical is refused by name; it was coerced
+  (a character vector of digits without a word).
+* An outcome far from zero in units of its own spread is centred, as `d`
+  has been since 0.4.4: `y + 1e9` moved the interval by 8e-5 relative, and
+  now by 2e-9.
+* The resolution notes no longer call a median over several repetitions
+  exact: with one run they say the p-value remains exact; with several they
+  say each run's p-value is exact and the median is not covered by the
+  theorem (`aggregate = "median2"` is).
+* `mwperm_threeway()` adds a note when one small dimension keeps the test
+  from reaching `alpha`: holding that dimension fixed is `mwperm_panel()`
+  with it as `time`, valid under three-way exchangeability.
+* The sign-flip offer printed by `mwperm_check()` states the assumption as
+  joint sign symmetry -- independent symmetric errors, or multiplicative
+  cluster factors, not additive cluster effects -- rather than independence
+  across cells. `DESCRIPTION`, the README and the help pages say the same.
+
+## Documentation
+
+* `?mwperm_missing` states its two assumptions in words: exchangeability
+  within the retained blocks, and an observation pattern independent of the
+  errors (dropping zero trade flows violates it). `?mwperm` and
+  `?mwperm_formula` say what automatic detection cannot check.
+* The README's quick start runs the test once, the configuration Theorem 1
+  covers, and shows `summary()` returning its table invisibly. Its account
+  of minorization, of `aggregate = "median2"` and of the confidence set's
+  end points is corrected, and it advises `K = 19` with 21 to 39 clusters
+  per side at `alpha = 0.05`.
+* `?mwperm_layout` and the README say that the paper's Section 6.3 example
+  of a replicate effect shared across cells is not covered by independent
+  per-cell permutations, which the package does not rely on.
+* The shipped files cite the unpublished revision of the paper by name and
+  numbering only.
+* `tests/golden/baseline-0.4.4.rds` is the previous snapshot.
+
 # mwperm 0.4.4
 
 Fixes from an independent audit of 0.4.3, and documentation brought in line
@@ -125,14 +245,14 @@ any of the three.
 * The documentation of the sign-flip test now cites the revised submission
   by its current numbering: Section 3.3 and Assumption 2 for double sign
   symmetry, and Section S1.1 of its Supplementary Material (Algorithm 1
-  there) for the sign-flipping set construction. Earlier help pages cited a
-  draft's "Appendix E", and source comments its "Algorithm 2" and its
-  "Figure 4". Every other reference keeps the public arXiv v1 numbering;
+  there) for the sign-flipping set construction. Earlier help pages and
+  source comments used the numbering of an earlier version of the revision.
+  Every other reference keeps the public arXiv v1 numbering;
   the README says so.
 * The notes on the projection (README, `?mwperm_dyadic`) describe the QR
   fallback above.
-* `inst/replication/07_size_signflip.R` now draws N(0, 1) innovations, as
-  the authors' corrected simulation code does. It drew centred lognormal
+* `inst/replication/07_size_signflip.R` now draws N(0, 1) innovations. It
+  drew centred lognormal
   ones, which are skewed
   and so violate the double sign symmetry the test assumes. Its expected
   output is regenerated: across the strong, mild and no-heteroskedasticity
@@ -142,9 +262,8 @@ any of the three.
   against 87.6% before). These are the numbers the help pages already
   quoted.
 * `?mwperm_dyadic_het` and the README no longer quote a rate from an
-  earlier draft of the paper for the sign-flip test's size. On 10,000
-  datasets of the paper's heteroskedastic design the test rejects a true
-  null in 1.36% of them and the authors' own implementation in 1.41%.
+  unpublished version of the paper for the sign-flip test's size; they quote
+  the package's own measurements.
 * Regression tests for all of the above, in both suites: the units and the
   origin of a nuisance column through the dyadic, panel and sign-flip
   front ends, with the fallback taken and not taken; the joint region
@@ -166,8 +285,7 @@ any of the three.
   sign-flip test's default `n_flip` as 6 at `alpha = 0.05` (it said 8).
   The README says which norm the statistic uses with several coefficients
   of interest (the Euclidean one).
-* `ARCHITECTURE.md` and `TESTING_PLAN.md`, notes for the package's
-  developers, are no longer part of the public repository;
+* Developer notes are no longer part of the public repository;
   `tests/README.md` describes the test suites.
 * The replication harness no longer stops where `parallel::detectCores()`
   returns `NA` (some containers): it then runs on one core. No output
@@ -203,7 +321,7 @@ other entries are `identical()`.
   0.4.2 results exactly** (tested for the dyadic and panel anchors).
 * **`mwperm_irregular()` keeps its default of 500.** Its repetitions also
   redraw the random per-cell subsample, so a single run would rest on one
-  random trim; 500 is the advisors' choice of 2026-09-22.
+  random trim; 500 is the method's authors' choice of 2026-09-22.
 * What moved, at `seed = 1` on the shipped data: no reported p-value. The
   default confidence intervals of `mwperm_dyadic()` (log_dist) went from
   [-1.25135, -0.53447] to [-1.27537, -0.51309], of `mwperm_panel()` (fta)
@@ -291,13 +409,13 @@ other entries are `identical()`.
 * testthat suite: the same behaviours in `test-designs.R`,
   `test-dispatch.R` and `test-confidence-sets.R`; the held-block p-values
   match the independent reference, whose block group now holds small blocks
-  fixed too. The draft's Section 6.2
-  printout is now checked with `n_reps = 10` passed explicitly, and its
-  literal call is recorded as discrepancy D11 (skipped).
+  fixed too. The incomplete-panel printout of the package's software paper
+  (in preparation) is now checked with `n_reps = 10` passed explicitly, and
+  its literal call is recorded as a known difference (skipped).
 
 # mwperm 0.4.2
 
-Three decisions taken by the package's advisors on 2026-09-22, implemented as
+Three decisions taken with the method's authors on 2026-09-22, implemented as
 one release: the sign-flip test's default `n_flip` now follows the package's
 resolution rule (6 at alpha = 0.05, was a fixed 8); `mwperm_irregular()`
 implements Section 6.4 step (i) only -- the paper's random per-cell trim --
@@ -353,7 +471,7 @@ the function implements; neither changes a number.
 
 * **`n_reps` defaults to 500 in `mwperm_irregular()`** (every other front end
   keeps 10). The paper's Appendix B repeated the test 100 times; the
-  advisors consider that the low end and recommend 500-1000. Runtime is
+  method's authors consider that the low end and recommend 500-1000. Runtime is
   linear in `n_reps`, and the docs say to use 1000 for a final run. At the
   default the exact confidence set is out of budget once `K > 14` (`2 K^2
   n_reps > 2e5`, and its cost grows like `K^3 n_reps^2`), so the interval is
@@ -482,50 +600,30 @@ the function implements; neither changes a number.
 
 * The revised paper states the assumption behind `mwperm_dyadic_het()` as
   its Assumption 2, *double sign symmetry*: `(eps_ij) =d (s_i t_j eps_ij) |
-  X, D` for all sign vectors `s, t`, under which "Procedure 1 would remain
-  unchanged except for the application of random sign flips in Step 1". The
-  paper gives `eps_ij = h(X_ij) u_i v_j`, `u_i, v_j` i.i.d. symmetric, `h`
-  unknown, as a model satisfying it; the assumption itself is weaker (the
-  authors, 2026-09-25). `R/signflip.R`, `man/mwperm_dyadic_het.Rd`,
+  X, D` for all sign vectors `s, t`. `R/signflip.R`, `man/mwperm_dyadic_het.Rd`,
   `man/build_flip_set.Rd`, the README and `DESCRIPTION` now say so instead of
   "Section 2 licenses any invariance group" or "the authors' revision
   material"; no section number is cited (the section is not public yet).
   The 0.4.1 statement of scope is kept word for word: independent symmetric
   errors, or dependence only through symmetric multiplicative factors; NOT
   additive cluster effects.
-* **The group construction matches the revised paper's** (its Appendix E):
-  a random partition of the rows, and of the columns, into `c = n_flip`
-  groups, with the sign vectors over the groups, and ONE sign vector per
-  element shared by rows and columns (confirmed by the authors). There are two
-  documented differences, and no number changed. The package keeps one
-  element per pair `{s, -s}`, since `s` and `-s` flip the same cells: the
-  paper's `K = 2^c - 1` counts every distinct flip twice. So its default
-  `K = 2^5 - 1 = 31` is `n_flip = 5` (smallest p-value 1/16), and its
-  simulation's `K = 2^6 - 1` is `n_flip = 6`, the package default. And the
-  package redraws the partition until every group is used. On the paper's own
-  1000 simulated datasets (25 x 25, normal errors, `n_flip = 6`),
-  `mwperm_dyadic_het()` rejected a true null in 1.7% of them with one
-  repetition and 0.7% at the default ten (the paper: 1.1%, one draw); power
-  at b = 0.05 / 0.10 / 0.15 / 0.20 / 0.30 was 0.12 / 0.55 / 0.85 / 0.95 /
-  0.99 with one repetition and 0.11 / 0.64 / 0.97 / 1.00 / 1.00 at the
-  default (the paper: 0.14 / 0.56 / 0.85 / 0.95 / 0.98). The paper's
-  procedure read literally puts the all -1 element, which acts as the
-  identity, into `min_j a_j`. That p-value is on the same grid and never
-  smaller; handed the same partition, it differed from the package's in one
-  of 3,000 datasets (the paper's design and two stronger heteroskedasticity
-  settings) and never in the decision at 0.05. The docs of `build_flip_set()`
+* **The group construction matches the revised paper's**: a random
+  partition of the rows, and of the columns, into `n_flip` groups, with the
+  sign vectors over the groups, and ONE sign vector per element shared by
+  rows and columns (confirmed by the authors). There are two documented
+  differences, and no number changed. The package keeps one element per
+  pair `{s, -s}`, since `s` and `-s` flip the same cells, and it redraws the
+  partition until every group is used. Counting the all -1 element, which
+  acts as the identity, among the non-identity elements gives a p-value on
+  the same grid that is never smaller; both are valid. The docs of `build_flip_set()`
   and `mwperm_dyadic_het()` now state all of this, and no longer call the
   deduplication bit-identical to the full enumeration without that
   qualification.
-* **The authors corrected their simulation script, and the package's checks
-  follow it.** The version of the heteroskedastic gravity design first shared
-  with the package drew centred lognormal (asymmetric) errors, under which
-  Assumption 2 fails; the authors confirmed that the errors are N(0, 1), as
-  the paper states, and the corrected script reproduces the paper's Figure 4
-  exactly. The design's port in `tests/helpers/signflip-reference.R` now
-  draws those errors (it reproduces the corrected script's data seed for
-  seed), so the size check in `tests/test-signflip.R` runs where the
-  assumption holds. The trade-off figures in `?mwperm_dyadic_het` and the
+* **The heteroskedastic gravity design now draws symmetric errors.** The
+  version first used drew centred lognormal (asymmetric) errors, under which
+  Assumption 2 fails; the errors are N(0, 1). The design's port in
+  `tests/helpers/signflip-reference.R` now draws those errors, so the size
+  check in `tests/test-signflip.R` runs where the assumption holds. The trade-off figures in `?mwperm_dyadic_het` and the
   README are re-measured on that design: the permutation test's size rose
   to 0.076 at nominal 0.05 under the strongest heteroskedasticity while the
   sign-flip test stayed at or below 0.016 (was 0.06-0.09 against 0.02 on the
@@ -540,10 +638,8 @@ the function implements; neither changes a number.
 * The revised paper is not public yet, and in arXiv:2601.08610v1 "Assumption
   2" is the Section 4 random-effects model; `?mwperm_dyadic_het` and the
   README now say so where they cite it.
-* Figures attributed to the authors' own runs -- a permutation-test size of
-  0.13 against 0.05 for the sign-flip test, and power 0.98 against 0.90 --
-  are removed from the README and `?mwperm_dyadic_het`: the authors' shared
-  script gives a size of at most 0.08, and their source is unconfirmed. The
+* Figures attributed to the authors' own runs, which the package could not
+  reproduce, are removed from the README and `?mwperm_dyadic_het`. The
   package's own measurements remain.
 
 ## Faster `mwperm_irregular()`, bit for bit
@@ -587,9 +683,9 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
 * **The `n_flip` trade-off is documented** (default unchanged). At 25 x 25
   with independent heteroskedastic symmetric errors and `n_reps = 10`, power
   at beta = 0.10 was 0.27 / 0.34 / 0.37 for `n_flip` = 6 / 7 / 8 (300
-  simulations each), at 1 / 2 / 4 times the projections; under the model
-  `eps_ij = h(X_ij) u_i v_j` the size was 0.014 at `n_reps = 1`
-  and 0.002 at the default.
+  simulations each), at 1 / 2 / 4 times the projections; with errors
+  multiplied by symmetric row and column factors the size was 0.014 at
+  `n_reps = 1` and 0.002 at the default.
 * **`print()` names the sign-flip group.** A `mwperm_dyadic_het()` fit prints
   "Invariant sign-flip test (mwperm)"; every permutation fit's header is
   unchanged byte for byte.
@@ -641,7 +737,7 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   `mwperm_irregular()` and `mwperm_panel_missing(L0 = )`; `tests/test-methods.R`
   pins both print headers; `tests/test-signflip.R` pins the mask condition in
   the incomplete-array note, and (section 11) the relation between its
-  p-value and the literal Appendix E enumeration.
+  p-value and the full enumeration of all sign vectors.
   `tests/golden/baseline-0.4.1.rds` is the previous snapshot.
 * **A second suite, `tests/testthat/`, checks the code against the paper.**
   It uses testthat's third edition (`testthat (>= 3.0.0)` joins Suggests,
@@ -651,9 +747,10 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   the S3 methods, input validation and reproducibility. Its reference is a
   naive Procedure 1 written from the paper
   (`tests/testthat/helper-reference.R`), and it reruns every seeded output
-  printed in the JSS draft. Monte Carlo size checks run only with
-  `MWPERM_SLOW_TESTS=true`. Tests that record a known difference from the
-  draft are skipped unless `MWPERM_SHOW_DISCREPANCIES=true`. The base-R
+  printed in the package's software paper (in preparation). Monte Carlo
+  size checks run only with `MWPERM_SLOW_TESTS=true`. Tests that record a
+  known difference from that paper are skipped unless
+  `MWPERM_SHOW_DISCREPANCIES=true`. The base-R
   suite stays the regression contract, and `tests/README.md` sets out which
   suite answers which question and how to run each one.
 * One case is a tie that rounding decides. With a layout whose `d` is
@@ -661,10 +758,6 @@ a CI) drops from 23.3 s to 14.6 s, and from 17.0 s to 11.3 s without a CI.
   arithmetic, so p = 1. Computed, the two are different sums, and platforms
   reported 1 or 5/6. The suite holds the package to `p >= K/(K+1)` there. No
   package code changed; changing the behaviour would move seeded numbers.
-* The repository (not the tarball) gains `ARCHITECTURE.md`, which covers the
-  pipeline, the paper-to-code notation and a file map. It also gains
-  `TESTING_PLAN.md`, which maps each paper object to its code and tests and
-  logs every known difference from the paper and the draft.
 
 # mwperm 0.4.1
 
@@ -750,9 +843,8 @@ the two irregular ones enumerated below).
   i.i.d. covariate the distortion is invisible (0.009-0.013), which is why
   the 0.4.0 checks missed it; with errors independent across cells and
   covariate-driven heteroskedasticity it held 0.010-0.017 while the
-  permutation test rose to 0.12-0.14. The authors' own design for this test
-  (`simulate_gravity_model()` in their revision material) has independent
-  errors, so the test is what it always was -- a heteroskedasticity-robust
+  permutation test rose to 0.12-0.14. The design the test was built for
+  has independent errors, so the test is what it always was -- a heteroskedasticity-robust
   test for errors independent across cells (or dependent only through
   sign-symmetric multiplicative factors) -- and the code is unchanged. What
   changed is every statement of the assumption: the man pages of
@@ -870,7 +962,7 @@ needs to know about.
 
 ## New
 
-* **`mwperm_dyadic_het()` -- the sign-flip test (IPT-Het).** Every test in
+* **`mwperm_dyadic_het()` -- the sign-flip test.** Every test in
   the package so far rests on Assumption 1: the error array is exchangeable
   under relabelling of the clusters, conditional on the covariates. That fails
   under heteroskedasticity, because relabelling the clusters relabels the
@@ -1046,7 +1138,7 @@ needs to know about.
   reports `p_floor` and `levels_needed`, and prints "fine enough for a 95%
   confidence set at alpha = 0.05" rather than a verdict silently specific to
   one level and one rule. The README transcripts and `tests/test-readme.R`
-  carry the new lines. (Audit findings F-004, F-012.)
+  carry the new lines.
 
 * **An empty confidence set is reported as such.** When no candidate is
   accepted -- every point of a supplied `grid` rejected, or the aggregated
@@ -1054,7 +1146,7 @@ needs to know about.
   `c(NA, NA)` with no note, and `print()` showed `95% IPT CI [NA, NA]` on an
   otherwise normal fit, indistinguishable from "not computed". The fit now
   carries a note naming the cause and the remedy, and `print()` shows
-  `IPT CI: empty set (see Notes)`. (F-009.)
+  `IPT CI: empty set (see Notes)`.
 
 * **`mwperm_formula()` refuses missing values by term, and never drops a row.**
   `model.matrix()` applied `getOption("na.action")` and silently dropped
@@ -1065,11 +1157,11 @@ needs to know about.
   naming the term, the count of affected rows and the first few, consistent
   with the package-wide contract that incomplete data is refused rather than
   silently subset (a dropped row would make a complete array incomplete
-  without notice). (F-010.)
+  without notice).
 
 * **`n_cores` is validated.** `0`, a negative and a fraction were clamped to
   1 and ran serially without comment; they are now refused with the message
-  the documented contract ("a single integer >= 1") implies. (F-011.)
+  the documented contract ("a single integer >= 1") implies.
 
 * **`mwperm_dyadic()` refuses an incomplete array before drawing anything.**
   Incompleteness was caught inside the gather-vector builder only when a drawn
@@ -1077,28 +1169,27 @@ needs to know about.
   array with its diagonal deleted, `seed = 1` RAN the test on 30 cells with
   K = 5 while seeds 2-8 errored. The front end now applies the same cell-count
   check `mwperm_panel()` and `mwperm_threeway()` use, and the message names
-  `mwperm_missing()`. (F-013.)
+  `mwperm_missing()`.
 
 * **Smaller things.** `DESCRIPTION`, `R/engine.R` and the README said "six"
-  designs where there are seven (F-007). The argument-scope warning read
-  "the missing and irregular and panel_missing designs" (F-018). The
+  designs where there are seven. The argument-scope warning read
+  "the missing and irregular and panel_missing designs". The
   position table the gather-vector builders use to translate permuted cell
   codes could be allocated at up to 2^26 entries (268 MB) regardless of the
   data; it is now capped at 2^24 entries and 64 entries per observation, and
   the two translation branches -- which produce identical gather vectors --
-  are both forced and compared by `tests/lower-level-tests/test-obsperms.R`
-  (F-019). The per-permutation degeneracy stop in `.ipt_prepare()` is
+  are both forced and compared by `tests/lower-level-tests/test-obsperms.R`. The per-permutation degeneracy stop in `.ipt_prepare()` is
   unchanged in behaviour and now pinned by a test, with the rationale (a value
   floating point cannot certify is refused, where Procedure 1 would define
-  p = 1) recorded on the argument (F-014). The NEWS and README claim that
+  p = 1) recorded on the argument. The NEWS and README claim that
   `mwperm_panel_missing()` "agrees exactly" with `mwperm_panel()` on a complete
   array was overstated: the construction coincides and the gather vectors are
   identical given the same groups, but the two draw their groups at different
   sub-seed offsets, so the same `seed` gives different, equally valid, draws;
-  both texts now say so (F-003). `inst/replication/06_size_by_design.R` ships
+  both texts now say so. `inst/replication/06_size_by_design.R` ships
   a null-size check for the four designs `01_size.R` omitted (layout,
   irregular with a cell-constant AND a within-cell-varying covariate, missing,
-  incomplete panel) at `n_reps = 1`, with K printed beside every rate (F-015).
+  incomplete panel) at `n_reps = 1`, with K printed beside every rate.
 
 * **The output README.md shows is now tested.** `tests/test-readme.R` pins the
   exact printed lines the README displays and, when it can find README.md,

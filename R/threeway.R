@@ -41,7 +41,12 @@
 #' @inheritParams mwperm_dyadic
 #' @param id1,id2,id3 Cluster identifiers for the three dimensions.
 #' @param K Number of non-identity permutations; defaults to `min(m, n, ell) -
-#'   1` capped at 199.
+#'   1` capped at 199, and `K + 1` may not exceed the smallest dimension.
+#'   Algorithm 1 itself would leave a dimension with fewer than `K + 1`
+#'   levels fixed, and that test exists: it is [mwperm_panel()] with `time =`
+#'   that dimension, valid here because three-way exchangeability implies the
+#'   panel condition. A note says so when one small dimension is what keeps
+#'   the test from reaching `alpha`.
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
 #'   the reported p-value, and into the confidence set that inverts it.
@@ -130,9 +135,31 @@ mwperm_threeway <- function(y, d, x = NULL, id1, id2, id3, K = NULL,
                      front_end = "mwperm_layout() (within-cell replication)")
   }
 
-  .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
-              alpha = alpha, conf_int = conf_int, beta_null = beta_null,
-              grid = grid, type = "threeway", d_names = d_names,
-              n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl,
-              n_cores = n_cores, ci_agg = aggregate)
+  res <- .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps,
+                     seed = seed, alpha = alpha, conf_int = conf_int,
+                     beta_null = beta_null, grid = grid, type = "threeway",
+                     d_names = d_names,
+                     n_clusters = c(id1 = m, id2 = n, id3 = ell), call = cl,
+                     n_cores = n_cores, ci_agg = aggregate)
+  ## One small dimension caps K for all three. When the other two are large
+  ## enough to reach alpha, say what Algorithm 1 itself does with an index set
+  ## smaller than K + 1 -- it leaves it fixed -- and that this test exists:
+  ## it is the panel design with that dimension as time, valid here because
+  ## three-way exchangeability (InvA) implies the panel condition (InvB).
+  if (isTRUE(res$p_floor > res$alpha)) {
+    dims3 <- c(id1 = m, id2 = n, id3 = ell)
+    small <- which.min(dims3)
+    others <- dims3[-small]
+    need <- ceiling((if (identical(aggregate, "median2")) 2 else 1) / alpha)
+    if (dims3[small] < need && min(others) >= need)
+      res$note <- c(res$note, sprintf(paste0(
+        "Only `%s` is too small here: it has %d levels, the other two ",
+        "dimensions %d and %d. Holding it fixed is itself a valid test under ",
+        "three-way exchangeability (which implies the panel condition), and ",
+        "it is what Algorithm 1 does with an index set smaller than K + 1: ",
+        "mwperm_panel() with `time = ` that index reaches K = %d."),
+        names(dims3)[small], dims3[small], others[1L], others[2L],
+        min(min(others) - 1L, 199L)))
+  }
+  res
 }

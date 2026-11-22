@@ -496,8 +496,65 @@
     M[, , k] <- slices[[k]]$M
     if (need_perm_D) W[, , k] <- slices[[k]]$W
   }
+  ## sD, sy: the scale of the statistics on the rows this repetition uses,
+  ## read by .tie_tau() for the tie rule of Eq. (10). They are the norms of D
+  ## and y after projecting out X, because the statistics are invariant to
+  ## y + X gamma and D + X delta (and, through the intercept, to any shift):
+  ## a scale with the same invariances moves no p-value and no end point under
+  ## them. |D' V_k V_k' (y - D b)| <= sD * (sy + sD * |b|), so it bounds the
+  ## size of every statistic of the repetition.
+  rX <- if (p == 0L) NULL else qr(X)
+  rD <- if (is.null(rX)) D else qr.resid(rX, D)
+  ry <- if (is.null(rX)) y else qr.resid(rX, y)
   list(u = u, v = v, M = M, W = W, K = K, Kp1 = Kp1, d = d,
-       has_perm_D = need_perm_D)
+       has_perm_D = need_perm_D,
+       sD = sqrt(sum(rD * rD)), sy = sqrt(sum(ry * ry)))
+}
+
+#' Tie tolerance for the comparison in Eq. (10)
+#'
+#' Eq. (10) counts a tie (`min_j a_j <= b_k`), and the validity argument
+#' needs it counted. With discrete data such ties are exact in exact
+#' arithmetic, but `a_j` and `b_k` are sums of the same terms taken in
+#' different orders, so in floating point they differ in the last bits and
+#' the comparison is decided by rounding: a tie is then dropped about four
+#' times in ten, the p-value falls below its exact value, and it changes when
+#' the rows of the data are reordered. The comparison is therefore made with
+#' an absolute tolerance on the scale of the statistics, `b_k >= min_j a_j -
+#' tau`, with
+#'
+#' \preformatted{  tau = 1e-10 * ||D~|| * (||y~|| + ||D~|| * ||b||)}
+#'
+#' where `D~` and `y~` are `D` and `y` with `X` projected out. That is 1e-10
+#' times an upper bound on `|D' V_k V_k' (y - D b)|`, and it has the
+#' invariances of the statistics themselves (to `y + X gamma`, `D + X delta`,
+#' shifts and rescaling), so it moves nothing they do not move. Rounding error
+#' in the statistics is of order N * 1e-16 of the bound when `y` is not
+#' dominated by its component in col(X) (the engine centres an outcome whose
+#' mean exceeds 1e3 standard deviations), so 1e-10 clears it with room to
+#' spare, and a genuine difference that small does not occur with continuous
+#' data (the golden fits are unchanged). The tolerance is absolute, not
+#' relative to the statistics, because tied statistics can both be zero.
+#' Counting a near-tie can only raise the p-value, which is the safe
+#' direction.
+#'
+#' Both comparison sites call this function -- `.ipt_eval()` for the reported
+#' p-value and `.pval_matrix()` for the confidence set -- so the test and the
+#' set keep one rule. A prep object built by hand without the scale fields
+#' (some tests do) gets a zero tolerance, i.e. the plain comparison.
+#'
+#' @details Eq. (10) of GTW (2026): the tie in `min_j a_j <= b_k`, made
+#'   robust to rounding.
+#' @param prep a prep object from `.ipt_prepare()`.
+#' @param beta the null value: a vector of length `prep$d`, or, when `d = 1`,
+#'   a vector of candidate nulls (one tolerance is returned per candidate).
+#' @return numeric tolerance(s), non-negative.
+#' @keywords internal
+#' @noRd
+.tie_tau <- function(prep, beta) {
+  if (is.null(prep$sD) || is.null(prep$sy)) return(0)
+  bn <- if (prep$d == 1L) abs(beta) else sqrt(sum(beta^2))
+  1e-10 * prep$sD * (prep$sy + prep$sD * bn)
 }
 
 #' Evaluate the Procedure 1 p-value at a null value beta = b
@@ -543,7 +600,11 @@
   ## is at least the (minorized) observed one, with the usual +1 correction.
   ## Eq. (10): pval = (1 + sum_k 1{min_j a_j <= b_k}) / (K + 1). `b >= amin`
   ## is the paper's `min_j a_j <= b_k`: a tie counts toward the p-value.
-  list(pvalue = (1 + sum(b >= amin)) / prep$Kp1, a = a, b = b)
+  ## A difference below the rounding scale of the statistics is a tie too
+  ## (.tie_tau()): with discrete data ties are exact in exact arithmetic, and
+  ## rounding alone would otherwise decide each one.
+  list(pvalue = (1 + sum(b >= amin - .tie_tau(prep, beta))) / prep$Kp1,
+       a = a, b = b)
 }
 
 #' Core invariant permutation p-value (Procedure 1), convenience wrapper

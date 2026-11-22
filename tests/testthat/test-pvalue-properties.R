@@ -132,3 +132,58 @@ test_that("D in col(X): p = 1 exactly, as Eq. (10) gives (and a warning)", {
     "no variation")
   expect_identical(f2$pvalues_rep, c(1, 1))
 })
+
+test_that("an exact tie is counted whatever the rounding (discrete data)", {
+  ## Integer y and d with an intercept only: N * (d - mean d) is an integer
+  ## vector, so Eq. (10) can be evaluated in exact integer arithmetic, and the
+  ## package must return that p-value. Without the tie tolerance of
+  ## .tie_tau() a tie that exact arithmetic counts was dropped by rounding in
+  ## about a third of such fits, always toward a smaller p-value.
+  exact_p_int <- function(y, d, ops) {
+    w <- length(y) * d - sum(d)
+    a <- abs(sum(w * y))
+    b <- vapply(ops[-1L], function(g) abs(sum(w * y[g])), numeric(1))
+    (1 + sum(a <= b)) / length(ops)
+  }
+  res <- with_seed(202, {
+    out <- NULL
+    for (it in 1:50) {
+      n <- sample(8:20, 1); m <- sample(8:20, 1); K <- min(n, m) - 1L
+      g <- expand.grid(i = seq_len(n), j = seq_len(m)); N <- nrow(g)
+      d <- rbinom(N, 1, 0.15); y <- rbinom(N, 1, 0.5)
+      if (length(unique(d)) < 2L) next
+      s <- sample(1e5, 1)
+      fit <- mwperm_dyadic(y, d, row = g$i, col = g$j, seed = s,
+                           conf_int = FALSE)
+      pr <- build_perm_set(n, K, seed = mwperm:::.sub_seed(s, 1L))
+      pc <- build_perm_set(m, K, seed = mwperm:::.sub_seed(s, 2L))
+      key <- g$i + (g$j - 1L) * n
+      ops <- lapply(seq_len(K + 1L), function(k)
+        match(pr[[k]][g$i] + (pc[[k]][g$j] - 1L) * n, key))
+      out <- rbind(out, c(pkg = fit$pvalue, exact = exact_p_int(y, d, ops)))
+    }
+    out
+  })
+  expect_gte(nrow(res), 40L)
+  expect_equal(res[, "pkg"], res[, "exact"], tolerance = 1e-12)
+})
+
+test_that("the p-value does not depend on the row order of discrete data", {
+  ## Reordering the rows changes the order of every sum, hence which exact
+  ## ties survive rounding; with ties counted by tolerance nothing moves.
+  moved <- with_seed(78, {
+    k <- 0L
+    for (s in 1:30) {
+      n <- 15L
+      g <- expand.grid(i = seq_len(n), j = seq_len(n)); N <- nrow(g)
+      d <- rbinom(N, 1, 0.3); y <- rbinom(N, 1, 0.5); o <- sample(N)
+      p1 <- mwperm_dyadic(y, d, row = g$i, col = g$j, seed = s,
+                          conf_int = FALSE)$pvalue
+      p2 <- mwperm_dyadic(y[o], d[o], row = g$i[o], col = g$j[o], seed = s,
+                          conf_int = FALSE)$pvalue
+      k <- k + !identical(p1, p2)
+    }
+    k
+  })
+  expect_identical(moved, 0L)
+})

@@ -10,7 +10,7 @@ runs under `R CMD check`, so every file here is kept fast.
 | **Question it answers** | Does each exported function keep its contract, and do the seeded numbers stay put? | Does the code compute what the paper defines? |
 | **Where** | `tests/test-*.R` and `tests/lower-level-tests/` | `tests/testthat/` |
 | **Organised by** | exported function (one file each), then the machinery underneath | paper object (Algorithm 1, Procedure 1, Eq. 10, ...) |
-| **Checked against** | the package's own contract and the golden seeded snapshot | a naive Procedure 1 written from the paper (`helper-reference.R`), the paper's algebra, the JSS draft's printed output, Monte Carlo |
+| **Checked against** | the package's own contract and the golden seeded snapshot | a naive Procedure 1 written from the paper (`helper-reference.R`), the paper's algebra, the package's software paper (in preparation)'s printed output, Monte Carlo |
 | **Style** | plain `stopifnot()` scripts | testthat 3rd edition |
 | **Tests which copy of the package** | the **installed** one: reinstall first | the source tree (`test_local()`) |
 | **Time** | about 60 s | about 30 s, plus 2.5 min for the slow Monte Carlo tests |
@@ -60,7 +60,7 @@ Two environment variables widen the testthat suite:
 * `MWPERM_SLOW_TESTS=true` runs `test-montecarlo.R` (Theorem 1 checked at
   every atom of the p-value distribution). It never runs on CRAN.
 * `MWPERM_SHOW_DISCREPANCIES=true` runs the tests skipped with
-  `Discrepancy D<n>`. Each asserts what the paper or the JSS draft says where
+  `Discrepancy D<n>`. Each asserts what the paper or the package's software paper (in preparation) says where
   the code deliberately does something else; setting the variable shows each
   one failing; each skip message says what differs and why.
 
@@ -71,8 +71,8 @@ Two environment variables widen the testthat suite:
 | what an **exported function** promises: its seeded numbers, arguments, errors, notes | the base-R file named after that function (`test-dyadic.R` for `mwperm_dyadic()`, ...) |
 | a contract **shared by every front end**: scalar-argument validation, output labels, equivariance, parallel identity | base-R `test-validation.R`, `test-methods.R` or `test-equivariance.R` |
 | an **internal building block** (a group, the projector, the p-value, an inversion routine) against its own invariants | base-R `lower-level-tests/`, one file per object |
-| that the code **matches a paper object** (against the naive reference, the paper's algebra, or a printed draft output) | the testthat file named after that paper object |
-| a place where the code **deliberately differs** from the paper or the draft | a testthat test asserting the paper's version, skipped with `skip_discrepancy("D<n>", ...)`, whose message says what differs and why |
+| that the code **matches a paper object** (against the naive reference, the paper's algebra, or an output printed in the software paper) | the testthat file named after that paper object |
+| a place where the code **deliberately differs** from the paper or the software paper | a testthat test asserting the paper's version, skipped with `skip_discrepancy("D<n>", ...)`, whose message says what differs and why |
 | **size or power** by simulation | quick checks: `testthat/test-montecarlo.R` (gated by `MWPERM_SLOW_TESTS`); publication-scale tables: `inst/replication/`, which no check runs |
 
 **A new design** needs all of these:
@@ -179,18 +179,18 @@ of Guo, Toulis & Wang (2026) (GTW) and Wen, Wang & Wang (2025).
 |---|---|
 | `helper-reference.R` | shared code, loaded by testthat before every file, never a test: a naive Procedure 1 (QR residuals with numerical rank, then `a_k`, `b_k` and Eq. 10); each front end's group rebuilt from its seed by explicit key matching; data generators; Monte Carlo helpers; `skip_discrepancy()` |
 | `test-procedure1-reference.R` | the package's `a_k`, `b_k` (to 1e-8) and every `pvalues_rep` entry against the naive Procedure 1, including d > 1, a non-zero null, shuffled rows and rank-deficient `[X \| X_k]` |
-| `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, orbit sizes, the printed formula; the draft's Sec. 3.6 example |
+| `test-algorithm1.R` | `build_perm_set()`: bijections, closure and inverses (Proposition 2), `psi_k = psi_1^k`, orbit sizes, the printed formula; the software paper's Sec. 3.6 example |
 | `test-pvalue-properties.R` | the p-value grid, the median over repetitions (odd and even), `median2`, ties counted (`<=`), a `D` the group cannot move, `D` in `col(X)` |
 | `test-invariances.R` | `y + X gamma`, rescaling `y` or `D`, testing `b` versus `y - D b`, a common trend under `time_fe`; CI equivariance; the units and origin of a nuisance column; p = 1 when no element moves `d` or `x`, on the QR route; the origin of the covariate of interest |
 | `test-confidence-sets.R` | duality just inside and outside every end point, the resolution guard, bisection and grid against the exact set, the joint region; the test and the set agreeing at `alpha` = 0.075, 0.10 and 0.20 |
 | `test-designs.R` | each design's group structure (three-way, panel, layout and `L0`, missing, incomplete panel, irregular) and its p-values against the reference |
 | `test-bicliques.R` | fully observed, disjoint, `min_block`; the exact search against brute force; the diagonal-deleted 40 x 40 array |
-| `test-dispatch.R` | every row of the draft's Table 1; `mwperm()` identical to its worker; `mwperm_check()` snapshots |
-| `test-s3-methods.R` | the draft's Sec. 3.5 slots, `summary()`, `confint()`, `coef()`, `nobs()`, `print()` snapshots, `plot()` |
+| `test-dispatch.R` | every row of the software paper's Table 1; `mwperm()` identical to its worker; `mwperm_check()` snapshots |
+| `test-s3-methods.R` | the software paper's Sec. 3.5 slots, `summary()`, `confint()`, `coef()`, `nobs()`, `print()` snapshots, `plot()` |
 | `test-data-validation.R` | lengths, missing and non-finite values, `N > 2p`, duplicate cells, the vector, column-name and formula interfaces, cluster-id types |
 | `test-reproducibility.R` | same seed, `seed + r - 1`, `n_cores = 2` identical to serial, the global RNG state; no core-count lookup on a serial fit |
-| `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the draft's negative control, and power |
-| `test-draft-replication.R` | every seeded output the JSS draft prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
+| `test-montecarlo.R` | slow: the empirical CDF at every atom `j/(K+1)` under the null (t_3, Cauchy, Moulton, MCAR, trending panel), the software paper's negative control, and power |
+| `test-draft-replication.R` | every seeded output the package's software paper (in preparation) prints, at printed precision; OLS against `lm()`; Sec. 7 when `gravity` is installed |
 
 `_snaps/` holds the `expect_snapshot()` records for `test-dispatch.R` and
 `test-s3-methods.R`. They are skipped on CRAN. After an intended change to
