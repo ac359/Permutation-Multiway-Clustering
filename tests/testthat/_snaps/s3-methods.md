@@ -50,8 +50,9 @@
           1/(K+1) = 0.1, which is above alpha = 0.05, so no value could be
           excluded and the set would be the whole line. A 95% set needs K + 1
           >= 20 -- that is, at least 20 levels in the smallest permuted
-          dimension. The p-value reported above is unaffected and remains
-          exact.
+          dimension. Each repetition's p-value is unaffected and remains
+          exact; the reported value is their median over 3 repetitions, which
+          the theorem does not cover (aggregate = "median2" does).
       
 
 ---

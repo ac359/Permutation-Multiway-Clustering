@@ -37,8 +37,10 @@ larger conforming block remains elsewhere in the mask, and stopping
 immediately forfeits every later block too. Retrying can only add blocks,
 never change or remove one already found, and the added blocks are
 ordinary disjoint bicliques -- so this affects power only, never validity.
-Set to \code{0L} for the pre-0.3.0 behaviour. Ignored for
-\code{method = "exact"}, where a sub-floor block \emph{is} proof.}
+Set to \code{0L} for the pre-0.3.0 behaviour (stop at the first block below
+the floor). Ignored for \code{method = "exact"}, which solves the
+floor-constrained problem directly when its largest block falls below the
+floor.}
 
 \item{node_budget}{Integer node cap for the \code{"exact"} branch-and-bound
 per block (default 200000). Ignored when \code{method = "greedy"}.}
@@ -71,8 +73,9 @@ Two ways to find each block are offered through \code{method}:
     peeling after each exact block can leave less for later blocks, so
     \code{"exact"} does not always cover more cells than \code{"greedy"}
     overall, and it costs orders of magnitude more time on large masks.
-    Worthwhile when a single largest block (finest p-value resolution)
-    matters more than total coverage.}
+    Worthwhile when a single block of the largest area matters more than
+    total coverage. (Area is what is maximised, not the smaller side, so the
+    largest block need not be the one that allows the largest \code{K}.)}
 }
 
 Both methods maximise \emph{area}, and with an asymmetric \code{min_block}
@@ -81,14 +84,32 @@ exist (a tall thin block never maximises area on a dense mask). When that
 happens the growth is retried under the floor -- rows that would push the
 common column set below the column minimum are skipped, and the block is
 grown past the area optimum until the row minimum is met (and vice versa)
--- so an asymmetric floor finds the tall/wide blocks it asks for. With a
-symmetric floor the behaviour is exactly the historical one.
+-- so an asymmetric floor finds the tall/wide blocks it asks for.
+
+The same holds for a symmetric floor: a long thin strip (two rows observing
+three hundred columns) has more area than a complete 20 x 20 block, so the
+largest block can fall below \code{min_block} while a conforming block
+exists. When that happens before any block has been found, \code{"exact"}
+solves the floor-constrained problem -- the largest block that meets the
+floor -- and an empty answer from a completed search is then proof that none
+remains; \code{"greedy"} grows a block under the floor and, if that fails
+too, sets the small block aside and keeps looking. Before 0.4.5 the search
+gave up at once, which returned no block and could end in a "no fully
+observed block" error on data that had one.
+
+Once a block has been recorded the search still stops at the first candidate
+below the floor, as it always has, so a search that returned blocks before
+returns the same blocks now. Conforming blocks hidden behind a larger thin
+one can therefore go unused: that costs power, never validity (any set of
+fully observed, disjoint blocks is valid), and it avoids a late small block
+lowering the default \code{K} of the whole fit.
 
 Implements Algorithm 2 (Appendix A) of Guo, Toulis and Wang (2026)
 with two changes that affect power only (their Remark 2): the
 largest-biclique problem (15) is solved greedily unless method = "exact",
-and the peeling stops at the first block smaller than min_block rather
-than when the mask is empty.
+and only blocks that meet min_block are recorded, the search ending at the
+first smaller candidate once a block has been found (the paper's loop
+records every block and runs until the mask is empty).
 }
 \examples{
 ## a 4x4 grid missing its diagonal

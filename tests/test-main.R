@@ -511,4 +511,33 @@ stopifnot(identical(mwperm_check(index = c("i", "j"), time = "t",
                                                   rep = "t",
                                                   data = tl))$design, "layout"))
 
+## ---- 10. the time role with three untagged indices ---------------------------
+## Even spacing is weak evidence of time (consecutive cluster ids are evenly
+## spaced too): calendar years outrank it, and a time role that rests on
+## spacing alone carries a warning. Before this, the importer id below was held
+## fixed as "time" in silence and the survey years were permuted.
+local({
+  mk <- function(time_vals, n = 6L) {
+    set.seed(1)
+    g <- expand.grid(imp = seq_len(n), ex = seq_len(n),
+                     tt = seq_along(time_vals))
+    data.frame(imp = g$imp, exp = sprintf("c%02d", g$ex),
+               round = time_vals[g$tt], y = rnorm(nrow(g)),
+               d = rnorm(nrow(g)), stringsAsFactors = FALSE)
+  }
+  ix <- c("imp", "exp", "round")
+  c1 <- mwperm_check(index = ix, data = mk(c(1990, 1993, 1997, 1998, 2004, 2011)))
+  stopifnot(identical(c1$design, "panel"), identical(c1$roles$time, "round"),
+            length(c1$warnings) == 0L)
+  g2 <- mk(paste0("w", 1:6))
+  c2 <- mwperm_check(index = ix, data = g2)
+  stopifnot(identical(c2$roles$time, "imp"),
+            any(grepl("evenly spaced", c2$warnings)))
+  expect_warn(mwperm(y = "y", d = "d", index = ix, data = g2, seed = 1,
+                     verbose = FALSE), "evenly spaced")
+  c3 <- mwperm_check(index = ix,
+                     data = mk(as.Date("2020-01-01") + c(0, 31, 59, 90, 120, 151)))
+  stopifnot(identical(c3$roles$time, "round"), length(c3$warnings) == 0L)
+})
+
 passed("test-main.R")

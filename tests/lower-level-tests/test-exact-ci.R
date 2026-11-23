@@ -137,13 +137,17 @@ hits <- vapply(roots, function(b) {
 }, logical(1))
 stopifnot(all(hits))
 
-## ---- 6. the boundary: what is reported is the CLOSURE of the set ----------
+## ---- 6. the boundary: the reported set IS the acceptance set ---------------
 ## Sections 1 and 4 probe points that are never roots of the step function, so
 ## neither can see the boundary. Here the roots themselves are probed, on the
 ## fit's OWN permutations (rebuilt from the documented seed scheme: rep r uses
-## seed + r - 1, and dimension j uses .sub_seed(rep_seed, j)). The relation
-## asserted is the closure relation, NOT "in the set iff not rejected" -- the
-## latter is false at an end point that bounds an accepted open cell.
+## seed + r - 1, and dimension j uses .sub_seed(rep_seed, j)). Since 0.4.5 a
+## tie in Eq. (10) is counted with a tolerance (.tie_tau()), and each end point
+## is placed on the last value the test accepts, a hair past its root. The
+## relation asserted is therefore "in the set iff accepted" at the end points
+## themselves: each is accepted, and a point just outside it is rejected.
+## (Until 0.4.4 the end points were the roots, the CLOSURE of the set, and
+## about a quarter of them were rejected, which rounding decided.)
 mk_preps <- function(nr, K) lapply(seq_len(nr), function(r) {
   rs <- 7L + r - 1L                  # the fit was run with seed = 7
   Grow <- build_perm_set(n, K, seed = mwperm:::.sub_seed(rs, 1L))
@@ -187,21 +191,26 @@ for (nr in c(1L, 3L)) {
     lo <- cs[i, 1L]; hi <- cs[i, 2L]
     ## (b) every point strictly inside a component is accepted
     stopifnot(all(acc[atoms > lo & atoms < hi]))
-    ## (c) each finite end point is a root, and is either accepted itself or is
-    ## the infimum / supremum of an accepted open cell (the closure case)
+    ## (c) each finite end point lies within a hair of a root (the tie
+    ## tolerance moves it by about 1e-10 relative), is accepted, and a point a
+    ## little further out -- still short of the next root -- is rejected
+    near_root <- function(e) min(abs(roots - e)) <= 1e-7 * (1 + abs(e))
+    just_out <- function(e, dir) {
+      nxt <- roots[(roots - e) * dir > 1e-7 * (1 + abs(e))]
+      gap <- if (length(nxt)) min(abs(nxt - e)) else 1
+      e + dir * min(1e-6 * (1 + abs(e)), gap / 2)
+    }
     if (is.finite(lo)) {
-      stopifnot(any(roots == lo))
-      j <- match(lo, atoms)
+      stopifnot(near_root(lo))
       in_lo <- pval_at(lo) > alpha
-      stopifnot(in_lo || (j < length(atoms) && acc[j + 1L]))
+      stopifnot(in_lo, pval_at(just_out(lo, -1)) <= alpha)
       n_end_examined <- n_end_examined + 1L
       if (!in_lo) n_rejected_end <- n_rejected_end + 1L
     }
     if (is.finite(hi)) {
-      stopifnot(any(roots == hi))
-      j <- match(hi, atoms)
+      stopifnot(near_root(hi))
       in_hi <- pval_at(hi) > alpha
-      stopifnot(in_hi || (j > 1L && acc[j - 1L]))
+      stopifnot(in_hi, pval_at(just_out(hi, 1)) <= alpha)
       n_end_examined <- n_end_examined + 1L
       if (!in_hi) n_rejected_end <- n_rejected_end + 1L
     }
@@ -210,22 +219,17 @@ for (nr in c(1L, 3L)) {
 ## Non-vacuity: the loop above must actually have probed end points, or every
 ## assertion in section 6 passes for the wrong reason.
 ##
-## What it does NOT assert is that any end point is REJECTED. An end point is a
-## root of the step function; at a root |v_k - W_k b| and min_j |u_j - M_j b|
-## are equal in exact arithmetic -- so which side the evaluation falls on is
-## settled by the last bits of the root and of the two norms, and that differs
-## by BLAS. This machine and the Linux runners reject some end points; the macOS
-## and Windows runners accept all of them. Both are correct: the reported set is
-## the CLOSURE of {b : pval(b) > alpha}, so an end point may be rejected, and
-## when none is, the reported set simply coincides with the attained one and is
-## no less conservative.
-##
-## The platform-independent invariant is (c), checked above for EVERY end point:
-## accepted, or the infimum / supremum of an accepted open cell. That is the
-## claim the documentation makes, and it is what this section pins.
-stopifnot(n_end_examined > 0L)
+## Until 0.4.4 an end point was a root, and at a root |v_k - W_k b| and
+## min_j |u_j - M_j b| are equal in exact arithmetic, so whether the test
+## accepted it was settled by the last bits of the root and of the two norms
+## -- differently by BLAS (Linux runners rejected some end points, macOS and
+## Windows none). The tie tolerance removes that dependence: the crossing pair
+## is counted at the root and for a hair beyond it on every platform, and the
+## end point is the last value accepted. So (c) asserts acceptance outright,
+## and the count printed below must be 0 everywhere.
+stopifnot(n_end_examined > 0L, n_rejected_end == 0L)
 cat(sprintf(paste0("test-exact-ci.R: %d of %d reported end points are ",
-                   "rejected on this platform\n"),
+                   "rejected (must be 0)\n"),
             n_rejected_end, n_end_examined))
 
 ## ---- 7. inverted at alpha itself, not at 1 - conf_level -------------------

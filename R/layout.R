@@ -37,7 +37,11 @@
 #' per-cell permutations change the cross-cell alignment of zeta, and with a
 #' `d` that follows the same pattern over l in every cell the test rejected a
 #' true null 63-74% of the time at alpha = 0.05 (10 x 10 cells of 22, 1000
-#' simulations each; about 5% when `d` had no such pattern). The test is
+#' simulations each; about 5% when `d` had no such pattern). (Section 6.3 of
+#' the paper lists such a shared, i.i.d. replicate effect among the cases its
+#' condition covers; with the permutations drawn independently per cell, as
+#' its step (i) prescribes, a shared effect is not invariant, and this
+#' package does not rely on that example.) The test is
 #' appropriate when l indexes independent replications (two-way layouts in
 #' randomised experiments). If l is a period or a survey wave, treat it as
 #' time: [mwperm_panel()], or [mwperm_panel_missing()] with `time =` and
@@ -91,15 +95,27 @@
 #' That combination is valid (a uniform random subset of exchangeable
 #' replicates is itself exchangeable) and raising `L0` is a legitimate power
 #' lever -- dropping thin cells raises the attainable `K` and so the p-value
-#' resolution -- but it is a different procedure from Section 6.4, and it does
+#' resolution -- but it discards data, and passing a larger `K` instead (see
+#' that argument) usually does better: every observation is kept, the cells
+#' smaller than `K + 1` are held fixed, and that is the Section 6.3
+#' construction itself. (On a 6 x 6 layout with cells of 2 to 40 replicates,
+#' power at a small effect was 0.54 with `K = 19` against 0.33 with
+#' `L0 = 20`, both holding size.) Balancing is also a different procedure from
+#' Section 6.4, and it does
 #' not cover what Section 6.4 exists for: a covariate constant within cells
 #' still gives a powerless test (see the warning in Details) -- use
 #' [mwperm_irregular()], the Section 6.4 procedure, there -- and replicates
 #' that are really time periods are not exchangeable within a cell -- pass
 #' them as `time` to [mwperm_panel()] or [mwperm_panel_missing()].
 #' @param K Number of non-identity permutations; defaults to `min(cell size) -
-#'   1` capped at 199 (with `L0`, to `L0 - 1`). Must satisfy `K + 1 <=
-#'   min(cell size)`.
+#'   1` capped at 199 (with `L0`, to `L0 - 1`), so that every cell is
+#'   permuted. A larger `K` may be passed, up to `max(cell size) - 1`: cells
+#'   with fewer than `K + 1` replicates are then kept in the regression and
+#'   held fixed (never relabelled), which is how Algorithm 1 treats an index
+#'   set smaller than `K + 1`, and a note reports how many. This is the
+#'   remedy when a few small cells would otherwise cap `K` below what
+#'   `alpha` needs (`K + 1 >= 20` at `alpha = 0.05`); unlike `L0` it
+#'   discards nothing. A cell with a single observation is always held fixed.
 #'
 #' @param aggregate How the `n_reps` per-repetition p-values are combined into
 #'   the reported p-value, and into the confidence set that inverts it.
@@ -232,6 +248,18 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   ## diagnostic below reads `d` and would fail opaquely on NA/non-numeric input.
   .check_finite(list(y = y, d = D, x = X))
 
+  ## Section 6.3 applies Algorithm 1 to every cell with ONE K, and Algorithm 1
+  ## leaves an index set smaller than K + 1 fixed: a cell with fewer than
+  ## K + 1 replicates stays in the regression and is simply never relabelled.
+  ## .layout_K() keeps the default at the smallest cell (every cell permuted,
+  ## the historical rule, so no seeded result moves) and lets an explicit K
+  ## exceed it, up to the largest cell.
+  ## Settled here, before the diagnostics below, so that a layout with no
+  ## replication at all stops with its own message first.
+  K <- .layout_K(K, ell)
+  held <- attr(K, "held")              # cells with fewer than K + 1 replicates
+  K <- as.integer(K)
+
   ## Dense 1-based replication index l within each cell. The permutation acts on
   ## this index, so it must run 1..ell[c] inside every cell; ties in the
   ## ordering key are broken deterministically. Shared with
@@ -253,7 +281,6 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
             call. = FALSE)
 
   min_cell <- min(ell)
-  K <- .default_K(K, min_cell)
 
   ## One cell per sub-seed offset, so a layout with >= 1000 occupied cells
   ## needs a wider stride than the historical 1000 or two reps would share a
@@ -263,14 +290,9 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
   ## Section 6.3, step (i): an Algorithm 1 group over [ell_c] in every cell c,
   ## all of order K + 1, each from its own sub-seed; step (ii) concatenates
   ## them (element k applies the k-th element of every cell's group).
-  perm_builder <- function(rep_seed) {
-    cell_groups <- vector("list", ncell)
-    for (c in seq_len(ncell))
-      cell_groups[[c]] <- build_perm_set(ell[c], K,
-                                         seed = .sub_seed(rep_seed, c,
-                                                          seed_stride))
-    .build_obs_perms_layout(cell, widx, cell_groups)
-  }
+  perm_builder <- function(rep_seed)
+    .build_obs_perms_layout(cell, widx,
+                            .layout_groups(ell, K, rep_seed, seed_stride))
 
   res <- .ipt_engine(y, D, X, perm_builder, K = K, n_reps = n_reps, seed = seed,
                      alpha = alpha, conf_int = conf_int, beta_null = beta_null,
@@ -280,8 +302,105 @@ mwperm_layout <- function(y, d, x = NULL, row, col, rep = NULL, L0 = NULL,
                      n_clusters = c(ncell = ncell,
                                     min_cell = min_cell), call = cl,
                      n_cores = n_cores, ci_agg = aggregate)
-  if (length(balance_note)) res$note <- c(balance_note, res$note)
+  ## A fit that cannot reject at alpha although some cell is larger than
+  ## K + 1: say that a larger K is available and what it does.
+  k_hint <- if (isTRUE(res$p_floor > res$alpha) && max(ell) - 1L > K)
+    sprintf(paste0(
+      "A larger `K` is available for this layout, up to %d (the largest ",
+      "cell minus 1): cells with fewer than K + 1 replicates are then kept ",
+      "and held fixed instead of capping K, which is what the within-cell ",
+      "construction does with them. Balancing with `L0` is the alternative; ",
+      "it drops the small cells and subsamples the rest."), max(ell) - 1L)
+    else character(0)
+  res$note <- c(balance_note, .held_cells_note(held, ell, K), res$note, k_hint)
   res
+}
+
+#' K for a two-way layout (Section 6.3), and which cells it holds fixed.
+#'
+#' `K = NULL` keeps the historical rule: the smallest cell (with at least two
+#' replicates) caps the one K every cell shares, so every such cell is
+#' permuted. An explicit `K` may exceed that, up to the largest cell minus 1:
+#' the cells with fewer than K + 1 replicates are then kept and held fixed --
+#' `.layout_groups()` gives them the identity -- exactly as Algorithm 1 leaves
+#' an index set smaller than K + 1 untouched. Returns K with attribute
+#' "held", the indices of the held cells (singleton cells are always held).
+#' @details Section 6.3, step (i) of GTW (2026) with Algorithm 1: one K for
+#'   all cells; a cell smaller than K + 1 is left unpermuted.
+#' @param K `NULL` or the user's K.
+#' @param ell integer vector of cell sizes.
+#' @keywords internal
+#' @noRd
+.layout_K <- function(K, ell) {
+  big <- ell[ell >= 2L]
+  if (!length(big))
+    stop(paste0("No cell holds two or more observations, so there is nothing ",
+                "to permute within a cell: mwperm_layout() needs replication ",
+                "inside cells. With one observation per cell use ",
+                "mwperm_dyadic() (complete array) or mwperm_missing()."),
+         call. = FALSE)
+  if (is.null(K)) {
+    K <- .default_K(NULL, min(big))
+  } else {
+    if (!(is.numeric(K) && length(K) == 1L && is.finite(K) &&
+          K == trunc(K) && K >= 1))
+      stop("`K` must be a single integer >= 1 (or NULL for the default).",
+           call. = FALSE)
+    K <- as.integer(K)
+    if (K + 1L > max(ell))
+      stop(sprintf(paste0(
+        "The permutation group has order K + 1 = %d, but the largest cell ",
+        "holds only %d replicates, so no cell could be permuted. Use ",
+        "K <= %d (cells smaller than K + 1 are then kept and held fixed), ",
+        "or leave K = NULL to permute every cell."),
+        K + 1L, max(ell), max(ell) - 1L), call. = FALSE)
+  }
+  structure(K, held = which(ell < K + 1L))
+}
+
+#' The per-cell permutation groups of a two-way layout.
+#'
+#' One Algorithm 1 group of order K + 1 over the replicates of every cell,
+#' each from its own sub-seed; a cell with fewer than K + 1 replicates gets
+#' the identity K + 1 times and draws nothing, so every other cell keeps the
+#' seed, and the group, it always had.
+#' @details Section 6.3, step (i) of GTW (2026): Algorithm 1 on `[ell_ij]` for
+#'   every cell, with one K.
+#' @param ell integer vector of cell sizes.
+#' @param K group order minus one.
+#' @param rep_seed,seed_stride the repetition seed and the sub-seed stride.
+#' @return list, one entry per cell, each a list of K + 1 image vectors.
+#' @keywords internal
+#' @noRd
+.layout_groups <- function(ell, K, rep_seed, seed_stride) {
+  groups <- vector("list", length(ell))
+  for (c in seq_along(ell))
+    groups[[c]] <- if (ell[c] < K + 1L) rep(list(seq_len(ell[c])), K + 1L)
+                   else build_perm_set(ell[c], K,
+                                       seed = .sub_seed(rep_seed, c,
+                                                        seed_stride))
+  groups
+}
+
+#' The note a layout fit adds when `K` holds some cells fixed.
+#' @details Reporting only; not a paper step.
+#' @param held indices of the held cells; `ell` the cell sizes.
+#' @param K the group order minus one.
+#' @return character(0) or one note.
+#' @keywords internal
+#' @noRd
+.held_cells_note <- function(held, ell, K) {
+  if (!length(held)) return(character(0))
+  one <- length(held) == 1L
+  n_obs <- sum(ell[held])
+  sprintf(paste0(
+    "%d cell%s with fewer than K + 1 = %d replicates %s kept but held fixed ",
+    "(%d observation%s): %s observations enter the statistic but are never ",
+    "relabelled, while the larger cells are permuted. This stays exact: ",
+    "every cell's group contains the identity, so the combined set is still ",
+    "a cyclic group of order K + 1."),
+    length(held), if (one) "" else "s", K + 1L, if (one) "is" else "are",
+    n_obs, if (n_obs == 1L) "" else "s", if (one) "its" else "their")
 }
 
 #' Choose row indices balancing every dense cell to exactly L0 replicates.

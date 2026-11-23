@@ -36,7 +36,12 @@ with several, a joint confidence region (see \code{conf_int}).}
 \item{id1, id2, id3}{Cluster identifiers for the three dimensions.}
 
 \item{K}{Number of non-identity permutations; defaults to
-\code{min(m, n, ell) - 1} capped at 199.}
+\code{min(m, n, ell) - 1} capped at 199, and \code{K + 1} may not exceed the
+smallest dimension. Algorithm 1 itself would leave a dimension with fewer than
+\code{K + 1} levels fixed, and that test exists: it is
+\code{\link{mwperm_panel}} with \verb{time =} that dimension, valid here
+because three-way exchangeability implies the panel condition. A note says so
+when one small dimension is what keeps the test from reaching \code{alpha}.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}

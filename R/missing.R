@@ -14,8 +14,12 @@
 ## Paper vs code (power only, never validity). Algorithm 2 loops "while M has
 ##   nonzero entries" and solves the maximum-biclique problem (15) at each
 ##   step; find_bicliques() solves (15) greedily by default (exactly, with a
-##   node budget, on request) and stops at the first block below min_block,
-##   since a block too small to permute adds no information.
+##   node budget, on request) and records only blocks that meet min_block,
+##   since a block too small to permute adds no information. When the very
+##   first candidate is below that floor a conforming block is looked for
+##   (exactly, under method = "exact"; failing that the small block is set
+##   aside and the peeling continues); once a block has been recorded the
+##   search stops at the first candidate below the floor.
 ## Pipeline. mwperm() -> dispatch -> [design worker] -> [permutation
 ##   construction: blocks, then the block-diagonal group] -> projection
 ##   engine -> median aggregation -> test inversion -> S3 methods.
@@ -76,8 +80,35 @@
 #'   observed, disjoint blocks (Definition 1; Algorithm 2, via
 #'   find_bicliques()), Algorithm 1 on each block's rows and columns with a
 #'   common K, and Procedure 1 on the stacked retained data with the
-#'   concatenated group. Validity is their Theorem 4 under Assumption 4.
+#'   concatenated group. Validity is their Theorem 4 under Assumptions 1 and
+#'   4 (arXiv v1 numbering).
+#' @section Assumptions: Two conditions, both about the errors, and neither can
+#'   be checked from the data. The first is the exchangeability condition of
+#'   [mwperm_dyadic()] (Assumption 1 of Guo, Toulis and Wang 2026), applied
+#'   within each retained block: relabelling the rows and the columns of a
+#'   fully observed block leaves the distribution of its errors unchanged,
+#'   given the covariates. The second is a condition on the missingness
+#'   (Assumption 4 of arXiv:2601.08610v1): which cells are observed must be
+#'   independent of the errors given the covariates. The pattern may depend on
+#'   `x` and `d` in any way -- cells observed more often for richer pairs are
+#'   fine -- but not on the outcome. Dropping zero trade flows because
+#'   `log(0)` is undefined violates it, and so does attrition driven by the
+#'   outcome: in a simulation where the observed cells depended on `y`, the
+#'   test rejected a true null in 66% of data sets at the 5% level, against
+#'   3% when cells were missing at random. Under both conditions the p-value
+#'   of a single run is exact in finite samples (their Theorem 4).
 #' @inheritParams mwperm_dyadic
+#' @param n_reps Number of independent runs of the test, each with its own
+#'   random relabelling. Defaults to 1, the procedure Theorem 4 covers: the
+#'   p-value is exact at any sample size. A single run's p-value depends on
+#'   the random relabelling (a seed lottery), so pass a `seed` to make it
+#'   reproducible. With `n_reps > 1` the runs' p-values are combined by
+#'   `aggregate` (the median by default, Remark 1) and the confidence set
+#'   inverts the same combined p-value; that steadies the result at roughly
+#'   `n_reps` times the cost, but it is not covered by the theorem -- see
+#'   *Aggregation over repetitions* in the Details of [mwperm_dyadic()]. The
+#'   default was 10 from 0.2.0 to 0.4.2; pass `n_reps = 10` to reproduce
+#'   results from those versions.
 #' @param row,col Cluster identities of each observed cell. Cells that are
 #'   absent from the data are treated as missing.
 #' @param min_block Integer; only bicliques whose smaller side is at least
@@ -651,8 +682,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   total covered area of the returned partition -- the greedy peeling after
 #'   each exact block can leave less for later blocks, so `"exact"` does not
 #'   always cover more cells than `"greedy"` overall, and it costs orders of
-#'   magnitude more time on large masks. Worthwhile when a single largest
-#'   block (finest p-value resolution) matters more than total coverage.
+#'   magnitude more time on large masks. Worthwhile when a single block of
+#'   the largest area matters more than total coverage. (Area is what is
+#'   maximised, not the smaller side, so the largest block need not be the
+#'   one that allows the largest `K`.)
 #'
 #' Both methods maximise *area*, and with an asymmetric `min_block` an
 #' area-maximal block can violate the floor even when conforming blocks exist
@@ -660,14 +693,32 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #' the growth is retried under the floor -- rows that would push the common
 #' column set below the column minimum are skipped, and the block is grown
 #' past the area optimum until the row minimum is met (and vice versa) -- so
-#' an asymmetric floor finds the tall/wide blocks it asks for. With a
-#' symmetric floor the behaviour is exactly the historical one.
+#' an asymmetric floor finds the tall/wide blocks it asks for.
+#'
+#' The same holds for a symmetric floor: a long thin strip (two rows
+#' observing three hundred columns) has more area than a complete 20 x 20
+#' block, so the largest block can fall below `min_block` while a conforming
+#' block exists. When that happens before any block has been found,
+#' `"exact"` solves the floor-constrained problem -- the largest block that
+#' meets the floor -- and an empty answer from a completed search is then
+#' proof that none remains; `"greedy"` grows a block under the floor and, if
+#' that fails too, sets the small block aside and keeps looking. Before 0.4.5
+#' the search gave up at once, which returned no block and could end in a
+#' "no fully observed block" error on data that had one.
+#'
+#' Once a block has been recorded the search still stops at the first
+#' candidate below the floor, as it always has, so a search that returned
+#' blocks before returns the same blocks now. Conforming blocks hidden behind
+#' a larger thin one can therefore go unused: that costs power, never
+#' validity (any set of fully observed, disjoint blocks is valid), and it
+#' avoids a late small block lowering the default `K` of the whole fit.
 #'
 #' @details Implements Algorithm 2 (Appendix A) of Guo, Toulis and Wang (2026)
 #'   with two changes that affect power only (their Remark 2): the
 #'   largest-biclique problem (15) is solved greedily unless method = "exact",
-#'   and the peeling stops at the first block smaller than min_block rather
-#'   than when the mask is empty.
+#'   and only blocks that meet min_block are recorded, the search ending at
+#'   the first smaller candidate once a block has been found (the paper's loop
+#'   records every block and runs until the mask is empty).
 #' @param row,col Integer (or factor-coercible) cluster ids of the observed
 #'   cells; the two vectors have equal length, one entry per observed cell.
 #' @param min_block Minimum block side(s). A single integer applies to both
@@ -686,8 +737,10 @@ mwperm_missing <- function(y, d, x = NULL, row, col, K = NULL,
 #'   immediately forfeits every later block too. Retrying can only add blocks,
 #'   never change or remove one already found, and the added blocks are
 #'   ordinary disjoint bicliques -- so this affects power only, never
-#'   validity. Set to `0L` for the pre-0.3.0 behaviour. Ignored for `method =
-#'   "exact"`, where a sub-floor block *is* proof.
+#'   validity. Set to `0L` for the pre-0.3.0 behaviour (stop at the first
+#'   block below the floor). Ignored for `method = "exact"`, which solves the
+#'   floor-constrained problem directly when its largest block falls below
+#'   the floor.
 #' @param node_budget Integer node cap for the `"exact"` branch-and-bound per
 #'   block (default 200000). Ignored when `method = "greedy"`.
 #'
@@ -752,11 +805,13 @@ find_bicliques <- function(row, col, min_block = 2L,
   avail_col <- rep(TRUE, nc)
   blocks <- list()
   budget_hit <- FALSE                  # exact search exhausted its budget?
+  rescued <- FALSE                     # first candidate was below the floor?
 
   ## Algorithm 2: repeatedly solve the largest-biclique problem (15) on what
   ## is left, add the block to F_M, and remove its rows and columns (the
-  ## paper removes their edges; the effect is the same). Stops when no block
-  ## meeting min_block remains (the paper stops when M is empty).
+  ## paper removes their edges; the effect is the same). Only blocks meeting
+  ## min_block are recorded, and once one has been recorded the loop ends at
+  ## the first candidate below the floor (the paper stops when M is empty).
   repeat {
     rrows <- which(avail_row)
     rcols <- which(avail_col)   # still-available clusters
@@ -781,15 +836,15 @@ find_bicliques <- function(row, col, min_block = 2L,
       blk2 <- .grow_biclique_min(Asub, mb_r, mb_c)
       if (length(blk2$rows) >= mb_r && length(blk2$cols) >= mb_c) blk <- blk2
     }
-    ## A sub-floor block ends the peeling -- but only the EXACT search proves
-    ## that no conforming block remains. The greedy heuristic seeds from the 8
-    ## highest-degree available rows, so a small block is evidence about those
-    ## seeds, not about the whole remaining mask: a conforming block anchored on
-    ## a lower-degree row would be missed, and every later block lost with it.
-    ## Slide the seed window down the degree order a bounded number of times
-    ## before giving up. This can only ADD blocks (it runs exactly where the old
-    ## code stopped), and each added block is a genuine fully observed biclique
-    ## disjoint from the others, so validity is untouched -- it buys power.
+    ## A block below the floor is not the end of the search. The greedy
+    ## heuristic seeds from the 8 highest-degree available rows, so a small
+    ## block is evidence about those seeds, not about the whole remaining mask:
+    ## a conforming block anchored on a lower-degree row would be missed, and
+    ## every later block lost with it. Slide the seed window down the degree
+    ## order a bounded number of times first. This can only ADD blocks (it runs
+    ## exactly where the old code stopped), and each added block is a genuine
+    ## fully observed biclique disjoint from the others, so validity is
+    ## untouched -- it buys power.
     if (method != "exact" && retry_peels > 0L &&
         (length(blk$rows) < mb_r || length(blk$cols) < mb_c)) {
       for (a in seq_len(retry_peels)) {
@@ -806,7 +861,57 @@ find_bicliques <- function(row, col, min_block = 2L,
         }
       }
     }
-    if (length(blk$rows) < mb_r || length(blk$cols) < mb_c) break
+    ## Still below the floor. That is not proof that no conforming block
+    ## remains, for either method: both maximise AREA, and a long thin strip
+    ## (2 rows observing 300 columns) out-areas a complete 20 x 20 block and
+    ## hides it. Until 0.4.4 the peel stopped here in every case, so a mask
+    ## whose FIRST candidate was such a strip returned no block at all and
+    ## mwperm_missing() stopped with "no fully observed block" on data that
+    ## had one. Algorithm 2 itself never stops on a small block: it records it
+    ## and goes on while the mask has entries.
+    ##
+    ## The rescue below therefore runs when nothing has been recorded yet:
+    ##   exact  -- solve the floor-constrained problem. A conforming block is
+    ##             taken; an empty result from a completed search IS proof
+    ##             that none remains, and ends the peel.
+    ##   greedy -- (and exact, when its node budget ran out) grow under the
+    ##             floor from the high-degree seeds; failing that, set the
+    ##             deficient side of the small block aside, unrecorded, and
+    ##             keep peeling.
+    ## and, once it has been used, for the rest of that search. Where the
+    ## plain search has already recorded a block, the historical stop is kept
+    ## on purpose: continuing there adds small late blocks, and since the
+    ## default K is the smallest block side minus 1 a late 3 x 3 block lowers
+    ## K for the whole fit (measured: K 5 -> 2 and p 0.167 -> 0.333 on a
+    ## seeded fit for 9 more cells out of 1404). So every search that returned
+    ## a block before returns exactly the same blocks now; what it can leave
+    ## unused costs power, never validity. `retry_peels = 0` keeps the old
+    ## greedy stop altogether, as documented.
+    if (length(blk$rows) < mb_r || length(blk$cols) < mb_c) {
+      if (length(blocks) > 0L && !rescued) break
+      if (method != "exact" && retry_peels <= 0L) break
+      rescued <- TRUE
+      found <- NULL
+      if (method == "exact") {
+        cb <- .max_biclique_exact(Asub, node_budget = node_budget,
+                                  mb_r = mb_r, mb_c = mb_c)
+        if (!isTRUE(cb$exact)) budget_hit <- TRUE
+        if (length(cb$rows)) found <- cb
+        else if (isTRUE(cb$exact)) break   # certified: nothing conforming left
+      }
+      if (is.null(found)) {
+        cand <- .grow_biclique_min(Asub, mb_r, mb_c)
+        if (length(cand$rows) >= mb_r && length(cand$cols) >= mb_c)
+          found <- cand
+      }
+      if (is.null(found)) {
+        if (!length(blk$rows) || !length(blk$cols)) break   # mask exhausted
+        if (length(blk$rows) < mb_r) avail_row[rrows[blk$rows]] <- FALSE
+        if (length(blk$cols) < mb_c) avail_col[rcols[blk$cols]] <- FALSE
+        next
+      }
+      blk <- found
+    }
 
     ## Map the block's local indices back to global clusters, store, and retire
     ## them.
@@ -956,10 +1061,15 @@ find_bicliques <- function(row, col, min_block = 2L,
 #'   biclique by branch and bound.
 #' @param A logical matrix.
 #' @param node_budget integer cap on the number of search nodes.
+#' @param mb_r,mb_c minimum row / column count of the returned block (the
+#'   floor-constrained problem). With the defaults `1, 1` this is the
+#'   unconstrained maximum; with a floor, the largest block that meets it, or
+#'   an empty block when none does. Both pruning bounds stay valid, since
+#'   they bound the area of every block in a subtree, conforming or not.
 #' @return list(rows, cols, area, exact); rows/cols are local indices.
 #' @keywords internal
 #' @noRd
-.max_biclique_exact <- function(A, node_budget = 2e5L) {
+.max_biclique_exact <- function(A, node_budget = 2e5L, mb_r = 1L, mb_c = 1L) {
   nr <- nrow(A)
   nc <- ncol(A)
   if (nr == 0L || nc == 0L)
@@ -986,10 +1096,15 @@ find_bicliques <- function(row, col, min_block = 2L,
     rem <- length(ord) - pos + 1L      # rows not yet decided
     if (length(chosen) > 0L) {
       ncols <- length(curcols)
-      if (ncols == 0L) return(invisible(NULL))  # no common column: dead end
+      ## Fewer common columns than the floor (none at all, at the default
+      ## floor of 1): a dead end, because adding rows never adds columns.
+      if (ncols < mb_c) return(invisible(NULL))
       area <- length(chosen) * ncols
-      if (area > best$area) best <<- list(rows = chosen, cols = curcols,
-                                          area = area)
+      ## The incumbent is the largest block that meets the floor; with the
+      ## default floors (1, 1) every block does, and this is the plain
+      ## maximum-area search.
+      if (area > best$area && length(chosen) >= mb_r)
+        best <<- list(rows = chosen, cols = curcols, area = area)
       ## Loose bound first, because it costs nothing: even adding every
       ## remaining row keeps <= ncols columns.
       if ((length(chosen) + rem) * ncols <= best$area) return(invisible(NULL))

@@ -172,3 +172,29 @@ test_that("the origin of the covariate of interest changes nothing", {
   expect_true(any(grepl("no variation", w, fixed = TRUE)))
   expect_identical(f0$pvalue, 1)
 })
+
+test_that("adding a constant to y changes nothing, even a very large one", {
+  ## The intercept absorbs the constant in exact arithmetic. In floating point
+  ## an outcome far from zero multiplies the rounding left in the residualized
+  ## regressor by its origin, so the engine centres an outcome whose mean
+  ## exceeds 1e3 standard deviations (y + 1e9 used to move the interval by
+  ## 8e-5 relative, with no warning). What the caller's own arithmetic rounded
+  ## away cannot come back, hence the 1e-7 tolerance at 1e9.
+  dy <- make_dyadic(20, 20, seed = 61)
+  f <- function(y) mwperm_dyadic(y, dy$d, x = dy$x, row = dy$i, col = dy$j,
+                                 seed = 3)
+  b <- f(dy$y)
+  for (h in c(1e6, 1e9)) {
+    g <- f(dy$y + h)
+    expect_identical(g$pvalue, b$pvalue)
+    expect_equal(g$conf_int, b$conf_int, tolerance = 1e-7)
+  }
+})
+
+test_that("an outcome that is not numeric or logical is refused by name", {
+  dy <- make_dyadic(6, 6, seed = 62)
+  expect_error(mwperm_dyadic(as.character(dy$y), dy$d, row = dy$i, col = dy$j),
+               "`y` must be numeric", fixed = TRUE)
+  expect_error(mwperm_dyadic(Sys.Date() + seq_len(nrow(dy)), dy$d, row = dy$i,
+                             col = dy$j), "`y` must be numeric", fixed = TRUE)
+})

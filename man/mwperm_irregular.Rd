@@ -76,8 +76,8 @@ covariates, a joint (grid-based) confidence region. See
 \item{n_reps}{Number of repetitions, each with its own random per-cell
 trim and its own permutation group; the reported p-value is the median
 over them (Remark 1 of the paper) and the confidence set inverts that
-median. Defaults to 500 -- the paper's Appendix B used 100, which the
-package's advisors consider the low end; use 1000 for a final run. Every
+median. Defaults to 500 -- the paper's Appendix B used 100; use 1000
+for a final run. Every
 other front end defaults to one run (0.4.3), the procedure Theorem 1
 covers; this one keeps 500 because only here is the data itself
 redrawn in every repetition, so a single run would rest on one random

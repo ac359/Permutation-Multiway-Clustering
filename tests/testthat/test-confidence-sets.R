@@ -38,9 +38,12 @@ test_that("the fit inverts the exact route", {
   expect_identical(fit$ci_method, "exact")
   expect_true(is.matrix(fit$conf_set))
   expect_identical(fit$conf_int, c(min(fit$conf_set), max(fit$conf_set)))
-  ## every reported end point is one of the step function's jumps
-  for (e in as.vector(fit$conf_set))
-    expect_lt(min(abs(roots - e)), 1e-10 * (1 + abs(e)))
+  ## every reported end point sits at one of the step function's jumps, moved
+  ## past it by the tie tolerance only (about 1e-10 relative), and is accepted
+  for (e in as.vector(fit$conf_set)) {
+    expect_lt(min(abs(roots - e)), 1e-7 * (1 + abs(e)))
+    expect_gt(p_at(e), fit$alpha)
+  }
 })
 
 test_that("duality: pval > alpha just inside, <= alpha just outside", {
@@ -64,10 +67,10 @@ test_that("the reported p-value is the one the set inverts", {
 })
 
 test_that("reported end points are in {b : pval(b) > alpha} (paper's CI)", {
-  skip_discrepancy("D10", paste("the exact route reports each component's",
-             "CLOSURE, so an end point can be a rejected jump (e.g. the",
-             "trade_dyadic anchor's lower end, p = 0.05 = alpha); the paper",
-             "defines CI = {b : pval(b) > alpha}"))
+  ## Until 0.4.4 this was a recorded discrepancy (D10): the exact route
+  ## reported each component's CLOSURE, and the trade_dyadic anchor's lower
+  ## end had p = 0.05 = alpha. Since 0.4.5 a tie is counted with a tolerance
+  ## and each end point is the last value the test accepts.
   data(trade_dyadic, package = "mwperm", envir = environment())
   f <- with(trade_dyadic, mwperm_dyadic(log_trade, log_dist,
                                         x = cbind(log_gdp_i, log_gdp_j),

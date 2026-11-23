@@ -108,6 +108,24 @@
   isTRUE(all(abs(d - d[1L]) < 1e-8))             # regularly spaced
 }
 
+#' Do a dimension's values look like calendar years? (numeric, at least two
+#' distinct values, all whole, all between 1800 and 2200)
+#'
+#' Unlike even spacing, which consecutive cluster ids 1, 2, 3, ... share, this
+#' is positive evidence of a time index and it holds for irregularly spaced
+#' survey years too. Used by `.rep_timelike()` and by the three-index route of
+#' `mwperm_check()`, where it outranks even spacing.
+#' @details Design detection: the panel versus three-way fork; not a paper
+#'   step.
+#' @keywords internal
+#' @noRd
+.calendar_years <- function(v) {
+  if (!is.numeric(v)) return(FALSE)
+  u <- sort(unique(as.numeric(v)))
+  length(u) >= 2L && all(u == round(u)) && u[1L] >= 1800 &&
+    u[length(u)] <= 2200
+}
+
 #' Strongly time-like values: temporal class, or regularly spaced numeric with
 #' strictly fewer levels than every other dimension (the typical few-periods
 #' panel shape). Consecutive integer cluster ids satisfy the weak rule above,
@@ -171,7 +189,7 @@
   x <- as.numeric(v)
   u <- sort(unique(x))
   if (length(u) < 2L) return(NULL)
-  if (all(u == round(u)) && u[1L] >= 1800 && u[length(u)] <= 2200)
+  if (.calendar_years(x))
     return("its values look like calendar years")
   dd <- diff(u)
   regular <- isTRUE(all(abs(dd - dd[1L]) < 1e-8 * max(1, abs(dd[1L]))))
@@ -205,12 +223,17 @@
 #'   therefore `panel`. The time role is assigned by, in order: an explicit
 #'   `time =` tag; a time-like *name* (case-insensitive vocabulary: year, yr,
 #'   time, t, date, period, wave, month, quarter, day, decade, week, season,
-#'   annum, and their plurals); time-like *values* (temporal class, or
-#'   regularly spaced numeric). A name-based assignment that the values do not
+#'   annum, and their plurals); *dates or calendar years* (a temporal class,
+#'   or whole numbers between 1800 and 2200, evenly spaced or not); evenly
+#'   spaced numeric *values*. A name-based assignment that the values do not
 #'   corroborate (temporal class, or regularly spaced with strictly fewer
 #'   levels than every other dimension) carries a **warning** -- a column
 #'   merely *named* like time may be a cluster, and permuting the true time
-#'   dimension over-rejects badly. An ambiguous case defaults to holding the
+#'   dimension over-rejects badly. So does an assignment that rests on even
+#'   spacing alone: consecutive cluster ids 1, 2, 3, ... are evenly spaced
+#'   too, so the index singled out may be a cluster while the true time index
+#'   (irregular periods, character labels) is permuted. An ambiguous case
+#'   defaults to holding the
 #'   third index fixed, with a warning. Forcing `design = "threeway"` when an
 #'   index looks time-like also warns; force it only when all three dimensions
 #'   are genuinely exchangeable.
@@ -225,10 +248,11 @@
 #' which an error variance that depends on the covariates violates. Nothing
 #' in the clustering structure shows this, so the diagnosis never selects
 #' the sign-flip test ([mwperm_dyadic_het()], valid under arbitrary
-#' heteroskedasticity for errors that are independent across cells and
-#' symmetric, but not under additive cluster effects); on a dyadic array,
-#' complete or not, it prints one line offering `design = "dyadic_het"`, and
-#' the choice is yours.
+#' heteroskedasticity for errors whose joint law is unchanged by row and
+#' column sign changes -- independent symmetric errors, or multiplicative
+#' cluster factors -- but not under additive cluster effects); on a dyadic
+#' array, complete or not, it prints one line offering
+#' `design = "dyadic_het"`, and the choice is yours.
 #'
 #' @details Maps each data signature to the procedure of Guo, Toulis and
 #'   Wang (2026) it supports: Procedure 1 (dyadic), Sections 6.1-6.4
@@ -746,8 +770,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         ## the sign-flip test can never be detected -- only offered.
         alternatives <- c(alternatives, paste0(
           "design = \"dyadic_het\" runs the sign-flip test instead: valid ",
-          "under arbitrary heteroskedasticity for errors that are ",
-          "independent across cells and symmetric about zero, but NOT under ",
+          "under arbitrary heteroskedasticity for errors whose joint law is ",
+          "unchanged by row and column sign changes (independent symmetric ",
+          "errors, or multiplicative cluster factors), but NOT under ",
           "additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
       } else {
         chosen <- "missing"
@@ -764,8 +789,9 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
         alternatives <- c(alternatives, paste0(
           "design = \"dyadic_het\" runs the sign-flip test on every observed ",
           "cell, with no biclique search and nothing discarded: valid under ",
-          "arbitrary heteroskedasticity for errors that are independent ",
-          "across cells and symmetric about zero, but NOT under additive ",
+          "arbitrary heteroskedasticity for errors whose joint law is ",
+          "unchanged by row and column sign changes (independent symmetric ",
+          "errors, or multiplicative cluster factors), but NOT under additive ",
           "cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
       }
     }
@@ -793,6 +819,17 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
       .timelike_values(idx[[k]], dims[k], max(dims[-k])), logical(1)))
     strong_hit <- which(vapply(seq_len(3L), function(k)
       .timelike_strong(idx[[k]], dims[k], min(dims[-k])), logical(1)))
+    ## Dates and calendar years are positive evidence of time. Even spacing is
+    ## not: consecutive cluster ids 1, 2, 3, ... are evenly spaced as well, so
+    ## an index singled out by spacing alone may be a cluster while the true
+    ## time index (irregular survey years, character wave labels) goes
+    ## unrecognised and is permuted -- the test then rejects a true null
+    ## almost surely. Hence the order below: a date or calendar-year index
+    ## outranks even spacing, and a time role that rests on spacing alone is
+    ## announced with a warning instead of assigned in silence.
+    cal_hit <- which(vapply(seq_len(3L), function(k)
+      inherits(idx[[k]], c("Date", "POSIXct", "POSIXlt")) ||
+        .calendar_years(idx[[k]]), logical(1)))
     t_k <- NULL
     t_why <- NULL
     if (length(name_hit) == 1L) {
@@ -818,11 +855,24 @@ mwperm_check <- function(index, y = NULL, d = NULL, data = NULL,
           "correct index explicitly via time = ; force design = \"threeway\" ",
           "only if all three dimensions are exchangeable."))
       }
+    } else if (length(cal_hit) == 1L) {
+      t_k <- cal_hit
+      t_why <- sprintf(paste0("'%s' identified as time by its values ",
+                              "(dates or calendar years)"),
+                       names(idx)[t_k])
     } else if (length(val_hit) == 1L) {
       t_k <- val_hit
       t_why <- sprintf(paste0("'%s' identified as time by its values ",
                               "(temporal/regularly spaced)"),
                        names(idx)[t_k])
+      warns <- c(warns, paste0(
+        "The time role went to '", names(idx)[t_k], "' only because its ",
+        "values are evenly spaced, and consecutive cluster ids (1, 2, 3, ",
+        "...) are evenly spaced too. If the true time dimension is a ",
+        "different index, it is being permuted and the test is invalid (it ",
+        "can over-reject badly). Tag the time index explicitly via time = ; ",
+        "force design = \"threeway\" only if all three dimensions are ",
+        "exchangeable."))
     }
     if (is.null(t_k)) {
       ## ASSUMPTION FORK: ambiguous -> panel default on the third index
@@ -1015,7 +1065,7 @@ print.mwperm_design <- function(x, ...) {
       sprintf("-> fine enough for %s %s confidence set at alpha = %s",
               art, lvl, format(alpha))
     else sprintf(paste0("-> TOO COARSE for %s %s confidence set at alpha = ",
-                        "%s (p cannot reach %s). The p-value is still ",
+                        "%s (p cannot reach %s). The p-value of a single run is still ",
                         "exact; %s %s set needs %s."),
                  art, lvl, format(alpha), format(alpha), art, lvl,
                  if (is_flip) sprintf("n_flip >= %d", need)
@@ -1071,6 +1121,18 @@ print.mwperm_design <- function(x, ...) {
 #' resolved. Structural forks (complete vs incomplete arrays, replicated
 #' cells) are resolved silently.
 #'
+#' **What detection cannot check.** Detection reads only the clustering
+#' structure: how many indices there are, whether cells repeat, whether the
+#' array is complete. Every design's validity rests on an assumption about
+#' the errors that the data cannot confirm -- exchangeability under that
+#' design's relabellings, conditional on the covariates (joint sign symmetry
+#' for `design = "dyadic_het"`), and, for an incomplete array, a pattern of
+#' observed cells that does not depend on the errors. The dispatched
+#' function's help page states its assumption; read it before relying on the
+#' result. In particular, an ordered index such as time must be passed as
+#' `time =`: left untagged it may be permuted, and a permuted time series
+#' over-rejects badly.
+#'
 #' @details Dispatches by the rule of mwperm_check(); the numbers returned are
 #'   those of the design-specific function it calls, bit for bit.
 #' @param y,d,x Outcome, covariate(s) of interest, and optional nuisance
@@ -1085,8 +1147,10 @@ print.mwperm_design <- function(x, ...) {
 #' @param design Force a design instead of auto-detecting (the structure is
 #'   still validated against it). `"dyadic_het"` runs [mwperm_dyadic_het()],
 #'   the sign-flip test that tolerates heteroskedasticity at the price of
-#'   assuming errors independent across cells and symmetric (no additive
-#'   cluster effects); it is *never* chosen automatically, because
+#'   assuming errors whose joint law is unchanged by row and column sign
+#'   changes (independent symmetric errors, or multiplicative cluster
+#'   factors; not additive cluster effects); it is *never* chosen
+#'   automatically, because
 #'   heteroskedasticity is invisible in the clustering structure. It runs
 #'   on incomplete arrays too (nothing is discarded).
 #' @param K Number of non-identity permutations; the default and the

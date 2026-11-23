@@ -51,9 +51,11 @@ of vectors, or character vector of column names in \code{data}.}
 \item{design}{Force a design instead of auto-detecting (the structure is
 still validated against it). \code{"dyadic_het"} runs
 \code{\link{mwperm_dyadic_het}}, the sign-flip test that tolerates
-heteroskedasticity at the price of assuming errors independent across cells
-and symmetric (no additive cluster effects); it is \emph{never} chosen
-automatically, because heteroskedasticity is invisible in the clustering
+heteroskedasticity at the price of assuming errors whose joint law is
+unchanged by row and column sign changes (independent symmetric errors, or
+multiplicative cluster factors; not additive cluster effects); it is
+\emph{never} chosen automatically, because heteroskedasticity is invisible in
+the clustering
 structure. It runs on incomplete arrays too (nothing is discarded).}
 
 \item{K}{Number of non-identity permutations; the default and the
@@ -192,6 +194,18 @@ two assumption-dependent forks (panel-vs-threeway and
 layout-vs-suppressed-panel) that are announced rather than silently
 resolved. Structural forks (complete vs incomplete arrays, replicated
 cells) are resolved silently.
+
+\strong{What detection cannot check.} Detection reads only the clustering
+structure: how many indices there are, whether cells repeat, whether the
+array is complete. Every design's validity rests on an assumption about the
+errors that the data cannot confirm -- exchangeability under that design's
+relabellings, conditional on the covariates (joint sign symmetry for
+\code{design = "dyadic_het"}), and, for an incomplete array, a pattern of
+observed cells that does not depend on the errors. The dispatched function's
+help page states its assumption; read it before relying on the result. In
+particular, an ordered index such as time must be passed as \code{time =}:
+left untagged it may be permuted, and a permuted time series over-rejects
+badly.
 
 Dispatches by the rule of mwperm_check(); the numbers returned are
 those of the design-specific function it calls, bit for bit.

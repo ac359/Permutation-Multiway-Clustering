@@ -54,7 +54,17 @@ fixed size as the design grows -- a different regime. Validity is unaffected
 either way (Theorem 1 holds for any group Algorithm 1 builds),
 so the default stands: it is the arrangement that gives the finest grid,
 and the theoretical power statement simply does not describe it. Set
-\code{K} explicitly to work in Theorem 2's regime.}
+\code{K} explicitly to work in Theorem 2's regime.
+
+The finest grid is not always the most powerful choice at a given
+\code{alpha}. The test rejects when \code{p <= alpha}, and the p-value lives
+on the grid \code{1/(K + 1), 2/(K + 1), ...}, so the level actually used is
+\code{floor(alpha * (K + 1)) / (K + 1)}, which falls short of \code{alpha}
+unless \code{alpha * (K + 1)} is a whole number. At \code{alpha = 0.05} a
+group of order 20 uses the whole level: with 21 to 39 clusters per side,
+passing \code{K = 19} is slightly more powerful than the default (in a
+simulation with 25 to 45 clusters per side the gain was about 1.5 to 3
+points of power, with size still below 0.05).}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -140,8 +150,9 @@ An object of class \code{"mwperm"} (see \code{\link{print.mwperm}}).
   (several coefficients: the retained beta vectors and their
   marginal extent) hold the \emph{IPT} (inverted permutation test)
   confidence set at level \code{conf_level}; \code{pvalue} is the IPT
-  permutation p-value (the median of the per-rep p-values
-  \code{pvalues_rep}).
+  permutation p-value: the per-repetition p-values \code{pvalues_rep}
+  combined by \code{aggregate} (their median, or
+  \code{min(1, 2 x median)} under \code{"median2"}).
 }
 \description{
 Finite-sample valid test of H0: beta = b in the dyadic regression
@@ -166,11 +177,13 @@ distribution are fine, and so is cluster-level heterogeneity that is itself
 i.i.d. across clusters and independent of the covariates, but an error
 variance (or any other feature of the error law) that depends on the
 covariates, or a fixed non-exchangeable pattern across clusters, is not. For
-covariate-driven heteroskedasticity with errors independent across cells see
-\code{\link{mwperm_dyadic_het}}, the same test under a sign-flip group,
-which tolerates arbitrary heteroskedasticity at the price of joint sign
-symmetry -- which additive cluster effects violate. Neither assumption
-implies the other.
+covariate-driven heteroskedasticity see \code{\link{mwperm_dyadic_het}}, the
+same test under a sign-flip group, which tolerates arbitrary
+heteroskedasticity at the price of joint sign symmetry: the law of the error
+array must be unchanged by row and column sign changes, as it is for
+independent symmetric errors with any variance pattern, or for errors
+multiplied by symmetric row and column factors -- and as it is not for
+additive cluster effects. Neither assumption implies the other.
 
 \strong{Aggregation over repetitions, and what "exact" covers.} Theorem 1
 establishes finite-sample validity for a single random permutation group, so at the default \code{n_reps = 1} the p-value is exact as stated.
@@ -230,8 +243,8 @@ cluster ids are character strings, the same collation locale; see
 
 Implements Procedure 1 of Guo, Toulis and Wang (2026), Eq. (10),
 with the paired row and column group of their Eq. (9), each drawn by
-Algorithm 1; validity is their Theorem 1 under Assumption 1 (condition
-InvA).
+Algorithm 1; validity is their Theorem 1 under Assumption 1 (double
+exchangeability; their Section 6.1 calls its three-way analogue InvA).
 }
 \examples{
 data(trade_dyadic)

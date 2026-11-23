@@ -14,9 +14,10 @@
                         -> fine enough for a 95% confidence set at alpha = 0.05
       Would run       : mwperm_dyadic(y, d, x, row = i, col = j)
         ? design = "dyadic_het" runs the sign-flip test instead: valid under
-          arbitrary heteroskedasticity for errors that are independent across
-          cells and symmetric about zero, but NOT under additive cluster
-          effects eta_i + xi_j (see ?mwperm_dyadic_het)
+          arbitrary heteroskedasticity for errors whose joint law is
+          unchanged by row and column sign changes (independent symmetric
+          errors, or multiplicative cluster factors), but NOT under additive
+          cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)
       
 
 ---
@@ -39,9 +40,10 @@
           K.
         ? design = "dyadic_het" runs the sign-flip test on every observed
           cell, with no biclique search and nothing discarded: valid under
-          arbitrary heteroskedasticity for errors that are independent across
-          cells and symmetric about zero, but NOT under additive cluster
-          effects eta_i + xi_j (see ?mwperm_dyadic_het)
+          arbitrary heteroskedasticity for errors whose joint law is
+          unchanged by row and column sign changes (independent symmetric
+          errors, or multiplicative cluster factors), but NOT under additive
+          cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)
       
 
 ---
@@ -98,8 +100,9 @@
       Balance         : replicated (16 cells, 6-8 replicates; the smallest cell sets K)
       Resolution      : default K = 5, so p-values are multiples of 1/6 = 0.167
                         -> TOO COARSE for a 95% confidence set at alpha = 0.05 (p
-                           cannot reach 0.05). The p-value is still exact; a 95% set
-                           needs >= 20 levels in the smallest permuted dimension.
+                           cannot reach 0.05). The p-value of a single run is still
+                           exact; a 95% set needs >= 20 levels in the smallest
+                           permuted dimension.
       Would run       : mwperm_layout(y, d, x, row = i, col = j, rep = rep)
       
 
@@ -117,8 +120,9 @@
       Balance         : complete
       Resolution      : default K = 5, so p-values are multiples of 1/6 = 0.167
                         -> TOO COARSE for a 95% confidence set at alpha = 0.05 (p
-                           cannot reach 0.05). The p-value is still exact; a 95% set
-                           needs >= 20 levels in the smallest permuted dimension.
+                           cannot reach 0.05). The p-value of a single run is still
+                           exact; a 95% set needs >= 20 levels in the smallest
+                           permuted dimension.
       Would run       : mwperm_threeway(y, d, x, id1 = i, id2 = j, id3 = l)
       
 

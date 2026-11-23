@@ -44,6 +44,18 @@ dropping a row would turn a complete array into an incomplete one without
 notice. Subset \code{data} to complete cases first.
 }
 \details{
+\strong{What detection cannot check.} As in \code{\link{mwperm}},
+detection reads only the clustering structure: how many indices there are, whether cells repeat, whether the
+array is complete. Every design's validity rests on an assumption about the
+errors that the data cannot confirm -- exchangeability under that design's
+relabellings, conditional on the covariates (joint sign symmetry for
+\code{design = "dyadic_het"}), and, for an incomplete array, a pattern of
+observed cells that does not depend on the errors. The dispatched function's
+help page states its assumption; read it before relying on the result. In
+particular, an ordered index such as time must be passed as \code{time =}:
+left untagged it may be permuted, and a permuted time series over-rejects
+badly.
+
 Argument assembly only: the test is the one mwperm() selects for
 the data.
 }

@@ -43,10 +43,11 @@ test_that("Sec. 3.3: mwperm_check() on trade_dyadic", {
           "of 1/40 = 0.025 -> fine enough for a 95% confidence set at alpha",
           "= 0.05 Would run : mwperm_dyadic(y, d, x, row = importer, col =",
           "exporter) ? design = \"dyadic_het\" runs the sign-flip test",
-          "instead: valid under arbitrary heteroskedasticity for errors that",
-          "are independent across cells and symmetric about zero, but NOT",
-          "under additive cluster effects eta_i + xi_j (see",
-          "?mwperm_dyadic_het)"))
+          ## the offer's wording is the package's since 0.4.5 (D13 below)
+          "instead: valid under arbitrary heteroskedasticity for errors whose",
+          "joint law is unchanged by row and column sign changes (independent",
+          "symmetric errors, or multiplicative cluster factors), but NOT under",
+          "additive cluster effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
 })
 
 ## ---- Sections 3.4-3.5: the first example -----------------------------------
@@ -238,8 +239,11 @@ test_that("Sec. 6.2: the incomplete panel prints as in the draft", {
           "= 0.0625, which is above alpha = 0.05, so no value could be",
           "excluded and the set would be the whole line. A 95% set needs K +",
           "1 >= 20 -- that is, at least 20 levels in the smallest permuted",
-          "dimension. The p-value reported above is unaffected and remains",
-          "exact."))
+          ## the last sentence is the package's since 0.4.5 (D13 above): ten
+          ## repetitions are reported by their median
+          "dimension. Each repetition's p-value is unaffected and remains",
+          "exact; the reported value is their median over 10 repetitions,",
+          "which the theorem does not cover (aggregate = \"median2\" does)."))
 })
 
 test_that("Sec. 6.2: the draft's literal call runs ten repetitions", {
@@ -251,6 +255,26 @@ test_that("Sec. 6.2: the draft's literal call runs ten repetitions", {
     y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j), row = importer,
     col = exporter, time = year, min_block = 5, seed = 1))
   expect_identical(fit_pm$n_reps, 10L)
+})
+
+test_that("Sec. 3.3 and 6.2: two sentences as the draft prints them", {
+  skip_discrepancy("D13", paste("0.4.5 reworded two sentences the draft",
+                                "prints: the sign-flip offer no longer says",
+                                "'independent across cells' (the assumption",
+                                "is joint sign symmetry), and the resolution",
+                                "note no longer calls a median over several",
+                                "repetitions exact"))
+  expect_match(printed(mwperm_check(index = c("importer", "exporter"),
+                                    data = trade_dyadic)),
+               "errors that are independent across cells and symmetric about zero",
+               fixed = TRUE)
+  tp <- draft_tp_thin()
+  fit_pm <- with(tp, mwperm_panel_missing(
+    y = log_trade, d = fta, x = cbind(log_gdp_i, log_gdp_j), row = importer,
+    col = exporter, time = year, min_block = 5, n_reps = 10, seed = 1))
+  expect_match(printed(fit_pm),
+               "The p-value reported above is unaffected and remains exact.",
+               fixed = TRUE)
 })
 
 ## ---- Section 6.3: three-way ------------------------------------------------
@@ -350,12 +374,17 @@ test_that("Sec. 6.5: the irregular example's numbers", {
   expect_equal(unname(fI$estimate),
                stats::coef(stats::lm(y ~ d, data = irr[keep, ]))[["d"]],
                tolerance = 1e-10)
-  ## "Passing the same data to mwperm_layout() instead is refused ...; with
-  ## L0 = 2, 3 or 4 ... it runs, warns ..., and returns p = 1 exactly"
-  expect_error(suppressWarnings(mwperm_layout(irr$y, irr$d, row = irr$i,
-                                              col = irr$j, rep = irr$l,
-                                              seed = 1)),
-               "Not enough clusters")
+  ## "Passing the same data to mwperm_layout() instead is refused ...": no
+  ## longer, see the D12 block below. Since 0.4.5 a cell with a single
+  ## observation is held fixed (Section 6.3 with Algorithm 1), so the call
+  ## runs; with d constant within cells it warns and returns p = 1 exactly.
+  expect_warning(
+    fl0 <- mwperm_layout(irr$y, irr$d, row = irr$i, col = irr$j, rep = irr$l,
+                         seed = 1, conf_int = FALSE),
+    "constant within every cell")
+  expect_identical(fl0$pvalue, 1)
+  ## "... with L0 = 2, 3 or 4 ... it runs, warns ..., and returns p = 1
+  ## exactly"
   for (L0 in 2:4) {
     expect_warning(
       fl <- mwperm_layout(irr$y, irr$d, row = irr$i, col = irr$j,
@@ -364,6 +393,18 @@ test_that("Sec. 6.5: the irregular example's numbers", {
       "constant within every cell")
     expect_identical(fl$pvalue, 1)
   }
+})
+
+test_that("Sec. 6.5: mwperm_layout() on the irregular example (as the draft states it)", {
+  skip_discrepancy("D12", paste("the draft says mwperm_layout() refuses this",
+                                "layout because it has single-observation",
+                                "cells; since 0.4.5 such cells are held fixed",
+                                "(Section 6.3 with Algorithm 1) and the call",
+                                "runs"))
+  expect_error(suppressWarnings(mwperm_layout(irr$y, irr$d, row = irr$i,
+                                              col = irr$j, rep = irr$l,
+                                              seed = 1)),
+               "Not enough clusters")
 })
 
 test_that("Sec. 6.5: the irregular example's printed note", {
@@ -482,9 +523,10 @@ test_that("Sec. 7: the Head-Mayer-Ries cross-section", {
           "find_bicliques() for the achievable K. ? design = \"dyadic_het\"",
           "runs the sign-flip test on every observed cell, with no biclique",
           "search and nothing discarded: valid under arbitrary",
-          "heteroskedasticity for errors that are independent across cells",
-          "and symmetric about zero, but NOT under additive cluster effects",
-          "eta_i + xi_j (see ?mwperm_dyadic_het)"))
+          "heteroskedasticity for errors whose joint law is unchanged by row",
+          "and column sign changes (independent symmetric errors, or",
+          "multiplicative cluster factors), but NOT under additive cluster",
+          "effects eta_i + xi_j (see ?mwperm_dyadic_het)"))
   bl <- find_bicliques(xs$importer, xs$exporter, min_block = 21L)
   sides <- lapply(bl, function(b) c(length(b$rows), length(b$cols)))
   expect_setequal(sides, list(c(31L, 91L), c(100L, 30L)))

@@ -71,22 +71,16 @@ function enumerates one representative per pair (coordinate 1 fixed to
 \code{1 / 2^(n_flip - 1)}, so a 95\% confidence set needs
 \code{n_flip >= 6}.
 
-\strong{Relation to the paper.} This is the sign-flipping set construction
-of the revised paper (Algorithm 1 in Section S1.1 of its Supplementary
-Material, not yet public) with \code{n_flip} as its \code{c}, applied to the rows and to the columns with one shared sign
-vector per element. The paper lists all \code{2^c} sign vectors,
-\code{K = 2^c - 1}, so its \code{K} counts every distinct flip twice: its
-default \code{K = 2^5 - 1 = 31} is \code{n_flip = 5} (16 distinct flips,
-smallest p-value 1/16), and the \code{K = 2^6 - 1} of its simulation is
-\code{n_flip = 6}, this package's default. One of the paper's \code{K}
-non-identity elements, the all \code{-1} vector, flips every row and every
-column and so is the identity on the cells; read literally, Procedure 1
-then puts the unflipped statistic into \code{min_j a_j}. That p-value is on
-the same grid and never smaller than the one computed here, which excludes
-both copies of the identity; both are valid, and on the paper's own
-simulation design and two stronger heteroskedasticity settings they
-differed in one of 3,000 datasets and never in the decision at the 5\%
-level.
+\strong{Relation to the paper.} The revised paper (not yet public) gives a
+sign-flipping set construction in Section S1.1 of its Supplementary Material;
+this function is the package's implementation of that group, applied to the
+rows and to the columns with one shared sign vector per element. Two choices
+are the package's own. Each distinct transformation is listed once, and both
+copies of the identity -- all \code{+1}, and all \code{-1}, which flips every
+row and every column and so changes no cell -- are kept out of
+\code{min_j a_j}; counting the all \code{-1} copy as a non-identity element
+instead gives a p-value on the same grid that is never smaller, and both are
+valid. And the assignment is redrawn until every group is used (below).
 
 \strong{Every flip group must be used.} If some group were assigned to no
 row cluster and no column cluster its sign would be free, the kernel would
@@ -95,9 +89,9 @@ contain duplicates -- a valid test whose \emph{reported} resolution would
 be wrong. The assignment is therefore resampled until the union of the row
 and column images covers all \code{n_flip} groups. That is rare at small
 \code{n_flip} (about 5\% of draws at \code{n_flip = 10} with 25 clusters
-per side) but it must be guaranteed, not left to chance. (The paper says
-only "randomly partition"; drawn without this check, a group goes unused
-about once in 1,500 draws at \code{n_flip = 6} on a 25 x 25 array.)
+per side) but it must be guaranteed, not left to chance. (Drawn without this
+check, a group goes unused about once in 1,500 draws at \code{n_flip = 6} on
+a 25 x 25 array.)
 
 The randomness in the assignment is what makes the resulting test a
 \emph{random} invariant test, exactly as the relabelling does in

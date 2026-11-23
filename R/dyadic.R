@@ -1,5 +1,5 @@
 ## ============================================================================
-## R/dyadic.R -- the two-way (dyadic) design: Procedure 1 under InvA
+## R/dyadic.R -- the two-way (dyadic) design: Procedure 1 under Assumption 1
 ##
 ## Purpose. mwperm_dyadic() validates a complete n_row x n_col array with one
 ##   observation per cell, fixes K, and hands the engine a builder of the
@@ -34,11 +34,13 @@
 #' itself i.i.d. across clusters and independent of the covariates, but an
 #' error variance (or any other feature of the error law) that depends on
 #' the covariates, or a fixed non-exchangeable pattern across clusters, is
-#' not. For covariate-driven heteroskedasticity with errors independent
-#' across cells see [mwperm_dyadic_het()], the same test under a sign-flip
-#' group, which tolerates arbitrary heteroskedasticity at the price of joint
-#' sign symmetry -- which additive cluster effects violate. Neither
-#' assumption implies the other.
+#' not. For covariate-driven heteroskedasticity see [mwperm_dyadic_het()],
+#' the same test under a sign-flip group, which tolerates arbitrary
+#' heteroskedasticity at the price of joint sign symmetry: the law of the
+#' error array must be unchanged by row and column sign changes, as it is for
+#' independent symmetric errors with any variance pattern, or for errors
+#' multiplied by symmetric row and column factors -- and as it is not for
+#' additive cluster effects. Neither assumption implies the other.
 #'
 #' **Aggregation over repetitions, and what "exact" covers.** Theorem 1
 #' establishes finite-sample validity for a single random permutation group,
@@ -96,8 +98,8 @@
 #'
 #' @details Implements Procedure 1 of Guo, Toulis and Wang (2026), Eq. (10),
 #'   with the paired row and column group of their Eq. (9), each drawn by
-#'   Algorithm 1; validity is their Theorem 1 under Assumption 1 (condition
-#'   InvA).
+#'   Algorithm 1; validity is their Theorem 1 under Assumption 1 (double
+#'   exchangeability; their Section 6.1 calls its three-way analogue InvA).
 #' @param y Numeric outcome vector, one entry per observed cell.
 #' @param d Numeric vector or matrix of the covariate(s) of interest (d_ij).
 #'   With a single covariate a confidence interval is produced; with several,
@@ -125,6 +127,16 @@
 #' so the default stands: it is the arrangement that gives the finest grid,
 #' and the theoretical power statement simply does not describe it. Set `K`
 #' explicitly to work in Theorem 2's regime.
+#'
+#' The finest grid is not always the most powerful choice at a given
+#' `alpha`. The test rejects when `p <= alpha`, and the p-value lives on the
+#' grid `1/(K + 1), 2/(K + 1), ...`, so the level actually used is
+#' `floor(alpha * (K + 1)) / (K + 1)`, which falls short of `alpha` unless
+#' `alpha * (K + 1)` is a whole number. At `alpha = 0.05` a group of order 20
+#' uses the whole level: with 21 to 39 clusters per side, passing `K = 19` is
+#' slightly more powerful than the default (in a simulation with 25 to 45
+#' clusters per side the gain was about 1.5 to 3 points of power, with size
+#' still below 0.05).
 #' @param alpha Significance level used for the reject/retain decision and for
 #'   the inverted confidence interval (`conf_level = 1 - alpha`).
 #' @param beta_null Null value b to test. Scalar (recycled if `d` has several
@@ -200,7 +212,8 @@
 #'   `conf_region`/`conf_box` (several coefficients: the retained beta vectors
 #'   and their marginal extent) hold the *IPT* (inverted permutation test)
 #'   confidence set at level `conf_level`; `pvalue` is the IPT permutation
-#'   p-value (the median of the per-rep p-values `pvalues_rep`).
+#'   p-value: the per-repetition p-values `pvalues_rep` combined by
+#'   `aggregate` (their median, or `min(1, 2 x median)` under `"median2"`).
 #'
 #' @references Guo, W., Toulis, P. and Wang, Y. (2026). Permutation inference
 #'   under multi-way clustering and missing data. arXiv:2601.08610.

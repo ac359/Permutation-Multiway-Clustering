@@ -1,7 +1,7 @@
 Package: mwperm
 Type: Package
 Title: Invariant Permutation Tests for Multi-Way Clustered and Panel Regression
-Version: 0.4.4
+Version: 0.4.5
 Authors@R: c(
     person("Andrew", "Chen", email = "andrewc24@uchicago.edu", role = c("aut", "cre", "cph")),
     person("Wenxuan", "Guo", email = "wxguo@chicagobooth.edu", role = c("aut", "cph")),
@@ -15,8 +15,9 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     the errors conditional on the covariates: separate exchangeability across
     the clustering dimensions for the permutation tests, or double sign
     symmetry of the error array under row-and-column sign changes for the
-    heteroskedasticity-robust sign-flip variant (independent symmetric
-    errors with any variance pattern; not additive cluster effects). The
+    heteroskedasticity-robust sign-flip variant (for example independent
+    symmetric errors with any variance pattern, or such errors multiplied by
+    symmetric row and column factors; not additive cluster effects). The
     covariate distribution is unrestricted, so the tests remain
     exact in finite samples even with few clusters or heavy-tailed regressors,
     where multi-way cluster-robust standard errors and the wild cluster
@@ -29,13 +30,13 @@ Description: Finite-sample valid hypothesis tests and confidence intervals for
     periods when pairs miss some), replicated two-way layouts, irregular
     layouts in which the covariate is constant within cells, incomplete
     arrays via fully observed bicliques,
-    and dyadic designs with arbitrary heteroskedasticity and errors
-    independent across cells.
+    and dyadic designs with arbitrary heteroskedasticity and no additive
+    cluster effects.
 License: MIT + file LICENSE
 URL: https://github.com/ac359/Permutation-Multiway-Clustering
 BugReports: https://github.com/ac359/Permutation-Multiway-Clustering/issues
 Language: en-US
-Date: 2026-11-15
+Date: 2026-11-17
 Encoding: UTF-8
 Depends: R (>= 3.6.0)
 Imports: stats, graphics, grDevices, parallel

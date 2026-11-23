@@ -145,4 +145,33 @@ w_m <- warns_of(mwperm(y = "y", d = "d", index = c("i", "j"), rep = "year",
                        verbose = FALSE))
 stopifnot(any(grepl("its name 'year' is a time word", w_m, fixed = TRUE)))
 
+## ---- K above the smallest cell: small cells are held fixed --------------------
+## Section 6.3 with Algorithm 1: one K for all cells, and an index set smaller
+## than K + 1 is left unpermuted. One cell of 2 and one of 1 among cells of 20
+## or more: K = 19 must run on all the data, the default must still run (K = 1,
+## the smallest cell with two replicates), and impossible requests must stop.
+local({
+  sizes <- c(2L, 25L, 30L, 22L, 1L, 40L, 20L, 21L, 26L)
+  set.seed(31)
+  cells <- expand.grid(i = 1:3, j = 1:3)
+  g <- data.frame(i = rep(cells$i, sizes), j = rep(cells$j, sizes))
+  g$d <- rnorm(nrow(g)); g$y <- rnorm(nrow(g))
+  f <- mwperm_layout(g$y, g$d, row = g$i, col = g$j, K = 19, seed = 1,
+                     conf_int = FALSE)
+  stopifnot(f$K == 19L, isTRUE(all.equal(f$p_floor, 0.05)),
+            f$n_obs == nrow(g),
+            any(grepl("2 cells with fewer than K + 1 = 20 replicates", f$note,
+                      fixed = TRUE)))
+  f0 <- mwperm_layout(g$y, g$d, row = g$i, col = g$j, seed = 1,
+                      conf_int = FALSE)
+  stopifnot(f0$K == 1L,
+            any(grepl("A larger `K` is available", f0$note, fixed = TRUE)))
+  expect_err(mwperm_layout(g$y, g$d, row = g$i, col = g$j, K = 60),
+             "largest cell holds only 40 replicates")
+  one <- expand.grid(i = 1:4, j = 1:4)
+  expect_err(mwperm_layout(as.numeric(1:16), as.numeric(16:1), row = one$i,
+                           col = one$j),
+             "No cell holds two or more observations")
+})
+
 passed("test-layout.R")

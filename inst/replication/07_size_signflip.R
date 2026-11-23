@@ -1,21 +1,20 @@
-## 07_size_signflip.R -- The sign-flip test (IPT-Het) against the permutation
-## test under heteroskedastic errors.
+## 07_size_signflip.R -- The sign-flip test against the permutation test
+## under heteroskedastic errors.
 ##
 ## Every permutation design assumes the errors exchangeable GIVEN the
 ## covariates, which an error variance that depends on the covariates
 ## violates. This script runs mwperm_dyadic() and mwperm_dyadic_het() on the
-## same draws of the paper authors' heteroskedastic gravity design (n = 25
-## clusters per side; log GDP node effects; a two-way random-feature log
-## distance; error sd = 0.35 * exp(rho1 * standardised gravity mean + rho2 *
-## standardised distance); N(0, 1) innovations, i.e. errors independent across
-## cells and SYMMETRIC, as the double sign symmetry assumption (Assumption 2
-## of the revised paper) requires and as the authors' corrected simulation
-## code draws them) at three strengths of
+## same draws of a heteroskedastic gravity design (n = 25 clusters per side;
+## log GDP node effects; a two-way random-feature log distance; error sd =
+## 0.35 * exp(rho1 * standardised gravity mean + rho2 * standardised
+## distance); N(0, 1) innovations, i.e. errors independent across cells and
+## SYMMETRIC, as the double sign symmetry assumption (Assumption 2 of the
+## revised paper) requires) at three strengths of
 ## heteroskedasticity under the null, and at beta = 0.15 under
 ## homoskedasticity for the power comparison. Until 0.4.3 this script drew
-## centred lognormal (asymmetric) innovations, a draw the authors later
-## corrected and under which the assumption fails; the cache cells were
-## renamed (_v2) so no result of that version is reused.
+## centred lognormal (asymmetric) innovations, under which the assumption
+## fails; the cache cells were renamed (_v2) so no result of that version is
+## reused.
 ##
 ## What it shows: the permutation test's rejection rate rises with the
 ## heteroskedasticity while the sign-flip test's stays at or below nominal,
@@ -40,15 +39,15 @@ N <- as.integer(Sys.getenv("MC_N", "500"))
 BATCH <- 250L
 ALPHA <- 0.05
 sink_both("out/07_size_signflip.txt")
-cat("==== 07 Sign-flip test (IPT-Het) vs permutation test under ",
+cat("==== 07 Sign-flip test vs permutation test under ",
     "heteroskedasticity ====\n", sep = "")
 cat(sprintf(paste0("mwperm %s | %d sims/cell | n = 25 | perm K = 24, flip ",
                    "n_flip = 6 | n_reps = 1 | rejection rule p <= %.2f | %s\n\n"),
             as.character(packageVersion("mwperm")), N, ALPHA,
             format(Sys.time())))
 
-## The authors' simulate_gravity_model() in long format (i varies fastest),
-## with the N(0, 1) error draw of their corrected version.
+## The gravity design in long format (i varies fastest), with N(0, 1)
+## innovations.
 dgp_gravity_het <- function(n, b, rho1, rho2, phi1 = 0.4, phi2 = 0.4) {
   m <- n
   log_gdp <- rnorm(n, mean = log(500), sd = 1.2)

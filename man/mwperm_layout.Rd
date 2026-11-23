@@ -62,8 +62,14 @@ the order of appearance within a cell is used.}
 That combination is valid (a uniform random subset of
   exchangeable replicates is itself exchangeable) and raising \code{L0} is a
   legitimate power lever -- dropping thin cells raises the attainable
-  \code{K} and so the p-value resolution -- but it is a different procedure
-  from Section 6.4, and it does not cover what Section 6.4 exists for: a
+  \code{K} and so the p-value resolution -- but it discards data, and
+  passing a larger \code{K} instead (see that argument) usually does better:
+  every observation is kept, the cells smaller than \code{K + 1} are held
+  fixed, and that is the Section 6.3 construction itself. (On a 6 x 6 layout
+  with cells of 2 to 40 replicates, power at a small effect was 0.54 with
+  \code{K = 19} against 0.33 with \code{L0 = 20}, both holding size.)
+  Balancing is also a different procedure from Section 6.4, and it does not
+  cover what Section 6.4 exists for: a
   covariate constant within cells still gives a powerless test (see the
   warning in Details) -- use \code{\link{mwperm_irregular}}, the Section 6.4
   procedure, there -- and replicates that are really time periods are not
@@ -71,8 +77,15 @@ That combination is valid (a uniform random subset of
   \code{\link{mwperm_panel}} or \code{\link{mwperm_panel_missing}}.}
 
 \item{K}{Number of non-identity permutations; defaults to
-\code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}).
-Must satisfy \code{K + 1 <= min(cell size)}.}
+\code{min(cell size) - 1} capped at 199 (with \code{L0}, to \code{L0 - 1}),
+so that every cell is permuted. A larger \code{K} may be passed, up to
+\code{max(cell size) - 1}: cells with fewer than \code{K + 1} replicates
+are then kept in the regression and held fixed (never relabelled), which is
+how Algorithm 1 treats an index set smaller than \code{K + 1}, and a note
+reports how many. This is the remedy when a few small cells would otherwise
+cap \code{K} below what \code{alpha} needs (\code{K + 1 >= 20} at
+\code{alpha = 0.05}); unlike \code{L0} it discards nothing. A cell with a
+single observation is always held fixed.}
 
 \item{alpha}{Significance level used for the reject/retain decision and for
 the inverted confidence interval (\code{conf_level = 1 - alpha}).}
@@ -166,7 +179,11 @@ entering every cell's l-th replicate) is \strong{not} covered: the independent
 per-cell permutations change the cross-cell alignment of zeta, and with a
 \code{d} that follows the same pattern over l in every cell the test rejected a
 true null 63-74\% of the time at alpha = 0.05 (10 x 10 cells of 22, 1000
-simulations each; about 5\% when \code{d} had no such pattern). The test is
+simulations each; about 5\% when \code{d} had no such pattern). (Section 6.3
+of the paper lists such a shared, i.i.d. replicate effect among the cases its
+condition covers; with the permutations drawn independently per cell, as its
+step (i) prescribes, a shared effect is not invariant, and this package does
+not rely on that example.) The test is
 appropriate when l indexes independent replications (two-way layouts in
 randomised experiments). If l is a period or a survey wave, treat it as
 time: \code{\link{mwperm_panel}}, or \code{\link{mwperm_panel_missing}} with \verb{time =} and

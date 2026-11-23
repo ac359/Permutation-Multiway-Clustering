@@ -68,7 +68,8 @@ decision.}
 \item{conf_int}{Logical; compute the confidence set by test inversion.}
 
 \item{n_reps}{Number of independent permutation groups. Defaults to 1,
-the procedure Theorem 1 covers; with more, the reported p-value is
+the procedure the argument of Theorem 4 covers; with more, the reported
+p-value is
 aggregated over them by \code{aggregate} (see \emph{Aggregation over repetitions}
 in \code{\link{mwperm_dyadic}}). The default was 10 from 0.4.0 to 0.4.2.}
 
@@ -102,8 +103,10 @@ in which the (i, j) array is \strong{incomplete} -- some pairs are never
 observed, or are observed in only some periods -- so
 \code{\link{mwperm_panel}}, which requires a complete balanced array, cannot
 run. This combines condition InvB of Guo, Toulis and Wang (2026), Section
-6.2 with the missing-data machinery of Section 5, which is the extension
-their Section 9 leaves open.
+6.2 with the missing-data machinery of Section 5. The paper does not state
+that combination; it is this package's extension (the paper's concluding
+section lists panel data among its open directions, without mentioning
+incomplete panels).
 }
 \details{
 The construction is:
@@ -125,9 +128,9 @@ and it is what keeps the test valid when the errors are autocorrelated over
 time.
 
 Combines Section 6.2 (condition InvB) with Procedure 2 of Guo,
-Toulis and Wang (2026) for incomplete panels, the case their Section 9
-leaves open: fully observed blocks of the every-period mask, Algorithm 1
-on each block, and the period held fixed.
+Toulis and Wang (2026) for incomplete panels, a combination the paper
+does not state (this package's extension): fully observed blocks of the
+every-period mask, Algorithm 1 on each block, and the period held fixed.
 }
 \section{Keeping L0 periods (\code{L0})}{
 

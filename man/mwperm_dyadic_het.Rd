@@ -126,12 +126,10 @@ but \strong{not additive cluster effects}: the error array must be
 \preformatted{  (eps_ij) =d (s_i t_j eps_ij) | X, D   for all row signs s and column signs t.}
 
 This is the invariant test of Guo, Toulis and Wang (2026) run with a
-\emph{sign-flip} group in place of the permutation group: the \emph{double
-sign symmetry} assumption (Assumption 2, Section 3.3 of the revised paper), under which
-Procedure 1 is unchanged except that Step 1 applies random sign flips. It
-is the test the authors call IPT-Het. Same model, same null, same
-statistic, same confidence set by test inversion; only the group changes,
-and with it the assumption. (The revised paper is not public yet; in
+\emph{sign-flip} group in place of the permutation group, under the
+\emph{double sign symmetry} assumption of the revised paper (its Assumption
+2, Section 3.3). Same model, same null, same statistic, same confidence set
+by test inversion; only the group changes, and with it the assumption. (The revised paper is not public yet; in
 arXiv:2601.08610v1, "Assumption 2" is the Section 4 random-effects model.)
 }
 \details{
@@ -170,22 +168,11 @@ assumptions are complementary and neither contains the other:
   (or sign-symmetrically dependent) symmetric errors, \strong{no additive
   cluster effects}.
 }
-The paper gives \code{eps_ij = h(X_ij) u_i v_j}, with \code{u_i, v_j}
-i.i.d. from a symmetric distribution and \code{h} an unknown function of the
-covariates, as a model that satisfies the assumption; the assumption itself
-is weaker. The paper's own simulation for this test draws errors independent
-across cells, \code{eps_ij = sigma_ij eta_ij} with
-\code{eta_ij ~ N(0, 1)} and \code{sigma_ij} increasing in the gravity mean
-and in distance; that is the setting the test is meant for. On 10,000
-datasets of that design (25 clusters per side, \code{n_flip = 6}) this
-function rejected a true null in 1.36\% of them at the default single run,
-and the method authors' own research code in 1.41\%. (On the first 1000 of
-those datasets: 1.7\% at a single run, 0.7\% with ten, and 1.1\% for the
-authors' code.)
 
-Under covariate-dependent heteroskedasticity (the paper's gravity design:
-25 clusters per side, symmetric errors independent across cells, their
-variance increasing in the mean and in the distance covariate) the
+Under covariate-dependent heteroskedasticity (the gravity design of the
+package's \code{inst/replication/07_size_signflip.R}: 25 clusters per side,
+symmetric errors independent across cells, their variance increasing in the
+mean and in the distance covariate) the
 permutation test's rejection rate under a true null rose with the strength
 of the heteroskedasticity -- to 0.076 at a nominal 0.05 in this package's
 own check, 500 simulations per setting -- while this test stayed at 0.016
@@ -193,10 +180,9 @@ or below. That gap is the reason the function exists. It is
 \strong{not a strict upgrade}: under homoskedastic, exchangeable errors the
 sign-flip test is less powerful (0.85 against 0.98 at beta = 0.15 in the
 same design), because its group is smaller and coarser than a full
-relabelling group. Use it when the
-errors are plausibly independent across cells with a variance that depends
-on the covariates; use \code{\link{mwperm_dyadic}} when additive cluster
-effects are the concern. Heteroskedasticity leaves no trace in the
+relabelling group. Use it when the variance plausibly depends on the
+covariates and the errors carry no additive cluster effects; use
+\code{\link{mwperm_dyadic}} when additive cluster effects are the concern. Heteroskedasticity leaves no trace in the
 clustering structure, so \code{\link{mwperm}} never selects this test
 automatically: request it with \code{design = "dyadic_het"}.
 
@@ -207,8 +193,8 @@ the revision): which cells are observed must be independent of the errors
 given X and D. Dropping zero trade flows
 because log(0) is undefined violates it, since whether a flow is zero
 depends on its error. Running on an incomplete array is this package's
-extension, which the method's authors have agreed to; the paper states
-Assumption 2 for a complete array. The only
+extension, which the method's authors have agreed to; the revised paper
+states its Assumption 2 for a complete array. The only
 thing an incomplete array changes in the computation is the guard on the
 flip-group assignment, which must keep the group's kernel at \code{{s, -s}} on the
 observed cells -- see the \code{cells} argument of
@@ -218,9 +204,9 @@ observed cells -- see the \code{cells} argument of
 cluster is assigned at random to one of \code{n_flip} flip groups, and a
 sign vector in \code{{-1, +1}^n_flip} multiplies observation \code{(i, j)}
 by the product of its row group's sign and its column group's sign (see
-\code{\link{build_flip_set}}: this is the revised paper's sign-flipping set
-construction, Section S1.1 of its Supplementary Material, with \code{n_flip} as its \code{c}, and its
-\code{K = 2^c - 1} counts each distinct flip twice). A sign vector and its negative induce the
+\code{\link{build_flip_set}}, the package's implementation of the
+sign-flipping set of the revised paper, Section S1.1 of its Supplementary
+Material). A sign vector and its negative induce the
 same transformation, so the group has \code{2^(n_flip - 1)} distinct
 elements, not \code{2^n_flip}; the package enumerates each exactly once.
 Per repetition the p-value therefore lives on the grid
@@ -246,20 +232,21 @@ note; each end point is rounded outward, by less than the bisection
 tolerance). The default buys resolution, not power: at 25 x 25 with
 independent heteroskedastic symmetric errors and \code{n_reps = 10}, power
 at beta = 0.10 was 0.27, 0.34 and 0.37 for \code{n_flip} = 6, 7 and 8 (300
-simulations each), at 1, 2 and 4 times the projections. Under the model
-\code{eps_ij = h(X_ij) u_i v_j} the size was 0.014 at the default
-\code{n_reps = 1} and 0.002 with \code{n_reps = 10} -- conservative, not
-over-rejecting.
+simulations each), at 1, 2 and 4 times the projections. With errors
+multiplied by symmetric row and column factors the size was 0.014 at the
+default \code{n_reps = 1} and 0.002 with \code{n_reps = 10} -- conservative,
+not over-rejecting.
 
-The aggregation over \code{n_reps} repetitions, the exact confidence set
-and its closure convention, the \code{aggregate = "median2"} guarantee and
+The aggregation over \code{n_reps} repetitions, the exact confidence set (its
+end points are values the test accepts), the \code{aggregate = "median2"}
+guarantee and
 the numerical notes on the projection are all exactly as documented in
 \code{\link{mwperm_dyadic}}; the sign-flip element \code{S_k} simply takes
 the place of the permuted copy in the stacked design \code{[X | S_k X]}.
 
-Implements Procedure 1 of Guo, Toulis and Wang (2026) with random
-sign flips in Step 1 in place of the permutation group, under the revised
-paper's Assumption 2 (double sign symmetry, Section 3.3).
+Implements Procedure 1 of Guo, Toulis and Wang (2026) with a sign-flip
+group in place of the permutation group, under the revised paper's
+Assumption 2 (double sign symmetry, Section 3.3).
 }
 \examples{
 data(trade_dyadic)
